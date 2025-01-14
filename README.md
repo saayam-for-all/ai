@@ -12,5 +12,5 @@
 **Install Dependencies:**
 pip install flask transformers serverless-wsgi
 
-**Run the Code**
+**Run the Code:**
 python app.py
