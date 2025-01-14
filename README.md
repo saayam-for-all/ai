@@ -1,2 +1,0 @@
-# AI
-This micro service is an AI based micro service that uses existing Saayam request data and also collect information from the latest generative AI services like Hugging Faces (preferably free services) to come up with intelligent suggestions that would be shown to the requestor of the help and also to the volunteers who are helping the requestor. We convert the request text as the prompt, get a text based response to start with. Later on we can come up with a voice based response.
