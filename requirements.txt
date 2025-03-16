@@ -1,0 +1,6 @@
+flask
+groq
+transformers
+python-dotenv
+serverless-wsgi
+pytest
