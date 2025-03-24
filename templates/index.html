@@ -4,12 +4,15 @@
     <meta charset="UTF-8">
     <title>Saayam AI Assistant</title>
     
-    <!-- ✅ Favicon & Icons -->
+    <!-- Favicon & Icons -->
     <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
     <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
     <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='favicon-16x16.png') }}">
     <link rel="manifest" href="{{ url_for('static', filename='site.webmanifest') }}">
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+
+    <!-- Add marked.js for Markdown rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 
     <style>
         body {
@@ -83,6 +86,26 @@
             padding: 10px;
             border: 1px solid #4CAF50;
             border-radius: 5px;
+            font-family: Arial, sans-serif;
+        }
+        .response p ul {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+        .response p li {
+            margin-bottom: 5px;
+        }
+        .response p strong {
+            color: #333;
+        }
+        .metrics {
+            margin-top: 10px;
+            padding: 10px;
+            background: #f0f0f0;
+            border-radius: 5px;
+        }
+        .metrics p {
+            margin: 5px 0;
         }
     </style>
 </head>
@@ -112,6 +135,7 @@
         <div class="response" id="response-container">
             <h3>AI Response:</h3>
             <p id="response-text"></p>
+            <div class="metrics" id="metrics-container"></div>
         </div>
     </div>
 
@@ -176,7 +200,27 @@
             .then(data => {
                 const responseContainer = document.getElementById("response-container");
                 const responseText = document.getElementById("response-text");
-                responseText.textContent = data.answer || data.error;
+                const metricsContainer = document.getElementById("metrics-container");
+
+                // Render the response as Markdown
+                responseText.innerHTML = marked.parse(data.answer || data.error);
+                
+                // Display metrics
+                if (data.metrics) {
+                    metricsContainer.innerHTML = `
+                        <h4>Performance Metrics:</h4>
+                        <p><strong>Model:</strong> ${data.metrics.model}</p>
+                        <p><strong>Temperature:</strong> ${data.metrics.temperature}</p>
+                        <p><strong>Time to First Token (TTFT):</strong> ${data.metrics.ttft_seconds} seconds</p>
+                        <p><strong>Total Response Time (TTLT):</strong> ${data.metrics.ttlt_seconds} seconds</p>
+                        <p><strong>Speed:</strong> ${data.metrics.speed_tokens_per_second} tokens/second</p>
+                        <p><strong>Input Tokens:</strong> ${data.metrics.input_tokens}</p>
+                        <p><strong>Output Tokens:</strong> ${data.metrics.output_tokens}</p>
+                    `;
+                } else {
+                    metricsContainer.innerHTML = '<p>No metrics available.</p>';
+                }
+
                 responseContainer.style.display = 'block';
             })
             .catch(err => console.error(err));

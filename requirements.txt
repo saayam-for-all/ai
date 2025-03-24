@@ -1,6 +1,8 @@
 flask
-groq
 transformers
+meta-ai-api
+google-generativeai
+openai
+groq
 python-dotenv
-serverless-wsgi
-pytest
+tiktoken
