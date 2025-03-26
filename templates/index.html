@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Saayam AI Assistant</title>
-    
-    <!-- ✅ Favicon & Icons -->
+
     <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
     <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
     <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='favicon-16x16.png') }}">
@@ -122,7 +121,6 @@
         const predictionArea = document.getElementById("category-prediction-area");
         let selectedCategory = "";
 
-        // Populate category dropdown
         categories.forEach(cat => {
             const option = document.createElement("option");
             option.value = cat;
@@ -183,8 +181,6 @@
             .catch(err => console.error(err));
         }
 
-
-
         function selectCategory(element, category) {
             document.querySelectorAll(".category-option").forEach(el => el.classList.remove("selected"));
             element.classList.add("selected");
@@ -204,9 +200,31 @@
 
             recognition.onresult = function(event) {
                 const transcript = event.results[0][0].transcript;
-                const descriptionField = document.getElementById("description");
-                descriptionField.value = transcript;
                 alert("Recorded: " + transcript);
+
+                fetch('/clarify_transcription', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ transcript })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    const fullClarified = data.clarified || transcript;
+                    const match = fullClarified.match(/"([^"]+)"/);
+                    const cleanClarified = match ? match[1] : fullClarified;
+
+                    const confirmMsg = `${fullClarified}\n\nUse this in the description box?`;
+                    if (confirm(confirmMsg)) {
+                        const descriptionField = document.getElementById("description");
+                        descriptionField.value = cleanClarified;
+                    }
+                })
+                .catch(err => {
+                    alert("Clarification failed. Using original transcript.");
+                    const descriptionField = document.getElementById("description");
+                    descriptionField.value = transcript;
+                    console.error(err);
+                });
             };
 
             recognition.onerror = function(event) {

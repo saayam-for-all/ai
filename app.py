@@ -7,7 +7,7 @@ import os
 # Load environment variables from .env
 load_dotenv()
 groq_api_key = os.getenv("GROQ_API_KEY")
-os.environ["GROQ_API_KEY"] = 'groq_api_key'
+os.environ["GROQ_API_KEY"] = groq_api_key  # ✅ correct usage
 
 # Initialize GROQ client
 client = Groq()
@@ -70,6 +70,29 @@ def generate_answer():
             ]
         )
         return jsonify({"answer": response.choices[0].message.content.strip()})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/clarify_transcription', methods=['POST'])
+def clarify_transcription():
+    data = request.get_json()
+    raw_input = data.get("transcript")
+
+    if not raw_input:
+        return jsonify({"error": "Transcript is required"}), 400
+
+    prompt = f"The following sentence was transcribed from voice input and may not be clear. Rewrite it in proper English:\n\n{raw_input}"
+
+    try:
+        response = client.chat.completions.create(
+            model="llama-3.2-1b-preview",
+            messages=[
+                {"role": "system", "content": "You are great at understanding and fixing unclear voice transcriptions."},
+                {"role": "user", "content": prompt}
+            ]
+        )
+        clarified = response.choices[0].message.content.strip()
+        return jsonify({"clarified": clarified})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
