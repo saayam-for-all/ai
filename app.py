@@ -7,7 +7,7 @@ import os
 # Load environment variables from .env
 load_dotenv()
 groq_api_key = os.getenv("GROQ_API_KEY")
-os.environ["GROQ_API_KEY"] = groq_api_key
+os.environ["GROQ_API_KEY"] = 'groq_api_key'
 
 # Initialize GROQ client
 client = Groq()

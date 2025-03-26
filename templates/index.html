@@ -112,6 +112,7 @@
         <div class="response" id="response-container">
             <h3>AI Response:</h3>
             <p id="response-text"></p>
+            <button onclick="readResponse()">🔊 Read Aloud</button>
         </div>
     </div>
 
@@ -182,10 +183,45 @@
             .catch(err => console.error(err));
         }
 
+
+
         function selectCategory(element, category) {
             document.querySelectorAll(".category-option").forEach(el => el.classList.remove("selected"));
             element.classList.add("selected");
             selectedCategory = category;
+        }
+    </script>
+
+    <button onclick="startRecording()" style="margin-top: 20px; width: 100%; padding: 15px; font-size: 16px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer;">🎤 Record Audio</button>
+
+    <script>
+        let recognition;
+        if ('webkitSpeechRecognition' in window) {
+            recognition = new webkitSpeechRecognition();
+            recognition.continuous = false;
+            recognition.interimResults = false;
+            recognition.lang = 'en-US';
+
+            recognition.onresult = function(event) {
+                const transcript = event.results[0][0].transcript;
+                const descriptionField = document.getElementById("description");
+                descriptionField.value = transcript;
+                alert("Recorded: " + transcript);
+            };
+
+            recognition.onerror = function(event) {
+                alert("Error: " + event.error);
+            };
+        } else {
+            alert("Speech recognition not supported in this browser.");
+        }
+
+        function startRecording() {
+            if (recognition) {
+                recognition.start();
+            } else {
+                alert("Your browser does not support audio recording.");
+            }
         }
     </script>
 </body>
