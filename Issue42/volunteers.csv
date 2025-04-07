@@ -1,0 +1,4 @@
+id,name,availability_days,availability_frequency,skills,languages,location,preferred_task_type,past_hours,certifications,age
+V001,Alice Smith,"Saturday,Sunday",weekly,"logistics:3,communication:2,tech_support:1","English,Spanish","New York",logistics,50,"First Aid",28
+V002,Bob Johnson,"Monday,Wednesday",biweekly,"logistics:1,communication:4,tech_support:3",English,Remote,tech_support,20,,35
+V003,Clara Diaz,Saturday,weekly,"logistics:2,communication:3,tech_support:0","English,Spanish,French","Los Angeles",communication,80,"Project Management",42
