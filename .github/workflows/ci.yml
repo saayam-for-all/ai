@@ -2,10 +2,10 @@ name: Python Flask CI Pipeline
 on:
     push:
         branches: 
-            -feature/divyatanwar/ai-ci-build
+            - feature/divyatanwar/ai-ci-build
     pull_request:
         branches: 
-            -feature/divyatanwar/ai-ci-build
+            - feature/divyatanwar/ai-ci-build
 
 jobs:
     build:
