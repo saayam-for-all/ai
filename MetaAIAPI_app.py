@@ -8,24 +8,57 @@ client = MetaAI()
 
 # Category list (unchanged)
 categories = [
-    "Banking", "Books", "Clothes", "College Admissions", "Cooking",
-    "Elementary Education", "Middle School Education", "High School Education", "University Education",
-    "Employment", "Finance", "Food", "Gardening", "Homelessness", "Housing", "Jobs", "Investing",
-    "Matrimonial", "Brain Medical", "Depression Medical", "Eye Medical", "Hand Medical",
-    "Head Medical", "Leg Medical", "Rental", "School", "Shopping",
-    "Baseball Sports", "Basketball Sports", "Cricket Sports", "Handball Sports",
-    "Jogging Sports", "Hockey Sports", "Running Sports", "Tennis Sports",
-    "Stocks", "Travel", "Tourism"
-]
+    "Banking",
+    "Books",
+    "Clothes",
+    "College Admissions",
+    "Cooking",
+    "Elementary Education",
+    "Middle School Education",
+    "High School Education",
+    "University Education",
+    "Employment",
+    "Finance",
+    "Food",
+    "Gardening",
+    "Homelessness",
+    "Housing",
+    "Jobs",
+    "Investing",
+    "Matrimonial",
+    "Brain Medical",
+    "Depression Medical",
+    "Eye Medical",
+    "Hand Medical",
+    "Head Medical",
+    "Leg Medical",
+    "Rental",
+    "School",
+    "Shopping",
+    "Baseball Sports",
+    "Basketball Sports",
+    "Cricket Sports",
+    "Handball Sports",
+    "Jogging Sports",
+    "Hockey Sports",
+    "Running Sports",
+    "Tennis Sports",
+    "Stocks",
+    "Travel",
+    "Tourism"]
 
 # Zero-shot classification pipeline (unchanged)
-classifier = pipeline("zero-shot-classification", model="facebook/bart-large-mnli")
+classifier = pipeline(
+    "zero-shot-classification",
+    model="facebook/bart-large-mnli")
 
 app = Flask(__name__)
+
 
 @app.route('/')
 def home():
     return render_template('index.html', categories=categories)
+
 
 @app.route('/predict_categories', methods=['POST'])
 def predict_categories():
@@ -41,6 +74,7 @@ def predict_categories():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
 @app.route('/generate_answer', methods=['POST'])
 def generate_answer():
     data = request.get_json()
@@ -48,7 +82,7 @@ def generate_answer():
     question = data.get("question")
     if not category or not question:
         return jsonify({"error": "Category and question required"}), 400
-    
+
     # Create a more specific prompt with formatting instructions
     prompt = (
         f"Category: {category}\n"
@@ -62,9 +96,8 @@ def generate_answer():
         "For example, if asked for websites, format the response like this:\n"
         "**Websites**\n"
         "- Website 1: Description.\n"
-        "- Website 2: Description.\n"
-    )
-    
+        "- Website 2: Description.\n")
+
     try:
         # Get the response from Meta AI
         response = client.prompt(prompt)
@@ -77,6 +110,7 @@ def generate_answer():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
 def format_response(text):
     """
     Format the raw AI response to ensure bullet points and structure, even if the AI doesn't follow instructions.
@@ -88,8 +122,10 @@ def format_response(text):
 
     # Patterns to detect list-like content
     list_indicators = [
-        r'^(General|Niche|International|Country-Specific|Additional)\b',  # Section headings
-        r'^(Indeed|LinkedIn|Glassdoor|H1BGrader|H1B Visa Jobs|ImmIhelp)\b',  # Website names
+        # Section headings
+        r'^(General|Niche|International|Country-Specific|Additional)\b',
+        # Website names
+        r'^(Indeed|LinkedIn|Glassdoor|H1BGrader|H1B Visa Jobs|ImmIhelp)\b',
         r'^(Network|Check|Stay)\b'  # Tips starting with verbs
     ]
 
@@ -101,11 +137,14 @@ def format_response(text):
                 formatted_lines.append('')  # Add a line break after a list
             continue
 
-        # Check if the line starts a new section (e.g., "General Job Search Websites")
-        if any(re.match(pattern, line, re.IGNORECASE) for pattern in list_indicators):
+        # Check if the line starts a new section (e.g., "General Job Search
+        # Websites")
+        if any(re.match(pattern, line, re.IGNORECASE)
+               for pattern in list_indicators):
             if in_list:
                 in_list = False
-                formatted_lines.append('')  # Add a line break before a new section
+                # Add a line break before a new section
+                formatted_lines.append('')
             # Add the section as a bold heading
             formatted_lines.append(f"**{line}**")
             in_list = True
@@ -113,7 +152,8 @@ def format_response(text):
 
         # If we're in a list, format the line as a bullet point
         if in_list and not line.startswith('-'):
-            # Split the line into website/tip and description (e.g., "Indeed (link unavailable): Description")
+            # Split the line into website/tip and description (e.g., "Indeed
+            # (link unavailable): Description")
             if ': ' in line:
                 parts = line.split(': ', 1)
                 item = parts[0].strip()
@@ -131,6 +171,7 @@ def format_response(text):
     # Join the lines with proper spacing
     formatted_text = '\n'.join(formatted_lines)
     return formatted_text
+
 
 if __name__ == '__main__':
     app.run(debug=True)
