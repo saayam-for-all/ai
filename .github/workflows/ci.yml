@@ -53,4 +53,5 @@ jobs:
           pytest
 
       - name: Pytest Code Coverage
-        run: pytest --cov=myproj tests/
+        run: |
+            pytest --cov=. --cov-report=xml --cov-report=term-missing tests/
