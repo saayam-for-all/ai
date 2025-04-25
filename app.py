@@ -302,5 +302,6 @@ def format_response(text):
 
 
 if __name__ == "__main__":
+    args = parser.parse_args()
     print(f"Starting Saayam AI Assistant with model: {selected_model}")
     app.run(debug=True, host="127.0.0.1", port=5000)
