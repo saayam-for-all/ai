@@ -53,7 +53,7 @@ jobs:
           source .venv/bin/activate
           pytest
 
-      - name: Pytest Code Coverage
-        run: |
-            source .venv/bin/activate
-            pytest --cov=. --cov-report=xml --cov-report=term-missing tests/
+      # - name: Pytest Code Coverage
+      #   run: |
+      #       source .venv/bin/activate
+      #       pytest --cov=. --cov-report=xml --cov-report=term-missing tests/
