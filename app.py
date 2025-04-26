@@ -117,11 +117,18 @@ app = Flask(__name__)
 
 @app.route("/")
 def home():
+    """Home route to render the main page.
+    Returns:
+        _type_: Home page with categories.
+    """
     return render_template("index.html", categories=categories)
-
 
 @app.route("/predict_categories", methods=["POST"])
 def predict_categories():
+    """Predict categories based on user input.
+    Returns:
+        _type_: JSON response with predicted categories.
+    """
     data = request.get_json()
     subject = data.get("subject")
     description = data.get("description")
@@ -302,6 +309,5 @@ def format_response(text):
 
 
 if __name__ == "__main__":
-    args = parser.parse_args()
     print(f"Starting Saayam AI Assistant with model: {selected_model}")
     app.run(debug=True, host="127.0.0.1", port=5000)
