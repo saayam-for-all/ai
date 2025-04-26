@@ -123,6 +123,7 @@ def home():
     """
     return render_template("index.html", categories=categories)
 
+
 @app.route("/predict_categories", methods=["POST"])
 def predict_categories():
     """Predict categories based on user input.
