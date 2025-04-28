@@ -1,11 +1,11 @@
 name: Python Flask CI Pipeline
 on:
   push:
-        branches: 
-            - feature/divyatanwar/ai-ci-build
+    branches:
+      - feature/divyatanwar/ai-ci-build
   pull_request:
-        branches: 
-            - feature/divyatanwar/ai-ci-build
+    branches:
+      - feature/divyatanwar/ai-ci-build
 
 jobs:
   build:
@@ -14,7 +14,7 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
-
+      # setting up Python environment
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
@@ -22,7 +22,7 @@ jobs:
 
       - name: Install Python Virtual Environment
         run: pip3 install virtualenv
-      
+
       # https://docs.github.com/en/actions/guides/caching-dependencies-to-speed-up-workflows
       - name: Virtual Environment
         uses: actions/cache@v3
@@ -32,7 +32,7 @@ jobs:
           key: ${{ runner.os }}-venv-${{ hashFiles('requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-venv-
-      
+
       - name: Activate Virtual Environment and Install Packages
         run: |
           if [ ! -d ".venv" ]; then
