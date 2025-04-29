@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Saayam AI Assistant</title>
+    
+    <!-- Favicon & Icons -->
+    <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
+    <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='favicon-16x16.png') }}">
+    <link rel="manifest" href="{{ url_for('static', filename='site.webmanifest') }}">
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+
+    <!-- Add marked.js for Markdown rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f9f9f9;
+        }
+        .container {
+            max-width: 600px;
+            margin: auto;
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #4CAF50;
+        }
+        label {
+            font-weight: bold;
+            margin-top: 10px;
+            display: block;
+        }
+        textarea, select, input, button {
+            margin-top: 10px;
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .predicted-categories {
+            margin-top: 10px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .category-option {
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            background-color: #e7f5e7;
+            cursor: pointer;
+        }
+        .category-option.selected {
+            background-color: #4CAF50;
+            color: white;
+            border: 1px solid #4CAF50;
+        }
+        .loading-message {
+            text-align: center;
+            margin-top: 10px;
+            font-style: italic;
+            color: #888;
+        }
+        .response {
+            margin-top: 20px;
+            display: none;
+        }
+        .response p {
+            background: #e7f5e7;
+            padding: 10px;
+            border: 1px solid #4CAF50;
+            border-radius: 5px;
+            font-family: Arial, sans-serif;
+        }
+        .response p ul {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+        .response p li {
+            margin-bottom: 5px;
+        }
+        .response p strong {
+            color: #333;
+        }
+        .metrics {
+            margin-top: 10px;
+            padding: 10px;
+            background: #f0f0f0;
+            border-radius: 5px;
+        }
+        .metrics p {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Saayam AI Assistant</h1>
+        <p><strong>Homepage:</strong><br>Enter a subject and description for your query.<br>
+        Optionally, select a category from the dropdown menu.</p>
+
+        <form id="qa-form">
+            <label for="subject">Subject:</label>
+            <input id="subject" name="subject" type="text" required />
+
+            <label for="category">Category (Optional):</label>
+            <select id="category" name="category">
+                <option value="" disabled selected>Select a category</option>
+            </select>
+
+            <label for="description">Description:</label>
+            <textarea id="description" name="description" rows="4" required></textarea>
+
+            <div id="category-prediction-area"></div>
+
+            <button type="button" onclick="askQuestion()">Ask</button>
+        </form>
+
+        <div class="response" id="response-container">
+            <h3>AI Response:</h3>
+            <p id="response-text"></p>
+            <div class="metrics" id="metrics-container"></div>
+        </div>
+    </div>
+
+    <script>
+        const categories = JSON.parse('{{ categories | tojson | safe }}');
+        const categoryDropdown = document.getElementById("category");
+        const predictionArea = document.getElementById("category-prediction-area");
+        let selectedCategory = "";
+
+        // Populate category dropdown
+        categories.forEach(cat => {
+            const option = document.createElement("option");
+            option.value = cat;
+            option.textContent = cat;
+            categoryDropdown.appendChild(option);
+        });
+
+        function askQuestion() {
+            const subject = document.getElementById("subject").value;
+            const category = document.getElementById("category").value || selectedCategory;
+            const description = document.getElementById("description").value;
+
+            if (!subject || !description) {
+                alert("Please fill out all required fields.");
+                return;
+            }
+
+            if (!category) {
+                predictionArea.innerHTML = '<p class="loading-message">Predicting categories...</p>';
+                fetch('/predict_categories', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ subject, description })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    predictionArea.innerHTML = "";
+                    const predictedContainer = document.createElement("div");
+                    predictedContainer.className = "predicted-categories";
+                    data.predicted_categories.forEach(cat => {
+                        const div = document.createElement("div");
+                        div.textContent = cat;
+                        div.className = "category-option";
+                        div.onclick = () => selectCategory(div, cat);
+                        predictedContainer.appendChild(div);
+                    });
+                    predictionArea.appendChild(predictedContainer);
+                })
+                .catch(err => {
+                    predictionArea.innerHTML = "<p class='loading-message'>Failed to predict categories.</p>";
+                    console.error(err);
+                });
+                return;
+            }
+
+            fetch('/generate_answer', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ category, question: description })
+            })
+            .then(res => res.json())
+            .then(data => {
+                const responseContainer = document.getElementById("response-container");
+                const responseText = document.getElementById("response-text");
+                const metricsContainer = document.getElementById("metrics-container");
+
+                // Render the response as Markdown
+                responseText.innerHTML = marked.parse(data.answer || data.error);
+                
+                // Display metrics
+                if (data.metrics) {
+                    metricsContainer.innerHTML = `
+                        <h4>Performance Metrics:</h4>
+                        <p><strong>Model:</strong> ${data.metrics.model}</p>
+                        <p><strong>Temperature:</strong> ${data.metrics.temperature}</p>
+                        <p><strong>Time to First Token (TTFT):</strong> ${data.metrics.ttft_seconds} seconds</p>
+                        <p><strong>Total Response Time (TTLT):</strong> ${data.metrics.ttlt_seconds} seconds</p>
+                        <p><strong>Speed:</strong> ${data.metrics.speed_tokens_per_second} tokens/second</p>
+                        <p><strong>Input Tokens:</strong> ${data.metrics.input_tokens}</p>
+                        <p><strong>Output Tokens:</strong> ${data.metrics.output_tokens}</p>
+                    `;
+                } else {
+                    metricsContainer.innerHTML = '<p>No metrics available.</p>';
+                }
+
+                responseContainer.style.display = 'block';
+            })
+            .catch(err => console.error(err));
+        }
+
+        function selectCategory(element, category) {
+            document.querySelectorAll(".category-option").forEach(el => el.classList.remove("selected"));
+            element.classList.add("selected");
+            selectedCategory = category;
+        }
+    </script>
+</body>
+</html>
