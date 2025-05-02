@@ -5,7 +5,7 @@ from groq import Groq
 import serverless_wsgi
 
 # Set up the Groq client
-os.environ["GROQ_API_KEY"] = "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"
+os.environ["GROQ_API_KEY"] = "  "
 client = Groq()
 
 # Set up categories 
