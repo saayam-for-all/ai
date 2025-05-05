@@ -1,4 +1,5 @@
 name: Python Flask CI Pipeline
+
 on:
   push:
     branches: ["test", "dev", "main"]
