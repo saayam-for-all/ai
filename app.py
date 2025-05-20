@@ -33,18 +33,18 @@ werkzeug_logger = logging.getLogger("werkzeug")
 werkzeug_logger.addHandler(console_handler)
 
 # Parse command-line arguments
-parser = argparse.ArgumentParser(
-    description="Run Saayam AI Assistant with a specific AI model."
-)
-parser.add_argument(
-    "--model",
-    type=str,
-    choices=["meta_ai", "gemini", "openai", "grok"],
-    default="meta_ai",
-    help="Choose the AI model to use: meta_ai, gemini, openai, or grok",
-)
-args = parser.parse_args()
-selected_model = args.model
+# parser = argparse.ArgumentParser(
+#     description="Run Saayam AI Assistant with a specific AI model."
+# )
+# parser.add_argument(
+#     "--model",
+#     type=str,
+#     choices=["meta_ai", "gemini", "openai", "grok"],
+#     default="meta_ai",
+#     help="Choose the AI model to use: meta_ai, gemini, openai, or grok",
+# )
+# args = parser.parse_args()
+# selected_model = args.model
 
 # Default temperature for models that support it
 DEFAULT_TEMPERATURE = 0.7
@@ -310,5 +310,28 @@ def format_response(text):
 
 
 if __name__ == "__main__":
+    # parse command line only when run as script
+    parser = argparse.ArgumentParser(
+        description="Run Saayam AI Assistant with a specific AI model."
+    )
+    parser.add_argument(
+        "--model",
+        type=str,
+        choices=["meta_ai", "gemini", "openai", "grok"],
+        default=os.getenv("SAYAAM_MODEL", "meta_ai"),
+        help="Choose the AI model to use: meta_ai, gemini, openai, or grok",
+    )
+    args = parser.parse_args()
+    selected_model = args.model
+
+    # then initialize ai_client based on selected_model
+    if selected_model == "meta_ai":
+        ai_client = MetaAI()
+    elif selected_model == "gemini":
+        # …
+    # etc.
+
+    print(f"Starting Saayam AI Assistant with model: {selected_model}")
+    app.run(debug=True, host="127.0.0.1", port=5000)
     print(f"Starting Saayam AI Assistant with model: {selected_model}")
     app.run(debug=True, host="127.0.0.1", port=5000)
