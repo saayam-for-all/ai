@@ -153,7 +153,7 @@ def generate_answer():
             first_token_time = time.time()
         elif selected_model == "grok":
             response = ai_client.chat.completions.create(
-                model="llama-3.2-1b-preview",
+                model="llama-3.1-8b-instant",
                 messages=[
                     {"role": "system", "content": "You are a helpful assistant."},
                     {"role": "user", "content": prompt}
