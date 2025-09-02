@@ -7,7 +7,14 @@ import serverless_wsgi
 # Set up the Groq client
 GROQ_API_KEY = os.environ["GROQ_API_KEY"] 
 client = Groq()
-
+#Set up temporary local databse of categories and categories constant
+help_categories={"FOOD_AND_ESSENTIALS_SUPPORT":"Food & Essentials",
+                 "CLOTHING_SUPPORT":"Clothing Support",
+                 "HOUSING_SUPPORT":"Housing Assistance",
+                 "EDUCATION_CAREER_SUPPORT":"Education & Career Support",
+                 "HEALTHCARE_WELLNESS_SUPPORT":"Healthcare & Wellness",
+                 "ELDERLY_SUPPORT":"Elderly & Community Support"
+}
 # Set up categories 
 categories = [
     "Food & Essentials", "Clothing Support", "Housing Assistance", "Education & Career Support", "Healthcare & Wellness", "Elderly & Community Support"
@@ -45,21 +52,22 @@ def predict_categories_api():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-#Generate an answer based on category, subject, description, location and gender
+#Generate an answer based on category constant, subject, description, location and gender
 @app.route('/generate_answer', methods=['POST'])
 def generate_answer_api():
     data = request.get_json()
-    category = data.get("category")
+    category_const = data.get("category_const")
     subject = data.get("subject")
     question = data.get("description")
     location = data.get("location")
     gender = data.get("gender")
     print(gender)
 
-    if not category or not subject or not question or not location:
-        return jsonify({"error": "Category, subject, description and location are required"}), 400
+    if not category_const or not subject or not question or not location:
+        return jsonify({"error": "Category_const, subject, description and location are required"}), 400
 
     try:
+        category = help_categories[category_const]
         answer = chat_with_llama(category, subject, question, location, gender)
         response = jsonify(answer)
         #print("Respose body:", response)            
