@@ -55,18 +55,18 @@ def predict_categories_api():
 @app.route('/generate_answer', methods=['POST'])
 def generate_answer_api():
     data = request.get_json()
-    category_const = data.get("category_const")
+    category = data.get("category")
     subject = data.get("subject")
     question = data.get("description")
     location = data.get("location")
     gender = data.get("gender")
     print(gender)
 
-    if not category_const or not subject or not question or not location:
-        return jsonify({"error": "Category_const, subject, description and location are required"}), 400
+    if not category or not subject or not question or not location:
+        return jsonify({"error": "Category, subject, description and location are required"}), 400
 
     try:
-        category = help_categories[category_const]
+        category = help_categories[category]
         answer = chat_with_llama(category, subject, question, location, gender)
         response = jsonify(answer)
         #print("Respose body:", response)            
@@ -81,7 +81,7 @@ def generate_answer_api():
 #Function to predict categories
 def predict_categories(subject, description):
     categories_with_desc = "\n".join([f"{k}: {v}" for k, v in TAXONOMY.items()]) # Move it outside the function, so that this is executed only once and not everytime
-    print(categories_with_desc)
+    # print(categories_with_desc)
     prompt = f"""
     You are a zero-shot text classifier that classifies user input into exactly one category from the predefined list of categories along with their description below. Respond ONLY with a category from the given list of categories whose meaning closely aligns with the category's description in the list. Do not include any additional text or explanations.
 
