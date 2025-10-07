@@ -1,10 +1,10 @@
 
 #  🔍 Saayam AI Assistant 🤖
 
-Saayam AI Assistant is a web-based application built with Flask that allows users to query various AI models (Meta AI, Gemini, ChatGPT, and Grok) for answers across multiple categories (e.g., Jobs, Education, Finance). The application uses zero-shot classification to predict relevant categories for user queries and provides detailed, formatted responses. Additionally, it collects performance metrics (latency, speed, temperature, token counts) to compare the efficiency of each AI model.
+Saayam AI Assistant is a web-based application built with Flask that allows users to query various AI models (Meta AI, Gemini, ChatGPT, and Groq) for answers across multiple categories (e.g., Jobs, Education, Finance). The application uses zero-shot classification to predict relevant categories for user queries and provides detailed, formatted responses. Additionally, it collects performance metrics (latency, speed, temperature, token counts) to compare the efficiency of each AI model.
 
 ## 🧠 Features
-- **Multi-Model Support**: Query Meta AI, Gemini, ChatGPT, or Grok via a command-line argument.
+- **Multi-Model Support**: Query Meta AI, Gemini, ChatGPT, or Groq via a command-line argument.
 - **Category Prediction**: Uses zero-shot classification (`facebook/bart-large-mnli`) to predict relevant categories for user queries.
 - **Formatted Responses**: Responses are structured with bullet points, bold headings, and clear sections for readability.
 - **Performance Metrics**: Measures latency (TTFT/TTLT), speed (tokens/second), temperature, and token counts for each model.
@@ -49,7 +49,7 @@ tiktoken
 ```
 
 ### 4. Set Up Environment Variables
-Create a .env file in the project root directory and add your API keys for Gemini, ChatGPT, and Grok:
+Create a .env file in the project root directory and add your API keys for Gemini, ChatGPT, and Groq:
 
 ```
 GEMINI_API_KEY=your_gemini_api_key
@@ -60,7 +60,7 @@ GROQ_API_KEY=your_groq_api_key
 Note: Meta AI doesn’t require an API key in this setup (uses meta-ai-api library).
 
 ### 5. Run the Application
-Run the application with a specific AI model using the --model argument. The available models are meta_ai, gemini, openai, and grok.
+Run the application with a specific AI model using the --model argument. The available models are meta_ai, gemini, openai, and groq.
 
 Meta AI:
 ```bash
@@ -77,9 +77,9 @@ ChatGPT (OpenAI):
 python app.py --model openai
 ```
 
-Grok:
+Groq:
 ```bash
-python app.py --model grok
+python app.py --model groq
 ```
 
 After running the application, open your browser and navigate to http://127.0.0.1:5000 to access the Saayam AI Assistant interface.
@@ -136,8 +136,8 @@ The application collects performance metrics for each AI model, including latenc
 - Input Tokens: 176
 - Output Tokens: 378
 
-**Grok**:
-- Model: grok
+**Groq**:
+- Model: groq
 - Temperature: 0.7
 - Time to First Token (TTFT): 0.856 seconds
 - Total Response Time (TTLT): 0.856 seconds
@@ -150,14 +150,14 @@ The application collects performance metrics for each AI model, including latenc
 - **Meta AI**: Free (unofficial API), but may have rate limits or reliability issues.
 - **Gemini**: Free tier available, with paid plans for higher usage.
 - **ChatGPT**: Pay-per-use ($0.002 per 1K tokens for gpt-3.5-turbo).
-- **Grok**: Free tier available, with paid plans for higher usage.
+- **Groq**: Free tier available, with paid plans for higher usage.
 
 ### Limitations
 
 - **Meta AI**: Slow, low speed, lacks temperature control.
 - **Gemini**: Moderate performance, potential tokenization differences.
-- **ChatGPT**: Reliable, slightly slower than Grok.
-- **Grok**: Fastest, high output token count (verbosity).
+- **ChatGPT**: Reliable, slightly slower than Groq.
+- **Groq**: Fastest, high output token count (verbosity).
 
 ## ⚖️ Comparison with Alternative Solutions
 
@@ -166,7 +166,7 @@ The application collects performance metrics for each AI model, including latenc
 | Meta AI   | 20.81            | 15.185   | Free         | Least consistent       |
 | Gemini    | 100.32           | 4.515    | Free tier    | Moderate consistency   |
 | ChatGPT   | 81.83            | 4.619    | Pay-per-use  | Highly consistent      |
-| Grok      | 630.66           | 0.856    | Free tier    | Practical, fast        |
+| Groq      | 630.66           | 0.856    | Free tier    | Practical, fast        |
 
 ## 🛠️ Proof-of-Concept Implementation
 
@@ -186,20 +186,20 @@ Flask-based web app to query 4 models, classify categories, format answers, and 
 
 ### Example
 ```bash
-python app.py --model grok
+python app.py --model groq
 ```
 Visit [http://127.0.0.1:5000](http://127.0.0.1:5000)
 
 ## 📈 Analysis and Recommendations
 
-- **Fastest**: Grok (0.856s TTLT, 630.66 tokens/s)
+- **Fastest**: Groq (0.856s TTLT, 630.66 tokens/s)
 - **Most Consistent**: ChatGPT
-- **Cost-Effective**: Gemini & Grok
+- **Cost-Effective**: Gemini & Groq
 - **Slowest**: Meta AI
 
 ### Recommendations
 
-- Use **Grok** for real-time speed
+- Use **Groq** for real-time speed
 - Use **ChatGPT** for reliability & consistency
 - Use **Gemini** for cost-conscious performance
 - Avoid **Meta AI** for production
