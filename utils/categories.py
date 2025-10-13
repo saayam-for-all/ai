@@ -1,3 +1,4 @@
+#File Contains all the help categories mapped to their string constants.
 help_categories = {
     
     # General (0)

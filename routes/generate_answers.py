@@ -8,6 +8,9 @@ generate_answer_bp = Blueprint('generate_answer', __name__)
 #Generate an answer based on category constant, subject, description, location and gender
 @generate_answer_bp.route('/generate_answer', methods=['POST'])
 def generate_answer_api():
+
+    # print(">>> generate_answer route hit")  # debug line
+    # return jsonify({"status": "ok", "echo": request.get_json()}), 200
     data = request.get_json()
     category = data.get("category")
     subject = data.get("subject")
