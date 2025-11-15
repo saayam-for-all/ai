@@ -385,10 +385,3 @@ The service includes full CORS support for web application integration. All endp
 
 Test the API using curl commands or any HTTP client. See the Usage Examples section above for sample curl commands.
 
-## License
-
-[Add your license information here]
-
-## Contributing
-
-[Add contribution guidelines here]
