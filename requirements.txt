@@ -1,0 +1,5 @@
+flask
+groq
+serverless-wsgi
+python-dotenv
+

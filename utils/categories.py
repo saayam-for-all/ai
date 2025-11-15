@@ -1,0 +1,52 @@
+#File Contains all the help categories mapped to their string constants.
+help_categories = {
+    
+    # General (0)
+    "0.0.0.0.0" : "General",
+    # Food & Essentials (1)
+    "1": "FOOD_AND_ESSENTIALS_SUPPORT",
+    "1.1": "FOOD_ASSISTANCE",
+    "1.2": "GROCERY_SHOPPING_AND_DELIVERY",
+    "1.3": "COOKING_HELP",
+
+    # Clothing (2)
+    "2.1": "DONATE_CLOTHES",
+    "2.2": "BORROW_CLOTHES",
+    "2.3": "EMERGENCY_ASSISTANCE",
+    "2.3.1": "EMERGENCY_CLOTHING_ASSISTANCE",
+    "2.4": "SEASONAL_DRIVE_NOTIFICATION",
+    "2.5": "TAILORING",
+
+    # Housing (3)
+    "3": "HOUSING_SUPPORT",
+    "3.1": "FIND_A_ROOMMATE",
+    "3.2": "RENTING_SUPPORT",
+    "3.3": "HOUSEHOLD_ITEM_EXCHANGE",
+    "3.4": "MOVING_ASSISTANCE",
+    "3.5": "CLEANING_HELP",
+    "3.6": "HOME_REPAIR_SUPPORT",
+    "3.7": "UTILITIES_SETUP",
+
+    # Education (4)
+    "4": "EDUCATION_CAREER_SUPPORT",
+    "4.1": "COLLEGE_APPLICATION_HELP",
+    "4.2": "SOP_ESSAY_REVIEW",
+    "4.3": "TUTORING",
+
+    # Healthcare (5)
+    "5": "HEALTHCARE_WELLNESS_SUPPORT",
+    "5.1": "MEDICAL_NAVIGATION",
+    "5.2": "MEDICINE_DELIVERY",
+    "5.3": "MENTAL_WELLBEING_SUPPORT",
+    "5.4": "MEDICATION_REMINDERS",
+    "5.5": "HEALTH_EDUCATION_GUIDANCE",
+
+    # Elderly (6)
+    "6": "ELDERLY_SUPPORT",
+    "6.1": "SENIOR_LIVING_RELOCATION",
+    "6.2": "DIGITAL_SUPPORT_FOR_SENIORS",
+    "6.3": "MEDICAL_HELP",
+    "6.4": "ERRANDS_TRANSPORTATION",
+    "6.5": "SOCIAL_CONNECTION",
+    "6.6": "MEAL_SUPPORT"
+}
