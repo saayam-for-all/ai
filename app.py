@@ -2,6 +2,7 @@
 from flask import Flask, jsonify, request, make_response, send_from_directory
 from routes.generate_answers import generate_answer_bp
 from routes.predict_categories import predict_categories_bp
+from routes.generate_subject import generate_subject_bp
 import os
 
 
@@ -9,6 +10,7 @@ app = Flask(__name__)
 
 app.register_blueprint(generate_answer_bp)
 app.register_blueprint(predict_categories_bp)
+app.register_blueprint(generate_subject_bp)
 
 # CORS support - handle preflight OPTIONS requests
 @app.after_request

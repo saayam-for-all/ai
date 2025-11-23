@@ -1,8 +1,8 @@
 """
 Service module with abstraction layer for easy provider switching.
+Python 3.14+ compatible.
 """
 from abc import ABC, abstractmethod
-from typing import Optional, List, Dict
 import os
 
 
@@ -33,10 +33,10 @@ class AnswerGenerationServiceInterface(ABC):
         category: str, 
         subject: str, 
         description: str, 
-        location: Optional[str] = None, 
-        gender: Optional[str] = None,
-        age: Optional[str] = None,
-        conversation_history: Optional[List[Dict[str, str]]] = None
+        location: str | None = None, 
+        gender: str | None = None,
+        age: str | None = None,
+        conversation_history: list[dict[str, str]] | None = None
     ) -> str:
         """
         Generate a conversational answer with context maintenance.
@@ -70,9 +70,9 @@ class ServiceWrapper:
     
     def __init__(
         self,
-        provider: Optional[str] = None,
-        classification_kwargs: Optional[dict] = None,
-        answer_generation_kwargs: Optional[dict] = None
+        provider: str | None = None,
+        classification_kwargs: dict | None = None,
+        answer_generation_kwargs: dict | None = None
     ):
         """
         Initialize the service wrapper.
@@ -137,10 +137,10 @@ class ServiceWrapper:
         category: str,
         subject: str,
         description: str,
-        location: Optional[str] = None,
-        gender: Optional[str] = None,
-        age: Optional[str] = None,
-        conversation_history: Optional[List[Dict[str, str]]] = None
+        location: str | None = None,
+        gender: str | None = None,
+        age: str | None = None,
+        conversation_history: list[dict[str, str]] | None = None
     ) -> str:
         """
         Generate a conversational answer with context maintenance.
@@ -177,7 +177,7 @@ class ServiceWrapper:
 
 
 # Global service wrapper instance (singleton pattern)
-_service_wrapper: Optional[ServiceWrapper] = None
+_service_wrapper: ServiceWrapper | None = None
 
 
 def get_service_wrapper() -> ServiceWrapper:

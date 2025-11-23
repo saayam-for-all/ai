@@ -1,5 +1,6 @@
 from flask import request, jsonify, Blueprint
 from services import get_service_wrapper
+from utils.subject_generator import generate_subject_from_description
 
 predict_categories_bp = Blueprint('predict_categories', __name__)
 
@@ -19,8 +20,15 @@ class SaayamPredictCategoriesAPI:
         subject = data.get("subject")
         description = data.get("description")
 
-        if not subject or not description:
-            return jsonify({"error": "Subject and description are required"}), 400
+        # Description is required
+        if not description:
+            return jsonify({"error": "Description is required"}), 400
+        
+        # Generate subject from description if not provided
+        if not subject or not subject.strip():
+            print("Subject not provided, generating from description...")
+            subject = generate_subject_from_description(description, max_length=70)
+            print(f"Generated subject: {subject}")
 
         try:
             service_wrapper = get_service_wrapper()

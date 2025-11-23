@@ -7,6 +7,8 @@ A Flask-based AI service that provides intelligent conversational assistance and
 - **Conversational Chatbot**: Multi-turn conversations with context maintenance (RAG-like functionality)
 - **Category Prediction**: Automatically classifies user requests into predefined help categories
 - **Intelligent Answer Generation**: Provides contextual, actionable solutions based on user input
+- **Auto-Subject Generation**: Automatically generates concise subjects (max 70 chars) from descriptions when not provided
+- **Emergency Phone Numbers**: Responses include relevant emergency contact numbers (911, 112, crisis hotlines, etc.)
 - **Optimized Prompts**: Short, precise, and accurate answers (2-4 sentences, under 100 words)
 - **Multi-category Support**: Covers 6 main categories with 50+ subcategories
 - **Context-Aware**: Maintains conversation history across multiple turns
@@ -16,7 +18,12 @@ A Flask-based AI service that provides intelligent conversational assistance and
 
 ## Quick Start
 
-### 1. Installation
+### 1. Prerequisites
+
+- **Python 3.14+** - Download from [python.org](https://www.python.org/downloads/)
+- Verify installation: `python --version` (should show 3.14.x)
+
+### 2. Installation
 
 ```bash
 # Clone the repository
@@ -27,14 +34,14 @@ cd Saayam-Predict
 pip install -r requirements.txt
 ```
 
-### 2. Environment Setup
+### 3. Environment Setup
 
 Create a `.env` file in the root directory:
 ```
 GROQ_API_KEY=your_groq_api_key_here
 ```
 
-### 3. Run the Service
+### 4. Run the Service
 
 ```bash
 python app.py
@@ -76,7 +83,49 @@ Automatically predicts the category for a user request.
 "FOOD_ASSISTANCE"
 ```
 
-### 3. Generate Answer (Conversational)
+### 3. Generate Subject
+```
+POST /generate_subject
+```
+Generates a concise subject (max 70 characters by default) from a description using AI.
+
+**Request Body:**
+```json
+{
+  "description": "string (required)",
+  "max_length": "integer (optional, default: 70, max: 200)"
+}
+```
+
+**Response:**
+```json
+{
+  "subject": "Generated subject text",
+  "max_length": 70,
+  "description_length": 45
+}
+```
+
+**Example:**
+```bash
+curl -X POST http://localhost:3001/generate_subject \
+  -H "Content-Type: application/json" \
+  -d '{
+    "description": "I need help finding food banks and meal programs in my area",
+    "max_length": 70
+  }'
+```
+
+**Response:**
+```json
+{
+  "subject": "Finding food banks and meal programs",
+  "max_length": 70,
+  "description_length": 58
+}
+```
+
+### 4. Generate Answer (Conversational)
 ```
 POST /generate_answer
 ```
@@ -86,7 +135,7 @@ Generates contextual answers with conversation history support.
 ```json
 {
   "category": "string (category ID like '1.1' or constant like 'FOOD_ASSISTANCE')",
-  "subject": "string",
+  "subject": "string (optional - auto-generated from description if not provided)",
   "description": "string (current user message)",
   "location": "string (optional)",
   "gender": "string (optional)",
@@ -105,9 +154,22 @@ Generates contextual answers with conversation history support.
 ```
 
 **Response:**
+
+If subject was auto-generated:
+```json
+{
+  "answer": "Generated answer text with markdown formatting",
+  "subject": "Auto-generated subject (max 70 characters)",
+  "subject_generated": true
+}
+```
+
+If subject was provided:
 ```json
 "Generated answer text with markdown formatting"
 ```
+
+**Note:** The API maintains backward compatibility. When a subject is provided, it returns just the answer string. When auto-generated, it returns a JSON object with the answer and generated subject.
 
 ## Category Input Format
 
@@ -214,6 +276,7 @@ curl -X POST http://localhost:3001/generate_answer \
         "role": "assistant",
         "content": "Here are food resources in San Francisco..."
       }
+      
     ]
   }'
 ```
@@ -243,6 +306,28 @@ curl -X POST http://localhost:3001/generate_answer \
   }'
 ```
 
+### Example 5: Auto-Subject Generation
+
+```bash
+curl -X POST http://localhost:3001/generate_answer \
+  -H "Content-Type: application/json" \
+  -d '{
+    "category": "1.1",
+    "subject": "",
+    "description": "I need help finding food banks and meal programs in my area",
+    "location": "New York, NY"
+  }'
+```
+
+**Response:**
+```json
+{
+  "answer": "Here are food resources in New York...",
+  "subject": "Finding food banks and meal programs",
+  "subject_generated": true
+}
+```
+
 ## Project Structure
 
 ```
@@ -255,7 +340,8 @@ curl -X POST http://localhost:3001/generate_answer \
 ├── routes/
 │   ├── __init__.py
 │   ├── generate_answers.py          # Answer generation endpoint
-│   └── predict_categories.py        # Category prediction endpoint
+│   ├── predict_categories.py        # Category prediction endpoint
+│   └── generate_subject.py          # Subject generation endpoint
 ├── services/
 │   ├── __init__.py
 │   ├── classification_service.py    # Category prediction logic
@@ -265,7 +351,8 @@ curl -X POST http://localhost:3001/generate_answer \
     ├── categories.py                 # Category mappings
     ├── categories_with_description.py # Category descriptions
     ├── client.py                     # Groq API client
-    └── prompts.py                    # AI prompts for different categories
+    ├── prompts.py                    # AI prompts for different categories
+    └── subject_generator.py          # Auto-subject generation utility
 ```
 
 ## Dependencies
@@ -337,7 +424,7 @@ The service is configured for AWS Lambda deployment. See deployment options:
 - **400 Bad Request**: Missing required fields or invalid category
   ```json
   {
-    "error": "Category, subject, and description are required"
+    "error": "Category and description are required"
   }
   ```
 

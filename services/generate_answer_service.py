@@ -1,5 +1,8 @@
+"""
+Answer generation service using Groq/LLaMA.
+Python 3.14+ compatible.
+"""
 from abc import ABC, abstractmethod
-from typing import Optional, List, Dict
 from services import AnswerGenerationServiceInterface, ClassificationServiceInterface
 from utils.prompts import get_prompt, get_conversational_prompt
 from utils.client import client
@@ -15,7 +18,7 @@ class GroqAnswerGenerationService(AnswerGenerationServiceInterface):
         self, 
         model: str = "llama-3.1-8b-instant", 
         temperature: float = 0.7, 
-        classification_service: Optional[ClassificationServiceInterface] = None
+        classification_service: ClassificationServiceInterface | None = None
     ):
         self.model = model
         self.temperature = temperature
@@ -26,10 +29,10 @@ class GroqAnswerGenerationService(AnswerGenerationServiceInterface):
         category: str, 
         subject: str, 
         description: str, 
-        location: Optional[str] = None, 
-        gender: Optional[str] = None,
-        age: Optional[str] = None,
-        conversation_history: Optional[List[Dict[str, str]]] = None
+        location: str | None = None, 
+        gender: str | None = None,
+        age: str | None = None,
+        conversation_history: list[dict[str, str]] | None = None
     ) -> str:
         """
         Generate conversational answer with context maintenance using Groq/LLaMA.

@@ -1,7 +1,43 @@
-/.venv
-.env
+# Python
 __pycache__/
-*.pyc, *.pyo
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+/.venv
+/venv/
+ENV/
+env/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# IDE
 .vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Project specific
 chatbot.html
 test_all.py
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# AWS Lambda
+*.zip
+.lambda/

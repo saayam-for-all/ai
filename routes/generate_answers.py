@@ -1,6 +1,7 @@
 from flask import request, jsonify, Blueprint
 from services import get_service_wrapper
 from utils.categories import help_categories
+from utils.subject_generator import generate_subject_from_description
 
 generate_answer_bp = Blueprint('generate_answer', __name__)
 
@@ -17,7 +18,7 @@ class SaayamGenerateAnswerAPI:
         Expected JSON format:
         {
             "category": "string",
-            "subject": "string",
+            "subject": "string (optional - will be auto-generated from description if not provided)",
             "description": "string (current user message)",
             "location": "string (optional)",
             "gender": "string (optional)",
@@ -44,9 +45,19 @@ class SaayamGenerateAnswerAPI:
         print(f"Gender: {gender}, Location: {location}, Age: {age}")
         print(f"Conversation history length: {len(conversation_history)}")
 
-        # Only category, subject, and description are required
-        if not category or not subject or not question:
-            return jsonify({"error": "Category, subject, and description are required"}), 400
+        # Category and description are required
+        if not category or not question:
+            return jsonify({"error": "Category and description are required"}), 400
+        
+        # Track if subject was auto-generated
+        subject_was_generated = False
+        
+        # Generate subject from description if not provided
+        if not subject or not subject.strip():
+            print("Subject not provided, generating from description...")
+            subject = generate_subject_from_description(question, max_length=70)
+            subject_was_generated = True
+            print(f"Generated subject: {subject}")
 
         # Validate conversation history format if provided
         if conversation_history:
@@ -77,13 +88,19 @@ class SaayamGenerateAnswerAPI:
             answer = service_wrapper.generate_answer(
                 category, subject, question, location, gender, age, conversation_history
             )
-            # Return answer as JSON object
-            # Note: jsonify() on a string returns a JSON-encoded string
-            # For better API consistency, we could use {"answer": answer} but maintaining backward compatibility
-            response = jsonify(answer)
-            # CORS headers are handled globally in app.py
             
-            return response
+            # Return answer with generated subject if it was auto-generated
+            # Maintain backward compatibility: if subject wasn't generated, return just the answer string
+            if subject_was_generated:
+                response_data = {
+                    "answer": answer,
+                    "subject": subject,
+                    "subject_generated": True
+                }
+                return jsonify(response_data)
+            else:
+                # Backward compatibility: return just the answer string if subject was provided
+                return jsonify(answer)
         except KeyError as e:
             print(f"KeyError: {str(e)}")
             return jsonify({"error": f"Invalid category: {str(e)}"}), 400
