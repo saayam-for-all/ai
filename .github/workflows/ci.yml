@@ -4,7 +4,7 @@ name: Python Flask CI Pipeline
 #push: Runs the workflow whenever you push commits to any of the test, dev or main branche
 on:
   push:
-    branches: ["test", "dev", "main", "Raj-Adarsh_ci-ai_22"]
+    branches: ["test", "dev", "main"]
 
   # Also runs the workflow on PRs targeting those same branches.
   pull_request:
