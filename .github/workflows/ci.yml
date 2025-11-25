@@ -1,0 +1,72 @@
+# A human readable name for the workflow. This apperas in the actions UI and Logs.
+name: Python Flask CI Pipeline
+# Triggers:
+#push: Runs the workflow whenever you push commits to any of the test, dev or main branche
+on:
+  push:
+    branches: ["test", "dev", "main"]
+
+  # Also runs the workflow on PRs targeting those same branches.
+  pull_request:
+    branches: ["test", "dev", "main"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest # Spins up a Linux VM with Ubuntu for all the steps in this job.
+
+    steps:
+      - name: Checkout repository # uses the official checkout action to pull your code into the runner.
+        uses: actions/checkout@v3
+
+      - name: Set up Python # Install Python 3.11.3 and makes it available in the PATH.
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11.3"
+
+      - name: Install Python Virtual Environment #installs the virtualenv package using pip3 globally to create isolated Python environments.
+        run: pip3 install virtualenv
+
+      # https://docs.github.com/en/actions/guides/caching-dependencies-to-speed-up-workflows
+      - name: Virtual Environment # this speeds up teh installation by reusing last virtual environment when there is no change in the requirements.txt
+        uses: actions/cache@v3
+        id: cache-venv
+        with:
+          path: .venv #.venv directory is created in the root of the repository and contains the virtual environment.
+          key: ${{ runner.os }}-venv-${{ hashFiles('requirements.txt') }} # The key is a unique identifier for the cache. It is based on the operating system and the hash of the requirements.txt file.
+          restore-keys:
+            | #fallback keys to restore the cache if the exact key is not found.
+            ${{ runner.os }}-venv-
+
+      - name: Activate Virtual Environment and Install Packages
+        run: |
+          if [ ! -d ".venv" ]; then
+            python3 -m venv .venv
+          fi
+          source .venv/bin/activate
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Install testing tools
+        run: |
+          source .venv/bin/activate
+          pip install pytest pytest-cov flake8
+        
+
+      - name: Lint code with flake8
+        run: |
+          source .venv/bin/activate
+          pip install flake8
+          flake8 *.py --max-line-length=150
+
+      - name: Run pytest
+        run: |
+          source .venv/bin/activate
+          pytest
+
+      - name: Run pytest Code Coverage
+        run: |
+            source .venv/bin/activate
+            pytest --cov=app \
+                   --cov-report=xml \
+                   --cov-report=term-missing \
+                --cov-report=xml 
