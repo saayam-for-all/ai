@@ -1,5 +1,5 @@
 
-#  🔍 Saayam AI Assistant 🤖
+#  🔍 Saayam AI Assistant 🤖 
 
 Saayam AI Assistant is a web-based application built with Flask that allows users to query various AI models (Meta AI, Gemini, ChatGPT, and Grok) for answers across multiple categories (e.g., Jobs, Education, Finance). The application uses zero-shot classification to predict relevant categories for user queries and provides detailed, formatted responses. Additionally, it collects performance metrics (latency, speed, temperature, token counts) to compare the efficiency of each AI model.
 
