@@ -7,7 +7,6 @@ from groq import Groq  # Grok API
 from dotenv import load_dotenv
 import os
 import re
-import argparse
 import time
 import tiktoken
 import logging
@@ -32,22 +31,13 @@ console_handler.setLevel(logging.INFO)
 werkzeug_logger = logging.getLogger('werkzeug')
 werkzeug_logger.addHandler(console_handler)
 
-# Parse command-line arguments
-parser = argparse.ArgumentParser(description="Run Saayam AI Assistant with a specific AI model.")
-parser.add_argument(
-    "--model",
-    type=str,
-    choices=["meta_ai", "gemini", "openai", "grok"],
-    default="meta_ai",
-    help="Choose the AI model to use: meta_ai, gemini, openai, or grok"
-)
-args = parser.parse_args()
-selected_model = args.model
+# Default model (can be overridden by command line or environment variable)
+selected_model = os.getenv("SAYAAM_MODEL", "meta_ai")
 
 # Default temperature for models that support it
 DEFAULT_TEMPERATURE = 0.7
 
-# Initialize the chosen AI client
+# Initialize the chosen AI client based on selected_model
 if selected_model == "meta_ai":
     ai_client = MetaAI()
 elif selected_model == "gemini":
@@ -59,6 +49,10 @@ elif selected_model == "openai":
 elif selected_model == "grok":
     groq_api_key = os.getenv("GROQ_API_KEY")
     ai_client = Groq(api_key=groq_api_key)
+else:
+    # Default to MetaAI if unknown model
+    ai_client = MetaAI()
+    selected_model = "meta_ai"
 
 # Category list (unchanged)
 categories = [
@@ -80,9 +74,11 @@ openai_tokenizer = tiktoken.encoding_for_model("gpt-3.5-turbo")
 
 app = Flask(__name__)
 
+
 @app.route('/')
 def home():
     return render_template('index.html', categories=categories)
+
 
 @app.route('/predict_categories', methods=['POST'])
 def predict_categories():
@@ -98,6 +94,7 @@ def predict_categories():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
 @app.route('/generate_answer', methods=['POST'])
 def generate_answer():
     data = request.get_json()
@@ -106,7 +103,7 @@ def generate_answer():
 
     if not category or not question:
         return jsonify({"error": "Category and question required"}), 400
-    
+
     # Create a prompt with formatting instructions
     prompt = (
         f"Category: {category}\n"
@@ -122,7 +119,7 @@ def generate_answer():
         "- Website 1: Description.\n"
         "- Website 2: Description.\n"
     )
-    
+
     # Count input tokens (approximation for non-OpenAI models)
     input_tokens = len(openai_tokenizer.encode(prompt)) if selected_model == "openai" else len(prompt.split())
 
@@ -198,6 +195,7 @@ def generate_answer():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
 def format_response(text):
     lines = text.split('\n')
     formatted_lines = []
@@ -241,6 +239,7 @@ def format_response(text):
 
     formatted_text = '\n'.join(formatted_lines)
     return formatted_text
+
 
 if __name__ == '__main__':
     print(f"Starting Saayam AI Assistant with model: {selected_model}")

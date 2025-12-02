@@ -1,4 +1,5 @@
 flask
+torch
 transformers
 meta-ai-api
 google-generativeai
@@ -6,3 +7,4 @@ openai
 groq
 python-dotenv
 tiktoken
+numpy<2
