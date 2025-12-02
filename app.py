@@ -3,7 +3,7 @@ from transformers import pipeline
 from meta_ai_api import MetaAI
 import google.generativeai as genai  # Gemini API
 from openai import OpenAI  # OpenAI API
-from groq import Groq  # Grok API
+from groq import Groq  # Groq API
 from dotenv import load_dotenv
 import os
 import re
@@ -37,9 +37,9 @@ parser = argparse.ArgumentParser(description="Run Saayam AI Assistant with a spe
 parser.add_argument(
     "--model",
     type=str,
-    choices=["meta_ai", "gemini", "openai", "grok"],
+    choices=["meta_ai", "gemini", "openai", "groq"],
     default="meta_ai",
-    help="Choose the AI model to use: meta_ai, gemini, openai, or grok"
+    help="Choose the AI model to use: meta_ai, gemini, openai, or groq"
 )
 args = parser.parse_args()
 selected_model = args.model
@@ -56,7 +56,7 @@ elif selected_model == "gemini":
     ai_client = genai.GenerativeModel('gemini-1.5-flash')
 elif selected_model == "openai":
     ai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-elif selected_model == "grok":
+elif selected_model == "groq":
     groq_api_key = os.getenv("GROQ_API_KEY")
     ai_client = Groq(api_key=groq_api_key)
 
@@ -151,7 +151,7 @@ def generate_answer():
             )
             raw_answer = response.choices[0].message.content.strip()
             first_token_time = time.time()
-        elif selected_model == "grok":
+        elif selected_model == "groq":
             response = ai_client.chat.completions.create(
                 model="llama-3.1-8b-instant",
                 messages=[
@@ -181,7 +181,7 @@ def generate_answer():
         # Log metrics
         metrics = {
             "model": selected_model,
-            "temperature": DEFAULT_TEMPERATURE if selected_model in ["gemini", "openai", "grok"] else "N/A",
+            "temperature": DEFAULT_TEMPERATURE if selected_model in ["gemini", "openai", "groq"] else "N/A",
             "ttft_seconds": round(ttft, 3),
             "ttlt_seconds": round(ttlt, 3),
             "speed_tokens_per_second": round(speed, 2),
