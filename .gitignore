@@ -1,0 +1,7 @@
+/.venv
+.env
+__pycache__/
+*.pyc, *.pyo
+.vscode/
+chatbot.html
+test_all.py
