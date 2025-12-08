@@ -2,7 +2,7 @@
 Utility module for generating summarized subjects from descriptions.
 Python 3.14+ compatible.
 """
-from utils.client import client
+from utils.client import client, _use_groq, _gemini_client
 
 
 def generate_subject_from_description(description: str, max_length: int = 70) -> str:
@@ -25,14 +25,72 @@ def generate_subject_from_description(description: str, max_length: int = 70) ->
         # Still generate a better summary if possible, but fallback to truncated description
         truncated = description.strip()[:max_length]
         # Try to generate a better summary
-        try:
-            prompt = f"""Generate a concise subject/title (maximum {max_length} characters) that summarizes the following description. 
+        prompt = f"""Generate a concise subject/title (maximum {max_length} characters) that summarizes the following description. 
 Return ONLY the subject, no additional text or explanation. Keep it brief and descriptive.
 
 Description: {description}
 
 Subject (max {max_length} chars):"""
-            
+        
+        # Try Groq first
+        if _use_groq and client:
+            try:
+                response = client.chat.completions.create(
+                    model="llama-3.1-8b-instant",
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.3,
+                    max_tokens=50
+                )
+                
+                generated_subject = response.choices[0].message.content.strip()
+                # Strictly enforce max_length - truncate if necessary
+                if len(generated_subject) <= max_length:
+                    return generated_subject
+                else:
+                    # Truncate to max_length, trying to cut at word boundary
+                    truncated = generated_subject[:max_length]
+                    last_space = truncated.rfind(' ')
+                    if last_space > max_length * 0.7:  # Keep at least 70% of length
+                        return truncated[:last_space].strip()
+                    return truncated.strip()
+            except Exception as e:
+                print(f"Error generating subject with Groq, trying Gemini: {str(e)}")
+        
+        # Fallback to Gemini
+        if _gemini_client:
+            try:
+                import google.generativeai as genai
+                model = genai.GenerativeModel("gemini-2.5-flash")
+                response = model.generate_content(prompt)
+                generated_subject = response.text.strip()
+                
+                # Strictly enforce max_length - truncate if necessary
+                if len(generated_subject) <= max_length:
+                    return generated_subject
+                else:
+                    truncated = generated_subject[:max_length]
+                    last_space = truncated.rfind(' ')
+                    if last_space > max_length * 0.7:
+                        return truncated[:last_space].strip()
+                    return truncated.strip()
+            except Exception as e:
+                print(f"Error generating subject with Gemini: {str(e)}")
+        
+        # Final fallback: return truncated description
+        print(f"Error generating subject, using truncated description")
+        return truncated
+    
+    # For longer descriptions, generate a summary
+    prompt = f"""Generate a concise subject/title (maximum {max_length} characters) that summarizes the following description. 
+Return ONLY the subject, no additional text or explanation. Keep it brief and descriptive.
+
+Description: {description}
+
+Subject (max {max_length} chars):"""
+    
+    # Try Groq first
+    if _use_groq and client:
+        try:
             response = client.chat.completions.create(
                 model="llama-3.1-8b-instant",
                 messages=[{"role": "user", "content": prompt}],
@@ -41,60 +99,50 @@ Subject (max {max_length} chars):"""
             )
             
             generated_subject = response.choices[0].message.content.strip()
-            # Strictly enforce max_length - truncate if necessary
+            
+            # Strictly enforce max_length (70 characters)
             if len(generated_subject) <= max_length:
                 return generated_subject
             else:
-                # Truncate to max_length, trying to cut at word boundary
+                # Truncate to max_length, trying to cut at word boundary if possible
                 truncated = generated_subject[:max_length]
+                # Try to cut at last space to avoid cutting words
                 last_space = truncated.rfind(' ')
-                if last_space > max_length * 0.7:  # Keep at least 70% of length
+                if last_space > max_length * 0.7:  # Only if we keep at least 70% of the length
                     return truncated[:last_space].strip()
                 return truncated.strip()
         except Exception as e:
-            print(f"Error generating subject, using truncated description: {str(e)}")
-            return truncated
+            print(f"Error generating subject with Groq, trying Gemini: {str(e)}")
     
-    # For longer descriptions, generate a summary
-    try:
-        prompt = f"""Generate a concise subject/title (maximum {max_length} characters) that summarizes the following description. 
-Return ONLY the subject, no additional text or explanation. Keep it brief and descriptive.
-
-Description: {description}
-
-Subject (max {max_length} chars):"""
-        
-        response = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.3,
-            max_tokens=50
-        )
-        
-        generated_subject = response.choices[0].message.content.strip()
-        
-        # Strictly enforce max_length (70 characters)
-        if len(generated_subject) <= max_length:
-            return generated_subject
-        else:
-            # Truncate to max_length, trying to cut at word boundary if possible
-            truncated = generated_subject[:max_length]
-            # Try to cut at last space to avoid cutting words
-            last_space = truncated.rfind(' ')
-            if last_space > max_length * 0.7:  # Only if we keep at least 70% of the length
-                return truncated[:last_space].strip()
-            return truncated.strip()
+    # Fallback to Gemini
+    if _gemini_client:
+        try:
+            import google.generativeai as genai
+            model = genai.GenerativeModel("gemini-2.5-flash")
+            response = model.generate_content(prompt)
+            generated_subject = response.text.strip()
             
-    except Exception as e:
-        print(f"Error generating subject from description: {str(e)}")
-        # Fallback: return truncated description (strictly enforce max_length)
-        truncated = description.strip()[:max_length]
-        # Try to cut at word boundary
-        last_space = truncated.rfind(' ')
-        if last_space > max_length * 0.7:
-            result = truncated[:last_space].strip()
-        else:
-            result = truncated.strip()
-        # Final check to ensure we never exceed max_length
-        return result[:max_length]
+            # Strictly enforce max_length
+            if len(generated_subject) <= max_length:
+                return generated_subject
+            else:
+                truncated = generated_subject[:max_length]
+                last_space = truncated.rfind(' ')
+                if last_space > max_length * 0.7:
+                    return truncated[:last_space].strip()
+                return truncated.strip()
+        except Exception as e:
+            print(f"Error generating subject with Gemini: {str(e)}")
+    
+    # Final fallback: return truncated description (strictly enforce max_length)
+    print(f"Error generating subject from description, using truncated description")
+    truncated = description.strip()[:max_length]
+    # Try to cut at word boundary
+    last_space = truncated.rfind(' ')
+    if last_space > max_length * 0.7:
+        result = truncated[:last_space].strip()
+    else:
+        result = truncated.strip()
+    # Final check to ensure we never exceed max_length
+    return result[:max_length]
 

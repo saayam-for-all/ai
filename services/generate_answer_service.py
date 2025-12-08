@@ -1,18 +1,18 @@
 """
-Answer generation service using Groq/LLaMA.
+Answer generation service using Groq/LLaMA with Gemini fallback.
 Python 3.14+ compatible.
 """
 from abc import ABC, abstractmethod
 from services import AnswerGenerationServiceInterface, ClassificationServiceInterface
 from utils.prompts import get_prompt, get_conversational_prompt
-from utils.client import client
+from utils.client import client, _use_groq, _gemini_client
 
 # Constants
 NOT_SPECIFIED = "Not specified"
 
 
 class GroqAnswerGenerationService(AnswerGenerationServiceInterface):
-    """Groq/LLaMA implementation of answer generation service."""
+    """Groq/LLaMA implementation of answer generation service with Gemini fallback."""
     
     def __init__(
         self, 
@@ -23,6 +23,30 @@ class GroqAnswerGenerationService(AnswerGenerationServiceInterface):
         self.model = model
         self.temperature = temperature
         self.classification_service = classification_service
+        self.gemini_model = "gemini-2.5-flash"
+    
+    def _generate_with_gemini(self, messages: list) -> str:
+        """Fallback to Gemini API if Groq fails."""
+        if not _gemini_client:
+            raise ValueError("Gemini API is not available. Please set GEMINI_API_KEY in .env file.")
+        
+        import google.generativeai as genai
+        model = genai.GenerativeModel(self.gemini_model)
+        
+        # Convert messages format for Gemini
+        # Gemini uses a different format - combine system and user messages
+        prompt_parts = []
+        for msg in messages:
+            if msg["role"] == "system":
+                prompt_parts.append(f"System: {msg['content']}")
+            elif msg["role"] == "user":
+                prompt_parts.append(f"User: {msg['content']}")
+            elif msg["role"] == "assistant":
+                prompt_parts.append(f"Assistant: {msg['content']}")
+        
+        full_prompt = "\n".join(prompt_parts)
+        response = model.generate_content(full_prompt)
+        return response.text.strip()
     
     def generate_answer(
         self, 
@@ -80,22 +104,35 @@ class GroqAnswerGenerationService(AnswerGenerationServiceInterface):
         print(f"Total messages in context: {len(messages)}")
         print(f"First message role: {messages[0]['role'] if messages else 'None'}")
         
+        # Try Groq first
+        if _use_groq and client:
+            try:
+                # Make call to Groq API with full conversation context
+                response = client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    temperature=self.temperature
+                )
+                
+                if not response.choices or not response.choices[0].message:
+                    raise ValueError("Empty response from Groq API")
+                
+                return response.choices[0].message.content.strip()
+            except Exception as e:
+                import traceback
+                error_trace = traceback.format_exc()
+                print(f"Error in Groq API call: {str(e)}")
+                print(f"Traceback: {error_trace}")
+                print("Falling back to Gemini API...")
+        
+        # Fallback to Gemini
+        print("Using Gemini API for answer generation")
         try:
-            # Make call to Groq API with full conversation context
-            response = client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                temperature=self.temperature
-            )
-            
-            if not response.choices or not response.choices[0].message:
-                raise ValueError("Empty response from Groq API")
-            
-            return response.choices[0].message.content.strip()
+            return self._generate_with_gemini(messages)
         except Exception as e:
             import traceback
             error_trace = traceback.format_exc()
-            print(f"Error in Groq API call: {str(e)}")
+            print(f"Error in Gemini API call: {str(e)}")
             print(f"Traceback: {error_trace}")
             print(f"Messages being sent: {messages}")
             raise

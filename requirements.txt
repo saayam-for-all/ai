@@ -2,4 +2,5 @@ flask
 groq
 serverless-wsgi
 python-dotenv
+google-generativeai
 
