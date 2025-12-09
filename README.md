@@ -1,6 +1,6 @@
 # Saayam Predict AI Service
 
-A Flask-based AI service that provides intelligent conversational assistance and support across various categories including food assistance, housing support, healthcare, education, and elderly care. The service uses Groq's LLaMA model for natural language processing and category prediction with context-aware conversational capabilities.
+A Flask-based AI service that provides intelligent conversational assistance and support across various categories including food assistance, housing support, healthcare, education, and elderly care. The service uses Groq's LLaMA model with automatic fallback to Google's Gemini API for natural language processing and category prediction with context-aware conversational capabilities.
 
 ## Features
 
@@ -8,6 +8,7 @@ A Flask-based AI service that provides intelligent conversational assistance and
 - **Category Prediction**: Automatically classifies user requests into predefined help categories
 - **Intelligent Answer Generation**: Provides contextual, actionable solutions based on user input
 - **Auto-Subject Generation**: Automatically generates concise subjects (max 70 chars) from descriptions when not provided
+- **API Fallback Mechanism**: Automatic fallback from Groq to Gemini API if Groq fails or API key is missing
 - **Emergency Phone Numbers**: Responses include relevant emergency contact numbers (911, 112, crisis hotlines, etc.)
 - **Optimized Prompts**: Short, precise, and accurate answers (2-4 sentences, under 100 words)
 - **Multi-category Support**: Covers 6 main categories with 50+ subcategories
@@ -39,7 +40,10 @@ pip install -r requirements.txt
 Create a `.env` file in the root directory:
 ```
 GROQ_API_KEY=your_groq_api_key_here
+GEMINI_API_KEY=your_gemini_api_key_here  # Optional - used as fallback if Groq fails
 ```
+
+**Note:** At least one API key is required. If `GROQ_API_KEY` is not provided or Groq API fails, the service will automatically fall back to Gemini API (if `GEMINI_API_KEY` is set).
 
 ### 4. Run the Service
 
@@ -350,7 +354,7 @@ curl -X POST http://localhost:3001/generate_answer \
     ├── __init__.py
     ├── categories.py                 # Category mappings
     ├── categories_with_description.py # Category descriptions
-    ├── client.py                     # Groq API client
+    ├── client.py                     # API client with Groq/Gemini fallback
     ├── prompts.py                    # AI prompts for different categories
     └── subject_generator.py          # Auto-subject generation utility
 ```
@@ -358,7 +362,8 @@ curl -X POST http://localhost:3001/generate_answer \
 ## Dependencies
 
 - **Flask**: Web framework
-- **Groq**: AI model provider (LLaMA 3.1 8B Instant)
+- **Groq**: AI model provider (LLaMA 3.1 8B Instant) - Primary provider
+- **google-generativeai**: Google Gemini API client - Fallback provider
 - **serverless-wsgi**: AWS Lambda deployment support
 - **python-dotenv**: Environment variable management
 
@@ -416,8 +421,11 @@ The service is configured for AWS Lambda deployment. See deployment options:
 
 ### Environment Variables for Lambda
 
-- `GROQ_API_KEY`: Your Groq API key (required)
+- `GROQ_API_KEY`: Your Groq API key (required if using Groq)
+- `GEMINI_API_KEY`: Your Google Gemini API key (optional - used as fallback)
 - `SERVICE_PROVIDER`: Optional (defaults to "groq")
+
+**Note:** The service will automatically use Gemini as a fallback if Groq API fails or if `GROQ_API_KEY` is not provided (as long as `GEMINI_API_KEY` is set).
 
 ## Error Handling
 
@@ -442,9 +450,29 @@ The service is configured for AWS Lambda deployment. See deployment options:
 - **Location-Aware**: Answers include location-specific resources and information
 - **Context-Aware**: Utilizes subject, description, location, gender, and age for personalized responses
 - **Auto-Category Detection**: General category automatically predicts the appropriate category
+- **API Fallback**: Automatic fallback from Groq to Gemini ensures service reliability
 - **100% Accurate**: Prompts emphasize verified, factual information only
 - **Markdown Support**: Responses include markdown formatting (bold, italic, lists)
 - **CORS Enabled**: Full CORS support for web applications
+
+## API Provider Fallback
+
+The service implements an intelligent fallback mechanism:
+
+1. **Primary Provider**: Groq API (LLaMA 3.1 8B Instant)
+   - Used when `GROQ_API_KEY` is available
+   - Fast inference with low latency
+
+2. **Fallback Provider**: Google Gemini API (Gemini 2.5 Flash)
+   - Automatically used if Groq API fails or key is missing
+   - Requires `GEMINI_API_KEY` to be set
+   - Ensures service availability even if primary provider is unavailable
+
+**How it works:**
+- Service attempts to use Groq API first
+- If Groq fails (API error, rate limit, missing key), automatically falls back to Gemini
+- All services (classification, answer generation, subject generation) support fallback
+- Transparent to API consumers - no code changes needed
 
 ## Development
 
