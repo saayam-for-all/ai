@@ -2,5 +2,5 @@ flask
 groq
 serverless-wsgi
 python-dotenv
-google-generativeai
-
+google-genai
+pydantic

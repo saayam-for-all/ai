@@ -175,6 +175,41 @@ If subject was provided:
 
 **Note:** The API maintains backward compatibility. When a subject is provided, it returns just the answer string. When auto-generated, it returns a JSON object with the answer and generated subject.
 
+### 5. Find Organizations (Gemini Web Search)
+```
+POST /find_organizations
+```
+Use Gemini's built-in google_search tool to surface reputable organizations tailored to the user's need.
+
+**Request Body:**
+```json
+{
+  "subject": "string (optional)",
+  "description": "string (required)",
+  "location": "string (optional)"
+}
+```
+
+**Response:**
+```json
+{
+  "organizations": [
+    {
+      "name": "string",
+      "website": "string or null",
+      "summary": "string",
+      "phone": "string or null",
+      "relevance": "string"
+    }
+  ]
+}
+```
+
+**Notes:**
+- Requires `GEMINI_API_KEY` in `.env`.
+- Uses Gemini `google_search` and returns structured JSON validated against the `organizations` schema (name, website, summary, phone, relevance). Invalid model responses return HTTP 500.
+- In the future, the results from this endpoint can be grounded with google search results for no hallucinations and thus obtaining factual and reliable information.
+
 ## Category Input Format
 
 The API accepts categories in two formats:
@@ -363,9 +398,10 @@ curl -X POST http://localhost:3001/generate_answer \
 
 - **Flask**: Web framework
 - **Groq**: AI model provider (LLaMA 3.1 8B Instant) - Primary provider
-- **google-generativeai**: Google Gemini API client - Fallback provider
+- **google-genai**: Google Gemini API client - Fallback provider
 - **serverless-wsgi**: AWS Lambda deployment support
 - **python-dotenv**: Environment variable management
+- **pydantic**: Structured output validation for Gemini responses
 
 ## Conversational Features
 

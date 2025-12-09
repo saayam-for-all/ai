@@ -22,10 +22,9 @@ except Exception as e:
 # Initialize Gemini client for fallback (always try to initialize if key is available)
 _gemini_client = None
 try:
-    import google.generativeai as genai
+    from google import genai
     if GEMINI_API_KEY:
-        genai.configure(api_key=GEMINI_API_KEY)
-        _gemini_client = genai
+        _gemini_client = genai.Client(api_key=GEMINI_API_KEY)
         if not _use_groq:
             print("Using Gemini API as primary provider")
         else:
@@ -34,7 +33,7 @@ try:
         print("Warning: Neither Groq nor Gemini API keys are available")
 except ImportError:
     if not _use_groq:
-        print("Warning: google-generativeai package not installed. Install it for Gemini fallback support.")
+        print("Warning: google-genai package not installed. Install it for Gemini fallback support.")
 except Exception as e:
     if not _use_groq:
         print(f"Warning: Gemini client initialization failed: {str(e)}")

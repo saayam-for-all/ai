@@ -30,9 +30,6 @@ class GroqAnswerGenerationService(AnswerGenerationServiceInterface):
         if not _gemini_client:
             raise ValueError("Gemini API is not available. Please set GEMINI_API_KEY in .env file.")
         
-        import google.generativeai as genai
-        model = genai.GenerativeModel(self.gemini_model)
-        
         # Convert messages format for Gemini
         # Gemini uses a different format - combine system and user messages
         prompt_parts = []
@@ -45,7 +42,10 @@ class GroqAnswerGenerationService(AnswerGenerationServiceInterface):
                 prompt_parts.append(f"Assistant: {msg['content']}")
         
         full_prompt = "\n".join(prompt_parts)
-        response = model.generate_content(full_prompt)
+        response = _gemini_client.models.generate_content(
+            model=self.gemini_model,
+            contents=full_prompt
+        )
         return response.text.strip()
     
     def generate_answer(

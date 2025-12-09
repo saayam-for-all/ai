@@ -16,14 +16,27 @@ class GroqClassificationService(ClassificationServiceInterface):
         self.categories_with_desc = "\n".join([f"{k}: {v}" for k, v in TAXONOMY.items()])
         self.gemini_model = "gemini-2.5-flash"
     
-    def _predict_with_gemini(self, prompt: str) -> str:
+    def _predict_with_gemini(self, subject: str, description: str) -> str:
         """Fallback to Gemini API if Groq fails."""
         if not _gemini_client:
             raise ValueError("Gemini API is not available. Please set GEMINI_API_KEY in .env file.")
         
-        import google.generativeai as genai
-        model = genai.GenerativeModel(self.gemini_model)
-        response = model.generate_content(prompt)
+        prompt = f"""
+        You are a zero-shot text classifier that classifies user input into exactly one category from the predefined list of categories along with their description below. Respond ONLY with a category from the given list of categories whose meaning closely aligns with the category's description in the list. Do not include any additional text or explanations.
+
+        Categories: {self.categories_with_desc}
+
+        User Input:
+        Subject: {subject}
+        Description: {description}
+
+        Output (category):
+        """
+        
+        response = _gemini_client.models.generate_content(
+            model=self.gemini_model,
+            contents=prompt
+        )
         return response.text.strip()
     
     def predict_categories(self, subject: str, description: str) -> str:
@@ -57,7 +70,7 @@ class GroqClassificationService(ClassificationServiceInterface):
         
         # Fallback to Gemini
         print("Using Gemini API for classification")
-        raw_output = self._predict_with_gemini(prompt)
+        raw_output = self._predict_with_gemini(subject, description)
         print(f"Gemini classification result: {raw_output}")
         return raw_output.strip()
 
