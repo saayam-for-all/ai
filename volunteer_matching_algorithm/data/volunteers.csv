@@ -502,3 +502,7 @@ fe5bf078-8652-4863-96c1-f0ea67c7dbee,Alfred Crawford,9078819161,"1942 Taylor Ove
 V001,John Doe,555-0000,Austin,"first aid, cooking, transport","English, Hindi",food delivery,4.8,Available,Yes,City-wide,
 ,Sita Rao,9876543210,Hyderabad,"Medical Aid, First Aid","English, Telugu",Urban,4.8,Active,Yes,Yes,VOL_1
 ,John Doe,john.doe@example.com,"123 Main St, New York, NY 10001","Teaching, Counseling, Cooking","English, Spanish, Hindi","Education, Healthcare",4.5,Active,Yes,High,VOL_2
+,John Daniel,john@example.com,"New York, NY","Teaching, Counseling","English, Hindi",Education,4.5,Active,Yes,High,VOL_3
+,Lara,3245678434,Texas,stitching,English,,4.5,open,yes,yes,VOL_4
+,Lara,3245678434,Texas,thrifted clothes,English,,4.5,open,yes,string,VOL_5
+,Danny,3245678434,Texas,"Clothing donation, thrift store organization, sorting donated clothes",English,"Clothing assistance, donation centers, community outreach",4.5,Active,Yes,High,VOL_6

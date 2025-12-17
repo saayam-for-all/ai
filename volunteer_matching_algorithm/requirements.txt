@@ -5,4 +5,5 @@ numpy
 scikit-learn
 sentence-transformers
 torch
+scipy
 hf_xet
