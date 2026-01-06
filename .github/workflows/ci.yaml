@@ -1,0 +1,65 @@
+name: Python Flask CI Pipeline # Name of this GitHub Actions workflow
+
+on:
+  # Run the workflow on pushes to these branches
+  push:
+    branches: ["test", "dev", "main"]
+
+  # Also run the workflow for pull requests targeting these branches
+  pull_request:
+    branches: ["test", "dev", "main"]
+
+jobs:
+  build:
+    # Use the latest stable Ubuntu runner
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Check out the repository so workflow can access the code
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # Step 2: Set up the desired Python version
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11.3"
+
+      # Step 3: Install virtualenv (optional helper; venv creation uses python -m venv)
+      - name: Install Python Virtual Environment
+        run: pip3 install virtualenv
+
+      # https://docs.github.com/en/actions/guides/caching-dependencies-to-speed-up-workflows
+      # Step 4: Cache the virtual environment to speed up subsequent runs
+      - name: Virtual Environment
+        uses: actions/cache@v3
+        id: cache-venv
+        with:
+          path: .venv
+          # Key is based on OS and hash of requirements.txt, so cache is invalidated when deps change
+          key: ${{ runner.os }}-venv-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-venv-
+
+      # Step 5: Create (if needed) and activate the virtual environment, then install project dependencies
+      - name: Activate Virtual Environment and Install Packages
+        run: |
+          if [ ! -d ".venv" ]; then
+            python3 -m venv .venv
+          fi
+          source .venv/bin/activate
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # Step 6: Lint Python files with flake8 to enforce basic code quality checks
+      - name: Lint code with flake8
+        run: |
+          source .venv/bin/activate
+          pip install flake8
+          flake8 *.py --max-line-length=150
+
+      # Step 7: Run unit tests with pytest inside the virtual environment
+      - name: Run pytest
+        run: |
+          source .venv/bin/activate
+          pytest

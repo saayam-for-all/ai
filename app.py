@@ -96,7 +96,13 @@ def predict_categories():
         result = classifier(prompt, categories)
         return jsonify({"predicted_categories": result['labels'][:3]})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        # Log the error and return a graceful fallback response instead of a 500
+        logging.error(f"Error in predict_categories: {e}")
+        fallback_categories = categories[:3]
+        return jsonify({
+            "predicted_categories": fallback_categories,
+            "warning": "Falling back to default categories due to classification error."
+        }), 200
 
 @app.route('/generate_answer', methods=['POST'])
 def generate_answer():

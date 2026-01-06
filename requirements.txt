@@ -6,3 +6,4 @@ openai
 groq
 python-dotenv
 tiktoken
+torch
