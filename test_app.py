@@ -1,15 +1,18 @@
 import pytest
 from app import app, categories
 
+
 @pytest.fixture
 def client():
     with app.test_client() as client:
         yield client
 
+
 def test_homepage(client):
     response = client.get('/')
     assert response.status_code == 200
     assert b"Saayam AI Assistant" in response.data
+
 
 def test_predict_categories(client):
     response = client.post('/predict_categories', json={
@@ -20,6 +23,7 @@ def test_predict_categories(client):
     data = response.get_json()
     assert "predicted_categories" in data
     assert len(data["predicted_categories"]) > 0
+
 
 @pytest.mark.parametrize("category", categories[:5])  # Use a few categories for demo
 def test_generate_answer(client, category):

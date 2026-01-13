@@ -1,7 +1,6 @@
 from flask import Flask, render_template, request, jsonify
 from transformers import pipeline
 from meta_ai_api import MetaAI
-import os
 import re  # For text processing
 
 # Initialize Meta AI client
@@ -24,9 +23,11 @@ classifier = pipeline("zero-shot-classification", model="facebook/bart-large-mnl
 
 app = Flask(__name__)
 
+
 @app.route('/')
 def home():
     return render_template('index.html', categories=categories)
+
 
 @app.route('/predict_categories', methods=['POST'])
 def predict_categories():
@@ -42,6 +43,7 @@ def predict_categories():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
 @app.route('/generate_answer', methods=['POST'])
 def generate_answer():
     data = request.get_json()
@@ -49,7 +51,7 @@ def generate_answer():
     question = data.get("question")
     if not category or not question:
         return jsonify({"error": "Category and question required"}), 400
-    
+
     # Create a more specific prompt with formatting instructions
     prompt = (
         f"Category: {category}\n"
@@ -65,7 +67,7 @@ def generate_answer():
         "- Website 1: Description.\n"
         "- Website 2: Description.\n"
     )
-    
+
     try:
         # Get the response from Meta AI
         response = client.prompt(prompt)
@@ -77,6 +79,7 @@ def generate_answer():
         return jsonify({"answer": formatted_answer})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 def format_response(text):
     """
@@ -132,6 +135,7 @@ def format_response(text):
     # Join the lines with proper spacing
     formatted_text = '\n'.join(formatted_lines)
     return formatted_text
+
 
 if __name__ == '__main__':
     app.run(debug=True)

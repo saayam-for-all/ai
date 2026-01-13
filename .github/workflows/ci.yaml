@@ -3,8 +3,8 @@ name: Python Flask CI Pipeline # Name of this GitHub Actions workflow
 on:
   # Run the workflow on pushes to these branches
   push:
-    branches: ["test", "dev", "main"]
-
+    branches: ["test", "dev", "main", "feature/ci-build-divyatanwar"]
+      
   # Also run the workflow for pull requests targeting these branches
   pull_request:
     branches: ["test", "dev", "main"]
@@ -42,14 +42,23 @@ jobs:
             ${{ runner.os }}-venv-
 
       # Step 5: Create (if needed) and activate the virtual environment, then install project dependencies
+      # Only install if cache was not restored (i.e., requirements.txt changed or cache doesn't exist)
       - name: Activate Virtual Environment and Install Packages
+        env:
+          CACHE_HIT: ${{ steps.cache-venv.outputs.cache-hit }}
         run: |
           if [ ! -d ".venv" ]; then
             python3 -m venv .venv
           fi
           source .venv/bin/activate
           pip install --upgrade pip
-          pip install -r requirements.txt
+          # Only install dependencies if cache was not restored (cache miss)
+          if [ "$CACHE_HIT" != "true" ]; then
+            echo "Cache miss - installing dependencies from requirements.txt"
+            pip install -r requirements.txt
+          else
+            echo "Cache hit - skipping dependency installation (requirements.txt unchanged)"
+          fi
 
       # Step 6: Lint Python files with flake8 to enforce basic code quality checks
       - name: Lint code with flake8
