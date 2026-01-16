@@ -1,0 +1,58 @@
+{
+    "US": {
+      "default": {
+        "police": "911",
+        "ambulance": "911",
+        "fire": "911",
+        "suicide_helpline": "988"
+      },
+      "states": {
+        "California": {
+          "default": {
+            "police": "911",
+            "ambulance": "911",
+            "fire": "911",
+            "suicide_helpline": "988"
+          },
+          "cities": {
+            "Los Angeles": {
+              "police": "911",
+              "ambulance": "911",
+              "fire": "911"
+            }
+          }
+        }
+      }
+    },
+  
+    "IN": {
+      "default": {
+        "police": "112",
+        "ambulance": "108",
+        "fire": "101",
+        "suicide_helpline": "9152987821"
+      },
+      "states": {
+        "Karnataka": {
+          "default": {
+            "police": "112",
+            "ambulance": "108",
+            "fire": "101"
+          },
+          "cities": {
+            "Tumakuru": {
+              "police": "112",
+              "ambulance": "108"
+            }
+          },
+          "zips": {
+            "572103": {
+              "police": "112",
+              "ambulance": "108"
+            }
+          }
+        }
+      }
+    }
+  }
+  
