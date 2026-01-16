@@ -16,9 +16,13 @@ def lambda_handler(event, context):
         if not subject or not subject.strip():
             subject = generate_subject_from_description(description, max_length=70)
 
-        category = predict_categories(subject, description)
+        ranked_categories = predict_categories(subject, description)
 
-        return _response(200, {"category": category})
+        # Return ranked categories with numbers
+        return _response(200, {
+            "categories": ranked_categories,
+            "top_category": ranked_categories[0] if ranked_categories else None
+        })
 
     except Exception as e:
         return _response(500, {"error": str(e)})
