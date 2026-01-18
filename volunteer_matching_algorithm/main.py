@@ -93,5 +93,6 @@ def list_requests():
             "requests": requests.to_dict(orient="records"),
             "count": len(requests)
         }
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error loading requests: {str(e)}")

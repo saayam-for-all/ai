@@ -225,5 +225,6 @@ def calculate_diversity_score(candidate, selected_group, request):
         # Reward if from different location (geographic spread)
         if candidate_loc not in existing_locs:
             score += 0.10
-    
+
+
     return score
