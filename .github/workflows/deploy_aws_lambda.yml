@@ -1,4 +1,4 @@
-name: Deploy to AWS Lambda
+name: Deploy to AWS Lambda (Layers + Function)
 
 on:
   push:
@@ -18,22 +18,31 @@ jobs:
         with:
           python-version: "3.12.6"
 
-      - name: Install dependencies and prepare package
+      ############################################################
+      # 1. Build Lambda Layer (dependencies only)
+      ############################################################
+      - name: Build Lambda Layer
         run: |
+          mkdir -p layer/python
           python -m pip install --upgrade pip
-          pip install -r requirements.txt -t package
+          pip install -r requirements.txt -t layer/python
+          cd layer
+          zip -r ../layer.zip .
 
-          # Copy all .py files
-          cp -r *.py package/
-
-          # Copy services folder
-          cp -r services package/services
-
-      - name: Zip deployment package
+      ############################################################
+      # 2. Build Function Package (your code only)
+      ############################################################
+      - name: Build Function Package
         run: |
-          cd package
-          zip -r ../deployment.zip .
+          mkdir function
+          cp -r *.py function/
+          cp -r services function/services
+          cd function
+          zip -r ../function.zip .
 
+      ############################################################
+      # 3. Configure AWS Credentials
+      ############################################################
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -41,8 +50,35 @@ jobs:
           aws-secret-access-key: ${{ secrets.MORE_ORG_AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.MORE_ORG_AWS_REGION }}
 
-      - name: Deploy to AWS Lambda
+      ############################################################
+      # 4. Publish Lambda Layer (AWS returns full ARN)
+      ############################################################
+      - name: Publish Lambda Layer
+        id: publish_layer
+        run: |
+          LAYER_ARN=$(aws lambda publish-layer-version \
+            --layer-name more-org-deps \
+            --zip-file fileb://layer.zip \
+            --compatible-runtimes python3.12 \
+            --query LayerVersionArn \
+            --output text)
+
+          echo "layer_arn=$LAYER_ARN" >> $GITHUB_OUTPUT
+
+      ############################################################
+      # 5. Attach Layer to Lambda Function (using name, not ARN)
+      ############################################################
+      - name: Update Lambda to use new layer
+        run: |
+          aws lambda update-function-configuration \
+            --function-name ${{ secrets.MORE_ORG_LAMBDA_NAME }} \
+            --layers ${{ steps.publish_layer.outputs.layer_arn }}
+
+      ############################################################
+      # 6. Deploy Function Code
+      ############################################################
+      - name: Deploy function code
         run: |
           aws lambda update-function-code \
-            --function-name ${{ secrets.MORE_ORG_LAMBDA_ARN }} \
-            --zip-file fileb://deployment.zip
+            --function-name ${{ secrets.MORE_ORG_LAMBDA_NAME }} \
+            --zip-file fileb://function.zip
