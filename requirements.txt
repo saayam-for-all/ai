@@ -1,8 +1,0 @@
-flask
-transformers
-meta-ai-api
-google-generativeai
-openai
-groq
-python-dotenv
-tiktoken

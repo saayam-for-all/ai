@@ -1,0 +1,48 @@
+name: Deploy to AWS Lambda
+
+on:
+  push:
+    branches:
+      - more-org-aws-lambda
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies and prepare package
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -t package
+
+          # Copy all .py files
+          cp -r *.py package/
+
+          # Copy services folder
+          cp -r services package/services
+
+      - name: Zip deployment package
+        run: |
+          cd package
+          zip -r ../deployment.zip .
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.MORE_ORG_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.MORE_ORG_AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.MORE_ORG_AWS_REGION }}
+
+      - name: Deploy to AWS Lambda
+        run: |
+          aws lambda update-function-code \
+            --function-name ${{ secrets.MORE_ORG_LAMBDA_ARN }} \
+            --zip-file fileb://deployment.zip
