@@ -46,7 +46,7 @@ def build_prompt(subject: str, description: str, location: str):
     prompt = ChatPromptTemplate.from_messages([
         (
             "system",
-            "You are a safety-focused assistant. Provide only reputable, verified nonprofit organizations. "
+            "You are a safety-focused assistant. Provide only reputable, verified nonprofit organizations at the provided location. "
             "Exclude unverified forums, low-trust sites, or questionable sources."
         ),
         (
@@ -57,7 +57,7 @@ def build_prompt(subject: str, description: str, location: str):
                 "Location: {location}\n\n"
                 "Return a JSON object following this schema:\n"
                 "{format_instructions}\n\n"
-                "List 2-3 reputable nonprofit organizations that work on the subject and descriptio; priortize organizations which are closest to the provided location"
+                "List 2-3 reputable nonprofit organizations that work on the subject and description; priortize organizations which are closest to the provided location"
                 "Include organization name, address, phone number, a 3-line description of the organization, and another 3-line summary of why the organization is relevant to the request."
             )
         )
