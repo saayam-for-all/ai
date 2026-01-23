@@ -59,8 +59,11 @@ Subject (max {max_length} chars)"""
                     temperature=0.3,
                     max_tokens=50
                 )
-                
-                generated_subject = response.choices[0].message.content.strip()
+
+                if response.choices[0].message.content:
+                    generated_subject = response.choices[0].message.content.strip()
+                else:
+                    generated_subject = "General Inquiry"
 
                 # Strictly enforce max_length - truncate if necessary
                 if len(generated_subject) <= max_length:
@@ -75,10 +78,14 @@ Subject (max {max_length} chars)"""
         if _gemini_client:
             try:
                 response = _gemini_client.models.generate_content(
-                    model="gemini-2.0-flash", 
+                    model="gemini-2.5-flash", 
                     contents=prompt
                 )
-                generated_subject = response.text.strip()
+
+                if response.text:
+                    generated_subject = response.text.strip()
+                else:
+                    generated_subject = "General Inquiry"
                 
                 # Strictly enforce max_length - truncate if necessary
                 if len(generated_subject) <= max_length:
@@ -103,8 +110,11 @@ Subject (max {max_length} chars)"""
                 temperature=0.3,
                 max_tokens=50
             )
-            
-            generated_subject = response.choices[0].message.content.strip()
+
+            if response.choices[0].message.content:
+                generated_subject = response.choices[0].message.content.strip()
+            else:
+                generated_subject = "General Inquiry"
             
             # Strictly enforce max_length (70 characters)
             if len(generated_subject) <= max_length:
@@ -119,7 +129,7 @@ Subject (max {max_length} chars)"""
     if _gemini_client:
         try:
             response = _gemini_client.models.generate_content(
-                model="gemini-2.0-flash", 
+                model="gemini-2.5-flash", 
                 contents=prompt
             )
             
