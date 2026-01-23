@@ -46,7 +46,7 @@ def build_prompt(subject: str, description: str, location: str):
     prompt = ChatPromptTemplate.from_messages([
         (
             "system",
-            "You are a safety-focused assistant. Provide only reputable, verified nonprofit organizations at the provided location. "
+            "You are a safety-focused assistant. Provide only reputable, verified nonprofit organizations at the provided {location}. "
             "Exclude unverified forums, low-trust sites, or questionable sources."
         ),
         (
@@ -82,10 +82,10 @@ def find_nonprofits(subject: str, description: str, location: str):
 # -----------------------------
 # 5. Example Usage
 # -----------------------------
-# if __name__ == "__main__":
-#     result = find_nonprofits(
-#         subject="shelter",
-#         description="i am on the streets now i dont have a place to stay please help",
-#         location="Sacramento"
-#     )
-#     print(result)
+if __name__ == "__main__":
+    result = find_nonprofits(
+        subject="shelter",
+        description="i am on the streets now i dont have a place to stay please help",
+        location="tampa"
+    )
+    print(result)
