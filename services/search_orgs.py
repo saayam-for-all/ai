@@ -82,10 +82,10 @@ def find_nonprofits(subject: str, description: str, location: str):
 # -----------------------------
 # 5. Example Usage
 # -----------------------------
-if __name__ == "__main__":
-    result = find_nonprofits(
-        subject="shelter",
-        description="i am on the streets now i dont have a place to stay please help",
-        location="tampa"
-    )
-    print(result)
+# if __name__ == "__main__":
+#     result = find_nonprofits(
+#         subject="shelter",
+#         description="i am on the streets now i dont have a place to stay please help",
+#         location="tampa"
+#     )
+#     print(result)

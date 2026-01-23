@@ -17,7 +17,8 @@ def lambda_handler(event, context):
 
         if not location or location.strip():
             location="United States"
-        
+            print("No location provided, defaulting to United States")
+            
         orgs=find_nonprofits(subject=subject,description=description,location=location)
         
         return _response(200,orgs)
