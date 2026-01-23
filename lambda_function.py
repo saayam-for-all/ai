@@ -15,7 +15,7 @@ def lambda_handler(event, context):
         if not subject or not subject.strip():
             subject = ""
 
-        if not location or location.strip():
+        if not location or not location.strip():
             location="United States"
             print("No location provided, defaulting to United States")
             
