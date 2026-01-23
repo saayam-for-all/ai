@@ -46,7 +46,7 @@ def build_prompt(subject: str, description: str, location: str):
     prompt = ChatPromptTemplate.from_messages([
         (
             "system",
-            "You are a safety-focused assistant. Provide only reputable, verified nonprofit organizations at the provided {location}. "
+            "You are a safety-focused assistant. Provide only reputable, verified nonprofit organizations at the provided address/location: {location}. "
             "Exclude unverified forums, low-trust sites, or questionable sources."
         ),
         (
