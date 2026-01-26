@@ -1,50 +1,135 @@
-TAXONOMY = {
+"""
+Service module with abstraction layer for easy provider switching.
+Python 3.14+ compatible.
+"""
 
-    # Food & Essentials
-    "FOOD_AND_ESSENTIALS_SUPPORT": "Parent category for all food and basic essentials-related assistance.",
-    "FOOD_ASSISTANCE": "Help users find food banks, pantries, and government meal programs.",
-    "GROCERY_SHOPPING_AND_DELIVERY": "Request help with grocery shopping and doorstep delivery by volunteers.",
-    "COOKING_HELP": "Users can request help from volunteers to assist with basic cooking and kitchen tasks.",
+from __future__ import annotations
 
-    # Clothing
-    "CLOTHING_SUPPORT": "Parent category for all clothing-related assistance and services.",
-    "DONATE_CLOTHES": "Allow users (donors) to donate clothes based on their location.",
-    "BORROW_CLOTHES": "Allow users to borrow clothes easily via the platform.",
-    "EMERGENCY_ASSISTANCE": "Subcategory for emergency needs including clothing, food, and shelter during crises.",
-    "EMERGENCY_CLOTHING_ASSISTANCE": "Enable users in crisis situations (e.g., natural disasters, sudden displacement) to request clothing help.",
-    "SEASONAL_DRIVE_NOTIFICATION": "Notify users when seasonal clothing drives are active, allowing them to donate or request items.",
-    "TAILORING": "Users can request clothing repair (e.g., seams, zippers) via volunteers or local tailoring partners.",
+from abc import ABC, abstractmethod
 
-    # Housing
-    "HOUSING_SUPPORT": "Parent category for all housing-related assistance and services.",
-    "FIND_A_ROOMMATE": "Help users find compatible roommates by posting listings or providing compatibility guidance.",
-    "RENTING_SUPPORT": "Assist with understanding rental agreements, finding rental listings, and navigating tenant rights.",
-    "HOUSEHOLD_ITEM_EXCHANGE": "Help users buy or sell secondhand furniture and home essentials (remote).",
-    "MOVING_ASSISTANCE": "In-person support for packing, sorting, or organizing small items during a move.",
-    "CLEANING_HELP": "In-person support for light cleaning tasks such as dusting, sweeping, and tidying common areas.",
-    "HOME_REPAIR_SUPPORT": "Support for non-urgent minor repairs like furniture fixes, plumbing, or appliance help.",
-    "UTILITIES_SETUP": "Assistance setting up internet, electricity, water, and other services during a move-in.",
+from typing import TypedDict, Literal
 
-    # Education & Career
-    "EDUCATION_CAREER_SUPPORT": "Parent category for education and career-related help.",
-    "COLLEGE_APPLICATION_HELP": "Guidance for navigating college application tasks.",
-    "SOP_ESSAY_REVIEW": "Review and feedback on SOPs, essays, and academic statements.",
-    "TUTORING": "Academic tutoring for specific subjects or standardized tests.",
+from utils.prompts import get_conversational_prompt
+from utils.client import client, _use_groq, _gemini_client
 
-    # Healthcare & Wellness
-    "HEALTHCARE_WELLNESS_SUPPORT": "Parent category for health-related assistance and non-clinical wellness support.",
-    "MEDICAL_NAVIGATION": "Help users find appropriate professionals or clinics.",
-    "MEDICINE_DELIVERY": "Assist with OTC medication pickup or pharmacy navigation.",
-    "MENTAL_WELLBEING_SUPPORT": "Access general mental health resources or referrals.",
-    "MEDICATION_REMINDERS": "Set up non-clinical reminders for OTC medication or supplements.",
-    "HEALTH_EDUCATION_GUIDANCE": "Wellness awareness on hygiene, sleep, nutrition, etc.",
+class ChatMessage(TypedDict):
+    role: Literal["system", "user", "assistant"]
+    content: str
 
-    # Elderly & Community
-    "ELDERLY_SUPPORT": "Parent category for elderly and community-related support.",
-    "SENIOR_LIVING_RELOCATION": "Help seniors find housing and assist with the moving process.",
-    "DIGITAL_SUPPORT_FOR_SENIORS": "Support with using phones, tablets, and apps.",
-    "MEDICAL_HELP": "Medication reminders or health device setup (non-clinical).",
-    "ERRANDS_TRANSPORTATION": "Assistance with errands or transport to appointments.",
-    "SOCIAL_CONNECTION": "Companionship and social activities (calls, walks, games).",
-    "MEAL_SUPPORT": "Help cooking meals or prepping food based on dietary needs."
-}
+class AnswerGenerationServiceInterface(ABC):
+    """Abstract interface for answer generation services."""
+
+    @abstractmethod
+    def generate_answer(
+        self,
+        category: str,
+        subject: str,
+        description: str,
+        location: str | None = None,
+        gender: str | None = None,
+        age: str | None = None,
+        conversation_history: list[dict[str, str]] | None = None,
+    ) -> str:
+        """Generate an answer string."""
+        raise NotImplementedError
+
+class GroqAnswerGenerationService(AnswerGenerationServiceInterface):
+    """Groq implementation of answer generation service with Gemini fallback."""
+
+    def __init__(
+        self,
+        model: str = "llama-3.1-8b-instant",
+        temperature: float = 0.7,
+        gemini_model: str = "gemini-2.5-flash",
+    ):
+        self.model = model
+        self.temperature = temperature
+        self.gemini_model = gemini_model
+
+    @staticmethod
+    def _normalize_history(
+        history: list[dict[str, str]] | None,
+    ) -> list[dict[str, str]]:
+        if not history:
+            return []
+        allowed = {"user", "assistant"}
+        return [
+            {"role": str(m["role"]), "content": str(m["content"])}
+            for m in history
+            if isinstance(m, dict)
+            and m.get("role") in allowed
+            and "content" in m
+        ]
+
+    def _generate_with_gemini(self, messages: list[dict[str, str]]) -> str:
+        """Fallback to Gemini API if Groq fails."""
+        if not _gemini_client:
+            raise ValueError("Gemini client not initialized")
+
+        def as_line(m: dict[str, str]) -> str:
+            role = m.get("role", "")
+            content = m.get("content", "")
+            if role == "system":
+                prefix = "System"
+            elif role == "user":
+                prefix = "User"
+            elif role == "assistant":
+                prefix = "Assistant"
+            else:
+                prefix = role or "Message"
+            return f"{prefix}: {content}"
+
+        full_prompt = "\n".join(as_line(m) for m in messages)
+
+        resp = _gemini_client.models.generate_content(
+            model=self.gemini_model,
+            contents=full_prompt,
+        )
+        return (resp.text or "").strip()  # type: ignore
+
+    def _try_groq(self, messages: list[dict[str, str]]) -> str | None:
+        if not (_use_groq and client):
+            return None
+        try:
+            resp = client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=self.temperature,
+            )
+            content = (
+                resp.choices[0].message.content
+                if resp.choices and resp.choices[0].message
+                else None
+            )
+            return content.strip() if content else None
+        except Exception:
+            return None
+
+    def generate_answer(
+        self,
+        category: str,
+        subject: str,
+        description: str,
+        location: str | None = None,
+        gender: str | None = None,
+        age: str | None = None,
+        conversation_history: list[dict[str, str]] | None = None,
+    ) -> str:
+        system_prompt = get_conversational_prompt(
+            category=category,
+            subject=subject,
+            location=location or "",
+            gender=gender or "",
+            age=age or "",
+        )
+
+        messages: list[dict[str, str]] = [
+            {"role": "system", "content": system_prompt},
+            *self._normalize_history(conversation_history),
+            {"role": "user", "content": f"Subject: {subject}\nQuestion: {description}"},
+        ]
+
+        return (
+            self._try_groq(messages)
+            or self._generate_with_gemini(messages)
+        )

@@ -1,0 +1,7 @@
+__pycache__
+*.pyc
+utils/__pycache__
+utils/*.pyc
+.env
+*.zip
+local_test.py

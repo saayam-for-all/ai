@@ -1,6 +1,5 @@
 import json
-from services.classification_service import predict_categories
-from utils.subject_generator import generate_subject_from_description
+from utils.generate_answer_service import generate_answer
 
 
 def lambda_handler(event, context):
@@ -9,16 +8,14 @@ def lambda_handler(event, context):
 
         subject = body.get("subject")
         description = body.get("description")
+        category = body.get("category")
 
-        if not description:
-            return _response(400, {"error": "Description is required"})
+        if not description or not subject or not category:
+            return _response(400, {"error": "Description, subject, and category are required"})
 
-        if not subject or not subject.strip():
-            subject = generate_subject_from_description(description, max_length=70)
+        answer = generate_answer(category, subject, description) or "Error: Failed to generate answer"
 
-        category = predict_categories(subject, description)
-
-        return _response(200, {"category": category})
+        return _response(200, {"answer": answer})
 
     except Exception as e:
         return _response(500, {"error": str(e)})
