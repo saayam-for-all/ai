@@ -85,7 +85,7 @@ class GroqAnswerGenerationService(AnswerGenerationServiceInterface):
             model=self.gemini_model,
             contents=full_prompt,
         )
-        return (resp.text or "").strip()  # type: ignore
+        return (resp.text or "").strip() if resp.text else ""
 
     def _try_groq(self, messages: list[dict[str, str]]) -> str | None:
         if not (_use_groq and client):
