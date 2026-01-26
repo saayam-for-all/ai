@@ -62,6 +62,7 @@ Subject (max {max_length} chars)"""
 
                 if response.choices[0].message.content:
                     generated_subject = response.choices[0].message.content.strip()
+                    generated_subject = generated_subject.strip('"').strip("'")
                 else:
                     generated_subject = "General Inquiry"
 
@@ -84,6 +85,7 @@ Subject (max {max_length} chars)"""
 
                 if response.text:
                     generated_subject = response.text.strip()
+                    generated_subject = generated_subject.strip('"').strip("'")
                 else:
                     generated_subject = "General Inquiry"
                 
@@ -113,6 +115,7 @@ Subject (max {max_length} chars)"""
 
             if response.choices[0].message.content:
                 generated_subject = response.choices[0].message.content.strip()
+                generated_subject = generated_subject.strip('"').strip("'")
             else:
                 generated_subject = "General Inquiry"
             
@@ -132,6 +135,12 @@ Subject (max {max_length} chars)"""
                 model="gemini-2.5-flash", 
                 contents=prompt
             )
+
+            if response.text:
+                generated_subject = response.text.strip()
+                generated_subject = generated_subject.strip('"').strip("'")
+            else:
+                generated_subject = "General Inquiry"
             
             # Strictly enforce max_length
             if len(generated_subject) <= max_length:
