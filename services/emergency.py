@@ -1,14 +1,7 @@
 import json
 import os
-import boto3
 import urllib.request
 
-s3 = boto3.client("s3")
-
-BUCKET = os.environ["EMERGENCY_NUMBERS_BUCKET"]
-KEY = os.environ["EMERGENCY_NUMBERS_KEY"]
-
-_cache = None
 
 def response(status, body):
     return {
@@ -22,11 +15,16 @@ def response(status, body):
 
 # ------------------ Data ------------------
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_FILE = os.path.join(BASE_DIR, "emergency_numbers.json")
+
+_cache = None
+
 def load_emergency_numbers():
     global _cache
     if _cache is None:
-        obj = s3.get_object(Bucket=BUCKET, Key=KEY)
-        _cache = json.loads(obj["Body"].read())
+        with open(DATA_FILE, "r") as f:
+            _cache = json.load(f)
     return _cache
 
 # ------------------ Geo helpers ------------------
@@ -63,6 +61,56 @@ def reverse_geocode(lat, lng):
             }
     except:
         return None
+
+def geocode_place(city=None, state=None, zip_code=None, country=None):
+    """
+    Forward geocode using OpenStreetMap
+    """
+    try:
+        query_parts = [p for p in [zip_code, city, state, country] if p]
+        query = ", ".join(query_parts)
+
+        url = f"https://nominatim.openstreetmap.org/search?format=json&limit=1&q={query}"
+        req = urllib.request.Request(url, headers={"User-Agent": "ngo-emergency-api"})
+        with urllib.request.urlopen(req, timeout=4) as r:
+            results = json.load(r)
+            if not results:
+                return None
+
+            place = results[0]
+            # reverse lookup for structured data
+            return reverse_geocode(place["lat"], place["lon"])
+    except:
+        return None
+
+
+def get_client_ip(event):
+    """
+    Supports:
+    - API Gateway HTTP API (v2)
+    - API Gateway REST API (v1)
+    - ALB / CloudFront fallback
+    """
+    # HTTP API (v2)
+    try:
+        return event["requestContext"]["http"]["sourceIp"]
+    except:
+        pass
+
+    # REST API (v1)
+    try:
+        return event["requestContext"]["identity"]["sourceIp"]
+    except:
+        pass
+
+    # Header fallback
+    headers = event.get("headers") or {}
+    xff = headers.get("X-Forwarded-For") or headers.get("x-forwarded-for")
+    if xff:
+        return xff.split(",")[0].strip()
+
+    return None
+
 
 # ------------------ Resolver ------------------
 
@@ -127,49 +175,88 @@ def find_emergency_services(location, data, requested_service=None):
     us_default = data.get("US", {}).get("default")
     return filter_service(us_default), "country"
 
+def infer_state_country_from_city(city, data):
+    """
+    Search entire dataset to find which state & country a city belongs to.
+    """
+    if not city:
+        return None
+
+    city_norm = city.title()
+
+    for country_code, country_data in data.items():
+        states = country_data.get("states", {})
+        for state_name, state_data in states.items():
+            cities = state_data.get("cities", {})
+            if city_norm in cities:
+                return {
+                    "city": city_norm,
+                    "state": state_name,
+                    "country": country_code
+                }
+
+    return None
 
 
 # ------------------ Lambda ------------------
 
 def lambda_handler(event, context):
     try:
-         
-        client_ip = event["requestContext"]["http"]["sourceIp"]
+        client_ip = get_client_ip(event)
         params = event.get("queryStringParameters") or {}
+
         service = params.get("service")
         lat = params.get("lat")
         lng = params.get("lng")
         zip_code = params.get("zip")
+        city = params.get("city")
+        state = params.get("state")
         country_override = params.get("country")
 
         location = {}
 
-        # Allow manual country override (for testing)
-        if country_override:
-            location["country"] = country_override.upper()
+        # Load data early (needed for inference)
+        data = load_emergency_numbers()
 
-
-        #  If GPS → strongest
+        # 1️⃣ GPS (strongest)
         if lat and lng:
             geo = reverse_geocode(lat, lng)
             if geo:
-                location = geo
+                location.update(geo)
 
-        #  If no country yet → detect from IP
+        # 2️⃣ ZIP / CITY / STATE → geocode
+        elif zip_code or city or state:
+            geo = geocode_place(
+                zip_code=zip_code,
+                city=city,
+                state=state,
+                country=country_override
+            )
+            if geo:
+                location.update(geo)
+
+        # 3️⃣ City-based inference from DATA (no IP!)
+        if city and not location.get("country"):
+            inferred = infer_state_country_from_city(city, data)
+            if inferred:
+                location.update(inferred)
+
+        # 4️⃣ Manual country override (testing only)
+        if country_override:
+            location["country"] = country_override.upper()
+
+        # 5️⃣ IP fallback (LAST RESORT)
         if not location.get("country"):
             ip_loc = get_location_from_ip(client_ip)
             for k, v in ip_loc.items():
                 if v:
                     location.setdefault(k, v)
 
-        #  If ZIP provided → apply AFTER country is known
-        if zip_code:
-            location["zip"] = zip_code
-
-
-
-        data = load_emergency_numbers()
+        # 6️⃣ Resolve emergency services
         services, level = find_emergency_services(location, data, service)
+
+        if not services:
+            return response(404, {"error": "Emergency services not found"})
 
         return response(200, {
             "services": services,
@@ -177,7 +264,6 @@ def lambda_handler(event, context):
             "resolved_location": location,
             "client_ip": client_ip
         })
-
 
     except Exception as e:
         return response(500, {"error": str(e)})
