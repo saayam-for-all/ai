@@ -1,73 +1,7 @@
-# from utils.categories_with_description import TAXONOMY
-# from utils.client import client, _use_groq, _gemini_client
-
-# class GroqClassificationService:
-#     def __init__(self, model="llama-3.1-8b-instant", temperature=0.8, top_p=0.3):
-#         self.model = model
-#         self.temperature = temperature
-#         self.top_p = top_p
-#         self.categories_with_desc = "\n".join(
-#             [f"{k}: {v}" for k, v in TAXONOMY.items()]
-#         )
-#         self.gemini_model = "gemini-2.0-flash" 
-
-#     def _predict_with_gemini(self, prompt: str) -> str:
-#         if not _gemini_client:
-#             print("CRITICAL ERROR: Gemini fallback requested but _gemini_client is None.")
-#             raise ValueError("Gemini client not initialized")
-            
-#         response = _gemini_client.models.generate_content(
-#             model=self.gemini_model,
-#             contents=prompt
-#         )
-#         return response.text.strip()
-
-#     def predict_categories(self, subject: str, description: str) -> str:
-#         prompt = f"""
-# You are a zero-shot classifier. Choose EXACTLY ONE category.
-
-# Categories:
-# {self.categories_with_desc}
-
-# Subject: {subject}
-# Description: {description}
-
-# Output (category only):
-# """
-
-#         # Detailed logic logging
-#         if _use_groq and client:
-#             try:
-#                 print(f"LOG: Attempting Groq classification with model {self.model}...")
-#                 # response = client.chat.completions.create(
-#                 #     model=self.model,
-#                 #     messages=[{"role": "user", "content": prompt}],
-#                 #     temperature=self.temperature,
-#                 #     top_p=self.top_p
-#                 # )
-#                 # Example improvement for classification_service.py
-#                 response = client.chat.completions.create(
-#                     model=self.model,
-#                     messages=[{"role": "user", "content": prompt}],
-#                     response_format={"type": "json_object"} # Forces JSON output
-#                 )
-#                 return response.choices[0].message.content.strip()
-#             except Exception as e:
-#                 print(f"LOG ERROR: Groq API call failed: {str(e)}") 
-#         else:
-#             reason = "Groq Key Missing" if not _use_groq else "Client Object None"
-#             print(f"LOG: Skipping Groq (Reason: {reason})")
-
-#         print("LOG: Proceeding with Gemini fallback...")
-#         return self._predict_with_gemini(prompt)
-
-# def predict_categories(subject, description):
-#     service = GroqClassificationService()
-#     return service.predict_categories(subject, description)
-
 import json
 from utils.categories_with_description import TAXONOMY
 from utils.client import client, _use_groq, _gemini_client
+from utils.categories import category_name_to_number
 
 class GroqClassificationService:
     def __init__(self, model="llama-3.1-8b-instant", temperature=0.8, top_p=0.3):
@@ -79,7 +13,7 @@ class GroqClassificationService:
         )
         self.gemini_model = "gemini-2.0-flash" 
 
-    def _predict_with_gemini(self, prompt: str) -> str:
+    def _predict_with_gemini(self, prompt: str) -> list:
         if not _gemini_client:
             raise ValueError("Gemini client not initialized")
             
@@ -91,23 +25,75 @@ class GroqClassificationService:
         # Handle cases where Gemini might return the JSON structure requested in the prompt
         if text.startswith('{'):
             try:
-                return json.loads(text).get("category", text)
-            except:
-                pass
-        return text
+                data = json.loads(text)
+                categories = data.get("categories", [])
+                if isinstance(categories, list):
+                    return categories
+                # Fallback: if single category returned
+                single_cat = data.get("category")
+                if single_cat:
+                    return [{"category": single_cat, "confidence": 1.0}]
+            except (json.JSONDecodeError, KeyError, TypeError) as e:
+                print(f"LOG: Error parsing Gemini response: {str(e)}")
+        return []
 
-    def predict_categories(self, subject: str, description: str) -> str:
-        # FIX: Added 'json' to the prompt to satisfy Groq's response_format requirement
+    def _parse_ranked_categories(self, response_data: dict) -> list:
+        """Parse the response and return ranked categories with numbers."""
+        categories = response_data.get("categories", [])
+        
+        # If single category format, convert to list
+        if "category" in response_data and not categories:
+            single_cat = response_data.get("category")
+            if single_cat:
+                categories = [{"category": single_cat, "confidence": 1.0}]
+        
+        # Map category names to numbers and sort by confidence
+        ranked_results = []
+        for item in categories:
+            if isinstance(item, dict):
+                cat_name = item.get("category", "")
+                confidence = item.get("confidence", 0.0)
+            elif isinstance(item, str):
+                cat_name = item
+                confidence = 1.0
+            else:
+                continue
+                
+            cat_number = category_name_to_number.get(cat_name)
+            if cat_number:
+                ranked_results.append({
+                    "category_number": cat_number,
+                    "category_name": cat_name,
+                    "confidence": confidence
+                })
+        
+        # Sort by confidence (highest first)
+        ranked_results.sort(key=lambda x: x["confidence"], reverse=True)
+        return ranked_results
+
+    def predict_categories(self, subject: str, description: str) -> list:
+        # Modified prompt to return ranked categories
         prompt = f"""
 You are a zero-shot classifier. 
-Return your answer in JSON format with a single key 'category'.
-Choose EXACTLY ONE category from the list below.
+Return your answer in JSON format with a key 'categories' containing a list of ranked categories.
+For each category, include the category name and a confidence score (0.0 to 1.0).
+Rank categories by relevance, with the most relevant first.
+Return at least the top 3 most relevant categories.
 
 Categories:
 {self.categories_with_desc}
 
 Subject: {subject}
 Description: {description}
+
+Return format:
+{{
+  "categories": [
+    {{"category": "CATEGORY_NAME", "confidence": 0.95}},
+    {{"category": "CATEGORY_NAME", "confidence": 0.80}},
+    {{"category": "CATEGORY_NAME", "confidence": 0.65}}
+  ]
+}}
 """
 
         if _use_groq and client:
@@ -124,13 +110,16 @@ Description: {description}
                 # Parse the JSON response
                 res_content = response.choices[0].message.content.strip()
                 res_data = json.loads(res_content)
-                return res_data.get("category", res_content)
+                return self._parse_ranked_categories(res_data)
                 
-            except Exception as e:
+            except (json.JSONDecodeError, KeyError, TypeError) as e:
                 print(f"LOG ERROR: Groq attempt failed: {str(e)}") 
 
         print("LOG: Falling back to Gemini...")
-        return self._predict_with_gemini(prompt)
+        gemini_result = self._predict_with_gemini(prompt)
+        if gemini_result:
+            return self._parse_ranked_categories({"categories": gemini_result})
+        return []
 
 def predict_categories(subject, description):
     service = GroqClassificationService()
