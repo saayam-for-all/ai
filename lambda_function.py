@@ -6,6 +6,10 @@ from utils.subject_generator import generate_subject_from_description
 def lambda_handler(event, context):
     try:
         body = json.loads(event.get("body", "{}"))
+        
+        # Handle API Gateway variations
+        if isinstance(body, str):
+            body = json.loads(body)
 
         subject = body.get("subject")
         description = body.get("description")
