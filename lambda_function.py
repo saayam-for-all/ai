@@ -3,8 +3,13 @@ from services.search_orgs import find_nonprofits
 
 def lambda_handler(event, context):
     try:
-        body = json.loads(event.get("body", "{}"))
-
+        raw_body = event.get("body")
+        if isinstance(raw_body, str):
+            # API Gateway → body is a JSON string
+            body = json.loads(raw_body)
+        else:
+            # Direct invoke / raw JSON → event itself is the body
+            body = event
         subject = body.get("subject")
         description = body.get("description")
         location=body.get("location")
