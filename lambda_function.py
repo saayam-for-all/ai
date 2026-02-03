@@ -3,6 +3,8 @@ from utils.subject_generator import generate_subject_from_description
 
 # Generate Subject from description
 def generate_subject_handler(event, context):
+    print("DEBUG EVENT:", json.dumps(event))
+    
     try:
         body = json.loads(event.get("body", "{}"))
 
