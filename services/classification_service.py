@@ -71,7 +71,7 @@ class GroqClassificationService:
         ranked_results.sort(key=lambda x: x["confidence"], reverse=True)
         return ranked_results
 
-    def predict_categories(self, subject: str, description: str) -> list:
+    def predict_categories(self, description: str) -> list:
         # Modified prompt to return ranked categories
         prompt = f"""
 You are a zero-shot classifier. 
@@ -83,7 +83,6 @@ Return at least the top 3 most relevant categories.
 Categories:
 {self.categories_with_desc}
 
-Subject: {subject}
 Description: {description}
 
 Return format:
@@ -121,6 +120,6 @@ Return format:
             return self._parse_ranked_categories({"categories": gemini_result})
         return []
 
-def predict_categories(subject, description):
+def predict_categories(description):
     service = GroqClassificationService()
-    return service.predict_categories(subject, description)
+    return service.predict_categories(description)
