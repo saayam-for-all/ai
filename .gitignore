@@ -5,3 +5,4 @@ utils/*.pyc
 .env
 *.zip
 local_test.py
+*.csv
