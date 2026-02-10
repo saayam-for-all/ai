@@ -1,54 +1,64 @@
-#File Contains all the help categories mapped to their string constants.
+"""File contains all the help categories mapped to their display names."""
+
 help_categories = {
-    
-    # General (0)
-    "0.0.0.0.0" : "General",
-    # Food & Essentials (1)
-    "1": "FOOD_AND_ESSENTIALS_SUPPORT",
-    "1.1": "FOOD_ASSISTANCE",
-    "1.2": "GROCERY_SHOPPING_AND_DELIVERY",
-    "1.3": "COOKING_HELP",
+    # 0. General
+    "0.0.0.0.0": "General",
 
-    # Clothing (2)
-    "2.1": "DONATE_CLOTHES",
-    "2.2": "BORROW_CLOTHES",
-    "2.3": "EMERGENCY_ASSISTANCE",
-    "2.3.1": "EMERGENCY_CLOTHING_ASSISTANCE",
-    "2.4": "SEASONAL_DRIVE_NOTIFICATION",
-    "2.5": "TAILORING",
+    # 1. Food & Essentials
+    "1": "Food & Essentials",
+    "1.1": "Food Assistance",
+    "1.2": "Grocery Shopping & Delivery",
+    "1.3": "Cooking Help",
 
-    # Housing (3)
-    "3": "HOUSING_SUPPORT",
-    "3.1": "FIND_A_ROOMMATE",
-    "3.2": "RENTING_SUPPORT",
-    "3.3": "HOUSEHOLD_ITEM_EXCHANGE",
-    "3.4": "MOVING_ASSISTANCE",
-    "3.5": "CLEANING_HELP",
-    "3.6": "HOME_REPAIR_SUPPORT",
-    "3.7": "UTILITIES_SETUP",
+    # 2. Clothing Assistance
+    "2": "Clothing Assistance",
+    "2.1": "Donate Clothes (In-person)",
+    "2.2": "Borrow Clothes (In-person)",
+    "2.3": "Emergency Clothing Assistance",
+    "2.4": "Tailoring or Alteration Assistance",
 
-    # Education (4)
-    "4": "EDUCATION_CAREER_SUPPORT",
-    "4.1": "COLLEGE_APPLICATION_HELP",
-    "4.2": "SOP_ESSAY_REVIEW",
-    "4.3": "TUTORING",
+    # 3. Housing Assistance
+    "3": "Housing Assistance",
+    "3.1": "Lease Support",
+    "3.2": "Tenant Rent Support",
+    "3.3": "Repair & Maintenance Support",
+    "3.4": "Utilities Setup Support",
+    "3.5": "Looking for a rental",
+    "3.6": "Find a roommate",
+    "3.7": "Move-in Help",
+    "3.8": "Packers & Movers Support",
+    "3.9": "Buy Used/New things",
+    "3.10": "Sell used/new things",
 
-    # Healthcare (5)
-    "5": "HEALTHCARE_WELLNESS_SUPPORT",
-    "5.1": "MEDICAL_NAVIGATION",
-    "5.2": "MEDICINE_DELIVERY",
-    "5.3": "MENTAL_WELLBEING_SUPPORT",
-    "5.4": "MEDICATION_REMINDERS",
-    "5.5": "HEALTH_EDUCATION_GUIDANCE",
+    # 4. Education & Career Support
+    "4": "Education & Career Support",
+    "4.1": "College Applications Help",
+    "4.2": "SOP & Essay Reviews",
+    "4.3": "Tutoring",
+    "4.4": "Scholarship Knowledge",
+    "4.5": "Study Group Formation",
+    "4.6": "Career Guidance (Mock Interviews, Referrals)",
+    "4.7": "Education Resource Sharing (Book Lending)",
 
-    # Elderly (6)
-    "6": "ELDERLY_SUPPORT",
-    "6.1": "SENIOR_LIVING_RELOCATION",
-    "6.2": "DIGITAL_SUPPORT_FOR_SENIORS",
-    "6.3": "MEDICAL_HELP",
-    "6.4": "ERRANDS_TRANSPORTATION",
-    "6.5": "SOCIAL_CONNECTION",
-    "6.6": "MEAL_SUPPORT"
+    # 5. Healthcare & Wellness
+    "5": "Healthcare & Wellness",
+    "5.1": "Medical Consultation",
+    "5.2": "Medicine Delivery",
+    "5.3": "Medical Well-being Support",
+    "5.4": "Medication Reminders",
+    "5.5": "Health Education Guidance",
+
+    # 6. Elderly & Community Assistance
+    "6": "Elderly & Community Assistance",
+    "6.1": "Senior Relocation support",
+    "6.2": "Digital Support For Seniors",
+    "6.3": "Medication Management and Schedule",
+    "6.4": "Medical Devices Setup",
+    "6.5": "Errands, Events, and Transportation",
+    "6.6": "Transportation support for Appointments, and Events",
+    "6.7": "Scheduling of Appointments or Tasks",
+    "6.8": "Social Connection",
+    "6.9": "Meal Support"
 }
 
 # Reverse mapping: category name -> category number
