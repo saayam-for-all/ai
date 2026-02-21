@@ -14,6 +14,10 @@ class Organization(BaseModel):
     organization_name: str = Field(description="Name of the nonprofit organization")
     location: str = Field(description="Address of the organization")
     contact: str = Field(description="Phone number of the organization")
+    email: str = Field(description="Email address of the organization")
+    source: str = Field(description="URL of the organization's website or a reputable source verifying its legitimacy")
+    web_url: str = Field(description="URL of the organization's website")
+    mission: str = Field(description="A 3-line summary of the organization's mission")
     description: str = Field(description="A 3-line summary of what the organization does")
     relevance: str = Field(description="A 3-line summary of why the organization is relevant to the request")
 
@@ -58,7 +62,7 @@ def build_prompt(subject: str, description: str, location: str):
                 "Return a JSON object following this schema:\n"
                 "{format_instructions}\n\n"
                 "List 2-3 reputable nonprofit organizations that work on the subject and description; priortize organizations which are closest to the provided location"
-                "Include organization name, address, phone number, a 3-line description of the organization, and another 3-line summary of why the organization is relevant to the request."
+                "Include organization name, address, phone number, email, source URL of the information, web URL of the organization, mission statement, description of what the organization does, and another 3-line summary of why the organization is relevant to the request."
             )
         )
     ])
