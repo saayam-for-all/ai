@@ -1,74 +1,115 @@
-name: Python Flask CI Pipeline # Name of this GitHub Actions workflow
+name: Python Flask CI Pipeline
 
 on:
-  # Run the workflow on pushes to these branches
   push:
     branches: ["test", "dev", "main", "feature/ci-build-divyatanwar"]
-      
-  # Also run the workflow for pull requests targeting these branches
   pull_request:
-    branches: ["test", "dev", "main"]
+    branches: ["test", "dev", "main", "feature/ci-build-divyatanwar"]
 
 jobs:
-  build:
-    # Use the latest stable Ubuntu runner
+  build-and-test:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
+        shell: bash
 
     steps:
-      # Step 1: Check out the repository so workflow can access the code
+      # --- CODE: Checkout source ---
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      # Step 2: Set up the desired Python version
+      # --- Set up Python ---
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: "3.11.3"
+          python-version: "3.11"
 
-      # Step 3: Install virtualenv (optional helper; venv creation uses python -m venv)
-      - name: Install Python Virtual Environment
-        run: pip3 install virtualenv
-
-      # https://docs.github.com/en/actions/guides/caching-dependencies-to-speed-up-workflows
-      # Step 4: Cache the virtual environment to speed up subsequent runs
-      - name: Virtual Environment
-        uses: actions/cache@v3
-        id: cache-venv
+      # --- Cache dependencies ---
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        id: cache-deps
         with:
           path: .venv
-          # Key is based on OS and hash of requirements.txt, so cache is invalidated when deps change
-          key: ${{ runner.os }}-venv-${{ hashFiles('requirements.txt') }}
+          key: ${{ runner.os }}-venv-${{ hashFiles('requirements.txt', 'pyproject.toml') }}
           restore-keys: |
             ${{ runner.os }}-venv-
 
-      # Step 5: Create (if needed) and activate the virtual environment, then install project dependencies
-      # Only install if cache was not restored (i.e., requirements.txt changed or cache doesn't exist)
-      - name: Activate Virtual Environment and Install Packages
-        env:
-          CACHE_HIT: ${{ steps.cache-venv.outputs.cache-hit }}
+      # --- BUILD/PACKAGE: Install and build the project ---
+      - name: Build and install package
         run: |
-          if [ ! -d ".venv" ]; then
-            python3 -m venv .venv
-          fi
+          python -m venv .venv
           source .venv/bin/activate
           pip install --upgrade pip
-          # Only install dependencies if cache was not restored (cache miss)
-          if [ "$CACHE_HIT" != "true" ]; then
-            echo "Cache miss - installing dependencies from requirements.txt"
-            pip install -r requirements.txt
-          else
-            echo "Cache hit - skipping dependency installation (requirements.txt unchanged)"
-          fi
+          pip install -r requirements.txt
+          pip install -e .
+          pip install pytest-cov bandit
 
-      # Step 6: Lint Python files with flake8 to enforce basic code quality checks
-      - name: Lint code with flake8
+      # --- TESTS [SAST]: Static Application Security Testing ---
+      - name: SAST with Bandit
+        run: |
+          source .venv/bin/activate
+          bandit -r . -x .venv,.git -ll
+
+      # --- CODE COVERAGE: Run tests with coverage ---
+      - name: Run tests with coverage
+        run: |
+          source .venv/bin/activate
+          python -m pytest --cov=app --cov-report=xml --cov-report=term-missing -v
+
+      # --- Lint (code quality) ---
+      - name: Lint with flake8
         run: |
           source .venv/bin/activate
           pip install flake8
           flake8 *.py --max-line-length=150
 
-      # Step 7: Run unit tests with pytest inside the virtual environment
-      - name: Run pytest
-        run: |
-          source .venv/bin/activate
-          pytest
+  # --- BUILD DOCKER IMAGE AND PUSH: Docker build job ---
+  build-docker:
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    if: github.event_name == 'push'
+    permissions:
+      contents: read
+      id-token: write  # for OIDC with AWS (if using ECR)
+    defaults:
+      run:
+        working-directory: .
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: saayam-ai-assistant:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Uncomment and configure for ECR push when ready:
+      # - name: Configure AWS credentials
+      #   uses: aws-actions/configure-aws-credentials@v4
+      #   with:
+      #     role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+      #     aws-region: ${{ secrets.AWS_REGION }}
+      #
+      # - name: Login to Amazon ECR
+      #   id: login-ecr
+      #   uses: aws-actions/amazon-ecr-login@v2
+      #
+      # - name: Build and push to ECR
+      #   uses: docker/build-push-action@v6
+      #   with:
+      #     context: .
+      #     push: true
+      #     tags: |
+      #       ${{ steps.login-ecr.outputs.registry }}/${{ secrets.ECR_REPOSITORY }}:${{ github.sha }}
+      #       ${{ steps.login-ecr.outputs.registry }}/${{ secrets.ECR_REPOSITORY }}:latest
+      #     cache-from: type=gha
+      #     cache-to: type=gha,mode=max

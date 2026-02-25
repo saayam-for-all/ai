@@ -8,3 +8,4 @@ python-dotenv
 tiktoken
 torch
 numpy
+pytest

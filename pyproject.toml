@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "saayam-ai-assistant"
+version = "0.1.0"
+description = "Saayam AI Assistant (Flask)"
+requires-python = ">=3.11"
+
+[tool.setuptools]
+# Your project is not a package folder; it's root-level modules.
+py-modules = ["app", "MetaAIAPI_app"]
+include-package-data = true
+
+[tool.setuptools.package-data]
+"*" = ["templates/**/*", "static/**/*"]
