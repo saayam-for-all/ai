@@ -14,6 +14,9 @@ on:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    env:
+      PYTHONUNBUFFERED: 1
+      PYTHONFAULTHANDLER: 1
     defaults:
       run:
         working-directory: .
@@ -28,11 +31,10 @@ jobs:
 
       - name: Show pipeline info
         run: |
-          echo "::group::Pipeline context"
+          echo "=== Pipeline context ==="
           echo "Branch: ${{ github.ref_name }}"
           echo "Commit: ${{ github.sha }}"
           echo "Event: ${{ github.event_name }}"
-          echo "::endgroup::"
 
       # --- Set up Python (with pip cache) ---
       - name: Set up Python
@@ -63,48 +65,43 @@ jobs:
       - name: Build and install package
         if: steps.cache-venv.outputs.cache-hit != 'true'
         env:
-          PIP_PROGRESS_BAR: on
-          PYTHONUNBUFFERED: 1
+          PIP_PROGRESS_BAR: off
+          PIP_DISABLE_PIP_VERSION_CHECK: 1
         run: |
-          echo "::group::Installing dependencies"
-          echo "⚠️ torch + transformers are large (~2GB). First install can take 15–20 min."
-          echo ""
+          set -o pipefail
+          echo "=== Build and install package (output below) ==="
+          echo "torch + transformers are large (~2GB). First install can take 15–20 min."
           python -m venv .venv
           source .venv/bin/activate
-          echo "→ Upgrading pip..."
+          echo "--- Upgrading pip ---"
           pip install --upgrade pip
-          echo "→ Installing from requirements.txt (this is the slow part)..."
-          pip install -r requirements.txt
-          echo "→ Installing project and CI tools..."
-          pip install -e .
-          pip install pytest-cov bandit flake8
-          echo "✅ Install complete"
-          echo "::endgroup::"
+          echo "--- Installing requirements.txt ---"
+          pip install -r requirements.txt 2>&1 | while IFS= read -r line; do echo "$line"; done
+          echo "--- Installing project + pytest-cov, bandit, flake8 ---"
+          pip install -e . pytest-cov bandit flake8 2>&1 | while IFS= read -r line; do echo "$line"; done
+          echo "=== Install complete ==="
 
 
       # --- TESTS [SAST]: Static Application Security Testing ---
       - name: SAST with Bandit
         run: |
-          echo "::group::Bandit SAST scan"
+          echo "=== SAST with Bandit (output below) ==="
           source .venv/bin/activate
           bandit -r . -x .venv,.git -ll -f screen --skip B101,B201
-          echo "::endgroup::"
 
       # --- CODE COVERAGE: Run tests with coverage ---
       - name: Run tests with coverage
         run: |
-          echo "::group::Pytest with coverage"
+          echo "=== Pytest with coverage (output below) ==="
           source .venv/bin/activate
-          python -m pytest --cov=app --cov-report=xml --cov-report=term-missing -v
-          echo "::endgroup::"
+          python -u -m pytest --cov=app --cov-report=xml --cov-report=term-missing -v -s
 
       # --- Lint (code quality) ---
       - name: Lint with flake8
         run: |
-          echo "::group::Flake8 lint"
+          echo "=== Flake8 lint (output below) ==="
           source .venv/bin/activate
           flake8 *.py --max-line-length=150
-          echo "::endgroup::"
 
   # --- BUILD DOCKER IMAGE AND PUSH: Docker build job ---
   build-docker:
