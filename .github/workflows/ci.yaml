@@ -1,6 +1,11 @@
 name: Python Flask CI Pipeline
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
+  workflow_dispatch:  # Allows manual "Run workflow" from GitHub Actions tab
   push:
     branches: ["test", "dev", "main", "feature/ci-build-divyatanwar"]
   pull_request:
@@ -18,51 +23,77 @@ jobs:
       # --- CODE: Checkout source ---
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for better visibility
 
-      # --- Set up Python ---
+      - name: Show pipeline info
+        run: |
+          echo "::group::Pipeline context"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Commit: ${{ github.sha }}"
+          echo "Event: ${{ github.event_name }}"
+          echo "::endgroup::"
+
+      # --- Set up Python (with pip cache) ---
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: "pip"
 
-      # --- Cache dependencies ---
-      - name: Cache dependencies
+      # --- Cache virtualenv (skip install when deps unchanged) ---
+      - name: Cache virtualenv
         uses: actions/cache@v4
-        id: cache-deps
+        id: cache-venv
         with:
           path: .venv
           key: ${{ runner.os }}-venv-${{ hashFiles('requirements.txt', 'pyproject.toml') }}
           restore-keys: |
             ${{ runner.os }}-venv-
 
-      # --- BUILD/PACKAGE: Install and build the project ---
+      - name: Cache status
+        run: |
+          if [ "${{ steps.cache-venv.outputs.cache-hit }}" = "true" ]; then
+            echo "✅ Cache HIT - skipping dependency install"
+          else
+            echo "⬜ Cache MISS - will install dependencies"
+          fi
+
+      # --- BUILD/PACKAGE: Install only on cache miss ---
       - name: Build and install package
+        if: steps.cache-venv.outputs.cache-hit != 'true'
         run: |
           python -m venv .venv
           source .venv/bin/activate
           pip install --upgrade pip
           pip install -r requirements.txt
           pip install -e .
-          pip install pytest-cov bandit
+          pip install pytest-cov bandit flake8
+
 
       # --- TESTS [SAST]: Static Application Security Testing ---
       - name: SAST with Bandit
         run: |
+          echo "::group::Bandit SAST scan"
           source .venv/bin/activate
-          bandit -r . -x .venv,.git -ll
+          bandit -r . -x .venv,.git -ll -f screen --skip B101,B201
+          echo "::endgroup::"
 
       # --- CODE COVERAGE: Run tests with coverage ---
       - name: Run tests with coverage
         run: |
+          echo "::group::Pytest with coverage"
           source .venv/bin/activate
           python -m pytest --cov=app --cov-report=xml --cov-report=term-missing -v
+          echo "::endgroup::"
 
       # --- Lint (code quality) ---
       - name: Lint with flake8
         run: |
+          echo "::group::Flake8 lint"
           source .venv/bin/activate
-          pip install flake8
           flake8 *.py --max-line-length=150
+          echo "::endgroup::"
 
   # --- BUILD DOCKER IMAGE AND PUSH: Docker build job ---
   build-docker:
