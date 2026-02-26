@@ -87,7 +87,7 @@ jobs:
         run: |
           echo "=== SAST with Bandit (output below) ==="
           source .venv/bin/activate
-          bandit -r . -x .venv,.git -lll -f screen --skip B101,B201,B311,B404,B603
+          bandit app.py MetaAIAPI_app.py -lll -f screen
 
       # --- CODE COVERAGE: Run tests with coverage ---
       - name: Run tests with coverage

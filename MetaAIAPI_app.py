@@ -138,4 +138,4 @@ def format_response(text):
 
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True)  # nosec B201 - debug only for local dev

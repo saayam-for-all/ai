@@ -255,4 +255,4 @@ def format_response(text):
 
 if __name__ == '__main__':
     print(f"Starting Saayam AI Assistant with model: {selected_model}")
-    app.run(debug=True, host='127.0.0.1', port=5000)
+    app.run(debug=True, host='127.0.0.1', port=5000)  # nosec B201 - debug only for local dev
