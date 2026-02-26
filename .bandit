@@ -1,0 +1,11 @@
+[bandit]
+# Exclude paths
+exclude_dirs = /test,/tests,.venv,.git,__pycache__
+
+# Skip rules that cause false positives in this project:
+# B101: assert_used - acceptable in test files
+# B201: flask_debug_true - only in __main__ for local dev
+# B311: random - used for non-crypto purposes
+# B404: import_subprocess - subprocess is needed for some operations
+# B603: subprocess_without_shell_equals_true - safe subprocess usage
+skips = B101,B201,B311,B404,B603

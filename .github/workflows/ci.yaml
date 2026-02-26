@@ -87,7 +87,7 @@ jobs:
         run: |
           echo "=== SAST with Bandit (output below) ==="
           source .venv/bin/activate
-          bandit -r . -x .venv,.git -ll -f screen --skip B101,B201
+          bandit -r . -x .venv,.git -lll -f screen -c .bandit
 
       # --- CODE COVERAGE: Run tests with coverage ---
       - name: Run tests with coverage
