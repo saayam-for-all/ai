@@ -62,13 +62,24 @@ jobs:
       # --- BUILD/PACKAGE: Install only on cache miss ---
       - name: Build and install package
         if: steps.cache-venv.outputs.cache-hit != 'true'
+        env:
+          PIP_PROGRESS_BAR: on
+          PYTHONUNBUFFERED: 1
         run: |
+          echo "::group::Installing dependencies"
+          echo "⚠️ torch + transformers are large (~2GB). First install can take 15–20 min."
+          echo ""
           python -m venv .venv
           source .venv/bin/activate
+          echo "→ Upgrading pip..."
           pip install --upgrade pip
+          echo "→ Installing from requirements.txt (this is the slow part)..."
           pip install -r requirements.txt
+          echo "→ Installing project and CI tools..."
           pip install -e .
           pip install pytest-cov bandit flake8
+          echo "✅ Install complete"
+          echo "::endgroup::"
 
 
       # --- TESTS [SAST]: Static Application Security Testing ---
