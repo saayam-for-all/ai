@@ -41,7 +41,8 @@ parser.add_argument(
     default="meta_ai",
     help="Choose the AI model to use: meta_ai, gemini, openai, or grok"
 )
-args = parser.parse_args()
+# Only parse sys.argv when run as script; when imported (e.g. by pytest) use defaults
+args, _ = parser.parse_known_args()
 selected_model = args.model
 
 # Default temperature for models that support it

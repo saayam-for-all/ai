@@ -68,7 +68,6 @@ jobs:
           PIP_PROGRESS_BAR: off
           PIP_DISABLE_PIP_VERSION_CHECK: 1
         run: |
-          set -o pipefail
           echo "=== Build and install package (output below) ==="
           echo "torch + transformers are large (~2GB). First install can take 15–20 min."
           python -m venv .venv
@@ -76,9 +75,9 @@ jobs:
           echo "--- Upgrading pip ---"
           pip install --upgrade pip
           echo "--- Installing requirements.txt ---"
-          pip install -r requirements.txt 2>&1 | while IFS= read -r line; do echo "$line"; done
+          pip install -r requirements.txt
           echo "--- Installing project + pytest-cov, bandit, flake8 ---"
-          pip install -e . pytest-cov bandit flake8 2>&1 | while IFS= read -r line; do echo "$line"; done
+          pip install -e . pytest-cov bandit flake8
           echo "=== Install complete ==="
 
 
@@ -90,11 +89,16 @@ jobs:
           bandit app.py MetaAIAPI_app.py -lll -f screen
 
       # --- CODE COVERAGE: Run tests with coverage ---
+      - name: Verify app import (quick check before tests)
+        run: |
+          source .venv/bin/activate
+          echo "Testing if app module can be imported..."
+          python -u -c "from app import app, categories; print('Import OK')"
       - name: Run tests with coverage
         run: |
           echo "=== Pytest with coverage (output below) ==="
           source .venv/bin/activate
-          python -u -m pytest --cov=app --cov-report=xml --cov-report=term-missing -v -s
+          python -u -m pytest test_app.py --cov=app --cov-report=xml --cov-report=term-missing -v -s --tb=short
 
       # --- Lint (code quality) ---
       - name: Lint with flake8
