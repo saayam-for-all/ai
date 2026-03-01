@@ -1,6 +1,7 @@
 # Testing AWS Endpoints
 
 ## Google Document
+Better Formatting & Images:
 https://docs.google.com/document/d/1gy4IbvX0R_znN5QJ7h8GYMex0LGt5vu4Yk8R2GDoe7o/edit?usp=sharing
 
 ## Prerequisites
