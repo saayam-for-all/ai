@@ -1,217 +1,154 @@
+# Testing AWS Endpoints
 
-#  🔍 Saayam AI Assistant 🤖 
+## Google Document
+https://docs.google.com/document/d/1gy4IbvX0R_znN5QJ7h8GYMex0LGt5vu4Yk8R2GDoe7o/edit?usp=sharing
 
-Saayam AI Assistant is a web-based application built with Flask that allows users to query various AI models (Meta AI, Gemini, ChatGPT, and Grok) for answers across multiple categories (e.g., Jobs, Education, Finance). The application uses zero-shot classification to predict relevant categories for user queries and provides detailed, formatted responses. Additionally, it collects performance metrics (latency, speed, temperature, token counts) to compare the efficiency of each AI model.
+## Prerequisites
 
-## 🧠 Features
-- **Multi-Model Support**: Query Meta AI, Gemini, ChatGPT, or Grok via a command-line argument.
-- **Category Prediction**: Uses zero-shot classification (`facebook/bart-large-mnli`) to predict relevant categories for user queries.
-- **Formatted Responses**: Responses are structured with bullet points, bold headings, and clear sections for readability.
-- **Performance Metrics**: Measures latency (TTFT/TTLT), speed (tokens/second), temperature, and token counts for each model.
-- **Web Interface**: A user-friendly interface built with Flask, HTML, and JavaScript, with Markdown rendering for responses.
+1. AWS account credentials with Lambda access  
+   Request Access - https://forms.gle/Mg8J3fSvA7AAHVxq5
+2. User account in **Sayaam For All**  
+   https://test-saayam.netlify.app
 
-## 🔧 Setup Instructions
+---
 
-### 1. Create & Activate Conda Environment
-Create a Conda environment with Python 3.10 and activate it:
+## Testing with AWS Lambda (In built Testing)
 
-```bash
-conda create -n saayam-env python=3.10
-conda activate saayam-env
-```
+**Demo:** [Watch here](https://youtu.be/e9RZSxCcn3g)
 
-### 2. Clone the Repository
-Clone the project repository to your local machine:
+---
 
-```bash
-git clone https://github.com/RobuRishabh/Saayam_ai.git
-cd Saayam_ai
-```
+## Testing Steps
 
-### 3. Install Requirements
-Install the required Python packages listed in requirements.txt:
+### Step 1: Sign In and Navigate to AWS Lambda Function
 
-```bash
-pip install -r requirements.txt
-```
+1. Sign in to AWS Console using your AWS account credentials  
+   https://aws.amazon.com
+2. Search for and navigate to **Lambda Functions** - https://us-east-1.console.aws.amazon.com/lambda/home?region=us-east-1#/functions.
+3. Locate the Lambda function name for testing and open it.
 
-Note: Ensure you have the following packages in your requirements.txt:
+---
 
-```
-flask
-transformers
-meta-ai-api
-google-generativeai
-openai
-groq
-python-dotenv
-tiktoken
-```
+### Step 2: Testing the Function Using the In built Test Event
 
-### 4. Set Up Environment Variables
-Create a .env file in the project root directory and add your API keys for Gemini, ChatGPT, and Grok:
+1. Navigate to the **Test** tab (next to **Code**).
 
-```
-GEMINI_API_KEY=your_gemini_api_key
-OPENAI_API_KEY=your_openai_api_key
-GROQ_API_KEY=your_groq_api_key
-```
+2. Configure the Test Event:
 
-Note: Meta AI doesn’t require an API key in this setup (uses meta-ai-api library).
+    - **Test Event Action:** Create New Event  
+    - **Invocation Type:** Synchronous  
+    - **Event Name:** _Optional_  
+    - **Event Sharing Settings:** Private. 
+    Share only when explicitly required for debugging or reporting anomalies.
+    - **Template:** _Optional_
 
-### 5. Run the Application
-Run the application with a specific AI model using the --model argument. The available models are meta_ai, gemini, openai, and grok.
+3. **Event JSON:** This is where you enter the raw request payload that the Lambda function will receive. After adding the JSON body, click **Test** in the upper right corner.
 
-Meta AI:
-```bash
-python app.py --model meta_ai
-```
+4. Upon successful execution, an output block will appear showing execution results.
 
-Gemini:
-```bash
-python app.py --model gemini
-```
+---
 
-ChatGPT (OpenAI):
-```bash
-python app.py --model openai
-```
+# Testing Cognito Authorized API Gateway Endpoints (Using Postman)
 
-Grok:
-```bash
-python app.py --model grok
-```
+**Demo:** [Watch here](https://youtu.be/CUXlJAPZI34)
 
-After running the application, open your browser and navigate to http://127.0.0.1:5000 to access the Saayam AI Assistant interface.
+These API endpoints are:
 
-## 📁 Project Structure
+- Hosted on AWS Lambda
+- Exposed via AWS API Gateway
+- Secured using a Cognito User Pool Authorizer
+- Require a valid Cognito ID Token (JWT)
 
-```
-Saayam_ai/
-├── app.py                 # Main application with multi-model support and metrics
-├── MetaAIAPI_app.py       # Meta AI-only version (simpler implementation)
-├── templates/
-│   └── index.html         # Frontend HTML template
-├── static/
-│   ├── apple-touch-icon.png
-│   ├── favicon-16x16.png
-│   ├── favicon-32x32.png
-│   ├── favicon.ico
-│   └── site.webmanifest    # Web manifest for favicon and icons
-├── requirements.txt        # Python dependencies
-├── .env                    # Environment variables (API keys)
-├── model_metrics.log       # Log file for performance metrics
-└── .gitignore              # Git ignore file
-```
+---
 
-## 📊 API Performance Evaluation
-The application collects performance metrics for each AI model, including latency, speed, temperature, and token counts. The metrics were evaluated using the query "Suggest me good job searching websites for international students" in the "Jobs" category.
+## Note on Authentication
 
-### Performance Metrics
+When a user logs in through the application, Amazon Cognito authenticates the user and issues a **JSON Web Token (JWT)**.
 
-**Meta AI**:
-- Model: meta_ai
-- Temperature: 0.7 (default)
-- Time to First Token (TTFT): 15.185 seconds
-- Total Response Time (TTLT): 15.185 seconds
-- Speed: 20.81 tokens/second
-- Input Tokens: 127
-- Output Tokens: 316
+This JWT:
 
-**Gemini**:
-- Model: gemini
-- Temperature: 0.7
-- Time to First Token (TTFT): 4.515 seconds
-- Total Response Time (TTLT): 4.515 seconds
-- Speed: 100.32 tokens/second
-- Input Tokens: 127
-- Output Tokens: 453
+- Represents the authenticated user
+- Contains user identity claims such as user ID and email
+- Is required to access protected API endpoints
 
-**ChatGPT (OpenAI)**:
-- Model: openai
-- Temperature: 0.7
-- Time to First Token (TTFT): 4.619 seconds
-- Total Response Time (TTLT): 4.619 seconds
-- Speed: 81.83 tokens/second
-- Input Tokens: 176
-- Output Tokens: 378
+The API Gateway validates this JWT before allowing access.
 
-**Grok**:
-- Model: grok
-- Temperature: 0.7
-- Time to First Token (TTFT): 0.856 seconds
-- Total Response Time (TTLT): 0.856 seconds
-- Speed: 630.66 tokens/second
-- Input Tokens: 127
-- Output Tokens: 540
+---
 
-### Cost Analysis
+## Testing Steps
 
-- **Meta AI**: Free (unofficial API), but may have rate limits or reliability issues.
-- **Gemini**: Free tier available, with paid plans for higher usage.
-- **ChatGPT**: Pay-per-use ($0.002 per 1K tokens for gpt-3.5-turbo).
-- **Grok**: Free tier available, with paid plans for higher usage.
+### Retrieving ID Token (JWT)
 
-### Limitations
+#### Step 1: Log in to Saayam Website
 
-- **Meta AI**: Slow, low speed, lacks temperature control.
-- **Gemini**: Moderate performance, potential tokenization differences.
-- **ChatGPT**: Reliable, slightly slower than Grok.
-- **Grok**: Fastest, high output token count (verbosity).
+1. Open: https://test-saayam.netlify.app/
+2. Create an account.
+3. Log in using valid credentials.
 
-## ⚖️ Comparison with Alternative Solutions
+---
 
-| Model     | Speed (tokens/s) | TTLT (s) | Cost         | Quality               |
-|-----------|------------------|----------|--------------|------------------------|
-| Meta AI   | 20.81            | 15.185   | Free         | Least consistent       |
-| Gemini    | 100.32           | 4.515    | Free tier    | Moderate consistency   |
-| ChatGPT   | 81.83            | 4.619    | Pay-per-use  | Highly consistent      |
-| Grok      | 630.66           | 0.856    | Free tier    | Practical, fast        |
+#### Step 2: Open Developer Tools
 
-## 🛠️ Proof-of-Concept Implementation
+1. Right click anywhere on the page.
+2. Click **Inspect**.
+3. Go to the **Application** tab (Chrome or Edge).
 
-### Overview
-Flask-based web app to query 4 models, classify categories, format answers, and log metrics.
+---
 
-### Backend (`app.py`)
-- Flask app, handles routes `/predict_categories` and `/generate_answer`
-- Model passed using `--model` CLI argument
-- Collects and logs metrics (TTFT, TTLT, token counts, temperature)
+#### Step 3: Locate the ID Token
 
-### Frontend (`index.html`)
-- HTML + JavaScript interface
-- Markdown rendering using marked.js
-- Submits subject, description, category
-- Displays response + metrics
+1. In the left panel, expand **Local Storage**.
+2. Select your website domain.
+3. Look for keys similar to:
 
-### Example
-```bash
-python app.py --model grok
-```
-Visit [http://127.0.0.1:5000](http://127.0.0.1:5000)
+    `CognitoIdentityServiceProvider.<client-id>.<username>.idToken`
 
-## 📈 Analysis and Recommendations
+4. Copy the value of the `idToken`.
 
-- **Fastest**: Grok (0.856s TTLT, 630.66 tokens/s)
-- **Most Consistent**: ChatGPT
-- **Cost-Effective**: Gemini & Grok
-- **Slowest**: Meta AI
+---
 
-### Recommendations
+### Testing in Postman
 
-- Use **Grok** for real-time speed
-- Use **ChatGPT** for reliability & consistency
-- Use **Gemini** for cost-conscious performance
-- Avoid **Meta AI** for production
+#### Step 4: Use in Postman
 
-## 🚀 Future Improvements
+1. Open Postman.
+2. Go to the **Authorization** tab.
+3. Set:
 
-- Enable streaming for better TTFT
-- Add cosine similarity for response sensitivity
-- Load testing (e.g., locust)
-- Caching frequent queries to save cost
+- **Auth Type:** Bearer Token
+- **Token:** Paste the copied ID token
 
-## 🙌 Acknowledgments
+4. Send the request to your Amazon API Gateway endpoint.
 
-Built with ❤️ using Flask, Transformers, and AI APIs.
-Special thanks to the open-source contributors of meta-ai-api.
+---
+
+#### Step 5: Verify Response
+
+If authentication is successful:
+
+- You will receive a **200 OK** response (or appropriate success response).
+
+If authentication fails:
+
+- **401 Unauthorized** → Token missing, invalid, or expired
+- **403 Forbidden** → Token valid but not authorized
+
+---
+
+## Common Issues and Troubleshooting
+
+### 1. Token Expired
+
+Cognito ID tokens typically expire after **1 hour**.
+
+**Solution:** Log in again and retrieve a fresh token.
+
+---
+
+### 2. Using Wrong Token Type
+
+Make sure you are using:
+
+- ✅ ID Token
+- ❌ Access Token
+- ❌ Refresh Token
