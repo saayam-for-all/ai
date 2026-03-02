@@ -22,9 +22,11 @@ def add_cors_headers(response):
     return response
 
 # ---------- Groq client ----------
-# Read key from environment (set GROQ_API_KEY in shell or .env)
-print("GROQ key present at startup:", bool(os.getenv("GROQ_API_KEY")))
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+def get_client() -> Groq:
+    api_key = os.getenv("GROQ_API_KEY")
+    if not api_key:
+        raise RuntimeError("GROQ_API_KEY is not set")
+    return Groq(api_key=api_key)
 
 MODEL_NAME = "llama-3.1-8b-instant"
 
@@ -102,7 +104,7 @@ Description: {description}
 Output (comma-separated categories):
 """.strip()
 
-    resp = client.chat.completions.create(
+    resp = get_client().chat.completions.create(
         model=MODEL_NAME,
         messages=[{"role": "user", "content": prompt}],
         temperature=0.5,
@@ -124,7 +126,7 @@ def chat_with_llama(category: str, subject: str, description: str) -> str:
     )
     full_prompt = f"{role_prompt}\n\nSubject: {subject}\nQuestion: {description}"
 
-    resp = client.chat.completions.create(
+    resp = get_client().chat.completions.create(
         model=MODEL_NAME,
         messages=[{"role": "user", "content": full_prompt}],
         temperature=0.7,
@@ -147,6 +149,8 @@ def predict_categories_api():
 
         cats = predict_categories(subject, description)
         return jsonify(cats), 200
+    except RuntimeError as exc:
+        return jsonify({"error": "config_error", "detail": str(exc)}), 500
     except Exception:
         traceback.print_exc()
         return jsonify({"error": "internal_error"}), 500
@@ -164,6 +168,8 @@ def generate_answer_api():
         answer = chat_with_llama(category, subject, question)
         # jsonify(answer) returns a JSON string (what your existing client likely expects)
         return jsonify(answer), 200
+    except RuntimeError as exc:
+        return jsonify({"error": "config_error", "detail": str(exc)}), 500
     except Exception:
         traceback.print_exc()
         return jsonify({"error": "internal_error"}), 500
