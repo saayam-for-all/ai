@@ -1,20 +1,21 @@
-# AI Category Classifier (AWS Lambda)
+# AI Support Answer Generator (AWS Lambda)
 
-This service is a serverless application designed to classify user support requests into a specific taxonomy using LLMs. It features a primary classification path via **Groq (Llama-3.1)** and a fallback to **Gemini-2.0-flash**.
+This service is a serverless application designed to generate support answers from a category taxonomy using LLMs. The generate-answer flow uses **LangChain** with **Groq (llama-3.1-8b-instant)** as primary and **Gemini (gemini-2.5-flash)** as fallback.
 
 ---
 
 ## Project Overview
 
-The application accepts a `description` and an optional `subject`. If the subject is missing, the system uses AI to generate a concise subject line (max 70 characters). It then predicts the most relevant category from a predefined taxonomy including Food, Clothing, Housing, Education, Healthcare, and Elderly support.
+The application accepts a `category_id`, `subject`, and `description` (with optional `location`, `gender`, `age`, and `conversation_history`) and returns a generated answer. Categories are mapped from a predefined taxonomy including Food, Clothing, Housing, Education, Healthcare, and Elderly support.
 
 ### Core Files
 
 - `lambda_function.py` – Lambda entry point handling request/response formatting  
-- `services/classification_service.py` – Zero-shot classification logic with Groq → Gemini fallback  
-- `utils/client.py` – Groq and Gemini client initialization via environment variables  
-- `utils/categories_with_description.py` – Defines the category taxonomy  
-- `requirements.txt` – Python dependencies (`groq`, `google-genai`, `python-dotenv`)  
+- `utils/generate_answer_service.py` – Answer generation service wrapper  
+- `utils/langchain_models.py` – LangChain model layer with Groq → Gemini fallback  
+- `utils/prompts.py` – Prompt construction  
+- `utils/categories.py` – Category taxonomy mapping  
+- `requirements.txt` – Python dependencies (`groq`, `google-genai`, `python-dotenv`, `langchain-*`)  
 
 ---
 
@@ -69,6 +70,7 @@ Set the following in **Configuration → Environment variables**:
 ```env
 GROQ_API_KEY=your_groq_api_key
 GEMINI_API_KEY=your_gemini_api_key
+# or use GOOGLE_API_KEY as an alternative for Gemini
 ```
 
 ---
@@ -76,7 +78,7 @@ GEMINI_API_KEY=your_gemini_api_key
 ## 4. API Gateway Integration (HTTP API)
 
 1. Create an **API Gateway HTTP API**
-2. Add route: `POST /classify`
+2. Add route: `POST /answer`
 3. Integrate the route with this Lambda
 4. Deploy and copy the Invoke URL
 
@@ -88,6 +90,8 @@ GEMINI_API_KEY=your_gemini_api_key
 
 ```json
 {
+  "category_id": "1.1",
+  "subject": "Food help",
   "description": "I need help finding a local food bank because I'm short on groceries this week."
 }
 ```
@@ -96,8 +100,46 @@ GEMINI_API_KEY=your_gemini_api_key
 
 ```json
 {
-  "category": "FOOD_ASSISTANCE"
+  "answer": "..."
 }
+```
+
+---
+
+## Testing the generate-answer flow
+
+### Automated tests (no API keys)
+
+From the project root:
+
+```bash
+pip install -r requirements.txt
+pytest tests/ -v
+```
+
+Tests in `tests/test_generate_answer.py` cover message building, prompt structure, and the full `generate_ai_answer` path with the LangChain LLM mocked so they run without `GROQ_API_KEY`, `GEMINI_API_KEY`, or `GOOGLE_API_KEY`.
+
+### Manual end-to-end test (with API keys)
+
+1. Set `GROQ_API_KEY` and/or `GEMINI_API_KEY` in `.env`.
+2. Invoke the handler locally:
+
+```python
+from lambda_function import lambda_handler
+
+event = {
+    "body": '{"category_id": "1.1", "subject": "Food help", "description": "Where can I find a food bank in NYC?"}'
+}
+result = lambda_handler(event, None)
+print(result)  # statusCode 200, body {"answer": "..."}
+```
+
+3. Or call the service directly:
+
+```python
+from utils.generate_answer_service import generate_ai_answer
+answer = generate_ai_answer(category="FOOD_ASSISTANCE", subject="Food help", description="Where can I find a food bank?")
+print(answer)
 ```
 
 ---

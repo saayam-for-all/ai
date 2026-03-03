@@ -1,0 +1,78 @@
+2026-02-25 13:35:46,528 - HTTP Request: HEAD https://huggingface.co/facebook/bart-large-mnli/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-02-25 13:35:46,552 - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/facebook/bart-large-mnli/d7645e127eaf1aefc7862fd59a17a5aa8558b8ce/config.json "HTTP/1.1 200 OK"
+2026-02-25 13:35:46,578 - HTTP Request: GET https://huggingface.co/api/resolve-cache/models/facebook/bart-large-mnli/d7645e127eaf1aefc7862fd59a17a5aa8558b8ce/config.json "HTTP/1.1 200 OK"
+2026-02-25 13:39:11,589 - HTTP Request: HEAD https://huggingface.co/facebook/bart-large-mnli/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-02-25 13:39:11,611 - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/facebook/bart-large-mnli/d7645e127eaf1aefc7862fd59a17a5aa8558b8ce/config.json "HTTP/1.1 200 OK"
+2026-02-25 13:39:11,728 - HTTP Request: HEAD https://huggingface.co/facebook/bart-large-mnli/resolve/main/model.safetensors "HTTP/1.1 302 Found"
+2026-02-25 13:39:12,183 - HTTP Request: GET https://huggingface.co/api/models/facebook/bart-large-mnli/xet-read-token/d7645e127eaf1aefc7862fd59a17a5aa8558b8ce "HTTP/1.1 200 OK"
+2026-02-25 13:39:35,493 - HTTP Request: HEAD https://huggingface.co/facebook/bart-large-mnli/resolve/main/tokenizer_config.json "HTTP/1.1 307 Temporary Redirect"
+2026-02-25 13:39:35,494 - Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-02-25 13:39:35,514 - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/facebook/bart-large-mnli/d7645e127eaf1aefc7862fd59a17a5aa8558b8ce/tokenizer_config.json "HTTP/1.1 200 OK"
+2026-02-25 13:39:35,534 - HTTP Request: GET https://huggingface.co/api/resolve-cache/models/facebook/bart-large-mnli/d7645e127eaf1aefc7862fd59a17a5aa8558b8ce/tokenizer_config.json "HTTP/1.1 200 OK"
+2026-02-25 13:39:35,626 - HTTP Request: GET https://huggingface.co/api/models/facebook/bart-large-mnli/tree/main/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
+2026-02-25 13:39:35,726 - HTTP Request: GET https://huggingface.co/api/models/facebook/bart-large-mnli/tree/main?recursive=true&expand=false "HTTP/1.1 200 OK"
+2026-02-25 13:39:35,822 - HTTP Request: HEAD https://huggingface.co/facebook/bart-large-mnli/resolve/main/vocab.json "HTTP/1.1 307 Temporary Redirect"
+2026-02-25 13:39:35,839 - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/facebook/bart-large-mnli/d7645e127eaf1aefc7862fd59a17a5aa8558b8ce/vocab.json "HTTP/1.1 200 OK"
+2026-02-25 13:39:35,861 - HTTP Request: GET https://huggingface.co/api/resolve-cache/models/facebook/bart-large-mnli/d7645e127eaf1aefc7862fd59a17a5aa8558b8ce/vocab.json "HTTP/1.1 200 OK"
+2026-02-25 13:39:36,016 - HTTP Request: HEAD https://huggingface.co/facebook/bart-large-mnli/resolve/main/merges.txt "HTTP/1.1 307 Temporary Redirect"
+2026-02-25 13:39:36,034 - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/facebook/bart-large-mnli/d7645e127eaf1aefc7862fd59a17a5aa8558b8ce/merges.txt "HTTP/1.1 200 OK"
+2026-02-25 13:39:36,061 - HTTP Request: GET https://huggingface.co/api/resolve-cache/models/facebook/bart-large-mnli/d7645e127eaf1aefc7862fd59a17a5aa8558b8ce/merges.txt "HTTP/1.1 200 OK"
+2026-02-25 13:39:36,161 - HTTP Request: HEAD https://huggingface.co/facebook/bart-large-mnli/resolve/main/tokenizer.json "HTTP/1.1 307 Temporary Redirect"
+2026-02-25 13:39:36,182 - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/facebook/bart-large-mnli/d7645e127eaf1aefc7862fd59a17a5aa8558b8ce/tokenizer.json "HTTP/1.1 200 OK"
+2026-02-25 13:39:36,209 - HTTP Request: GET https://huggingface.co/api/resolve-cache/models/facebook/bart-large-mnli/d7645e127eaf1aefc7862fd59a17a5aa8558b8ce/tokenizer.json "HTTP/1.1 200 OK"
+2026-02-25 13:39:36,323 - HTTP Request: HEAD https://huggingface.co/facebook/bart-large-mnli/resolve/main/added_tokens.json "HTTP/1.1 404 Not Found"
+2026-02-25 13:39:36,418 - HTTP Request: HEAD https://huggingface.co/facebook/bart-large-mnli/resolve/main/special_tokens_map.json "HTTP/1.1 404 Not Found"
+2026-02-25 13:39:36,514 - HTTP Request: HEAD https://huggingface.co/facebook/bart-large-mnli/resolve/main/chat_template.jinja "HTTP/1.1 404 Not Found"
+2026-02-25 13:39:39,926 - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://127.0.0.1:5000
+2026-02-25 13:39:39,927 - [33mPress CTRL+C to quit[0m
+2026-02-25 13:39:39,927 -  * Restarting with stat
+2026-02-25 13:39:43,320 - HTTP Request: HEAD https://huggingface.co/facebook/bart-large-mnli/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-02-25 13:39:43,342 - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/facebook/bart-large-mnli/d7645e127eaf1aefc7862fd59a17a5aa8558b8ce/config.json "HTTP/1.1 200 OK"
+2026-02-25 13:39:43,758 - HTTP Request: GET https://huggingface.co/api/models/facebook/bart-large-mnli/tree/main/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
+2026-02-25 13:39:43,844 - HTTP Request: GET https://huggingface.co/api/models/facebook/bart-large-mnli/tree/main?recursive=true&expand=false "HTTP/1.1 200 OK"
+2026-02-25 13:39:45,898 -  * Debugger is active!
+2026-02-25 13:39:45,920 -  * Debugger PIN: 113-700-614
+2026-02-25 13:40:47,551 - 127.0.0.1 - - [25/Feb/2026 13:40:47] "GET / HTTP/1.1" 200 -
+2026-02-25 13:42:56,262 - 127.0.0.1 - - [25/Feb/2026 13:42:56] "POST /predict_categories HTTP/1.1" 200 -
+2026-02-25 13:43:14,937 - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 401 Unauthorized"
+2026-02-25 13:43:14,940 - 127.0.0.1 - - [25/Feb/2026 13:43:14] "[35m[1mPOST /generate_answer HTTP/1.1[0m" 500 -
+2026-02-25 13:43:19,661 - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 401 Unauthorized"
+2026-02-25 13:43:19,664 - 127.0.0.1 - - [25/Feb/2026 13:43:19] "[35m[1mPOST /generate_answer HTTP/1.1[0m" 500 -
+2026-02-25 13:45:47,690 - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 401 Unauthorized"
+2026-02-25 13:45:47,694 - 127.0.0.1 - - [25/Feb/2026 13:45:47] "[35m[1mPOST /generate_answer HTTP/1.1[0m" 500 -
+2026-02-25 13:45:51,638 - 127.0.0.1 - - [25/Feb/2026 13:45:51] "GET / HTTP/1.1" 200 -
+2026-02-25 13:46:07,540 - 127.0.0.1 - - [25/Feb/2026 13:46:07] "POST /predict_categories HTTP/1.1" 200 -
+2026-02-25 13:46:16,767 - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 401 Unauthorized"
+2026-02-25 13:46:16,770 - 127.0.0.1 - - [25/Feb/2026 13:46:16] "[35m[1mPOST /generate_answer HTTP/1.1[0m" 500 -
+2026-02-25 13:47:36,186 -  * Detected change in '/Users/prajwal/Documents/Saayam/ai/app.py', reloading
+2026-02-25 13:47:36,772 -  * Restarting with stat
+2026-02-25 13:47:40,184 - HTTP Request: HEAD https://huggingface.co/facebook/bart-large-mnli/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-02-25 13:47:40,206 - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/facebook/bart-large-mnli/d7645e127eaf1aefc7862fd59a17a5aa8558b8ce/config.json "HTTP/1.1 200 OK"
+2026-02-25 13:47:40,651 - HTTP Request: GET https://huggingface.co/api/models/facebook/bart-large-mnli/tree/main/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
+2026-02-25 13:47:40,741 - HTTP Request: GET https://huggingface.co/api/models/facebook/bart-large-mnli/tree/main?recursive=true&expand=false "HTTP/1.1 200 OK"
+2026-02-25 13:47:43,001 -  * Debugger is active!
+2026-02-25 13:47:43,018 -  * Debugger PIN: 113-700-614
+2026-02-25 13:49:29,592 - HTTP Request: HEAD https://huggingface.co/facebook/bart-large-mnli/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-02-25 13:49:29,611 - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/facebook/bart-large-mnli/d7645e127eaf1aefc7862fd59a17a5aa8558b8ce/config.json "HTTP/1.1 200 OK"
+2026-02-25 13:49:29,971 - HTTP Request: GET https://huggingface.co/api/models/facebook/bart-large-mnli/tree/main/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
+2026-02-25 13:49:30,068 - HTTP Request: GET https://huggingface.co/api/models/facebook/bart-large-mnli/tree/main?recursive=true&expand=false "HTTP/1.1 200 OK"
+2026-02-25 13:49:31,022 - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://127.0.0.1:5000
+2026-02-25 13:49:31,023 - [33mPress CTRL+C to quit[0m
+2026-02-25 13:49:31,023 -  * Restarting with stat
+2026-02-25 13:49:33,654 - HTTP Request: HEAD https://huggingface.co/facebook/bart-large-mnli/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-02-25 13:49:33,677 - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/facebook/bart-large-mnli/d7645e127eaf1aefc7862fd59a17a5aa8558b8ce/config.json "HTTP/1.1 200 OK"
+2026-02-25 13:49:34,036 - HTTP Request: GET https://huggingface.co/api/models/facebook/bart-large-mnli/tree/main/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
+2026-02-25 13:49:34,139 - HTTP Request: GET https://huggingface.co/api/models/facebook/bart-large-mnli/tree/main?recursive=true&expand=false "HTTP/1.1 200 OK"
+2026-02-25 13:49:35,591 -  * Debugger is active!
+2026-02-25 13:49:35,607 -  * Debugger PIN: 113-700-614
+2026-02-25 13:49:42,815 - 127.0.0.1 - - [25/Feb/2026 13:49:42] "GET / HTTP/1.1" 200 -
+2026-02-25 13:50:30,175 - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-02-25 13:50:30,192 - Metrics: {'model': 'grok', 'temperature': 0.7, 'ttft_seconds': 1.397, 'ttlt_seconds': 1.397, 'speed_tokens_per_second': 394.34, 'input_tokens': 135, 'output_tokens': 551}
+2026-02-25 13:50:30,193 - 127.0.0.1 - - [25/Feb/2026 13:50:30] "POST /generate_answer HTTP/1.1" 200 -
+2026-02-25 13:52:13,551 - 127.0.0.1 - - [25/Feb/2026 13:52:13] "GET / HTTP/1.1" 200 -
+2026-02-25 13:52:25,282 - 127.0.0.1 - - [25/Feb/2026 13:52:25] "POST /predict_categories HTTP/1.1" 200 -
+2026-02-25 13:52:28,777 - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-02-25 13:52:28,780 - Metrics: {'model': 'grok', 'temperature': 0.7, 'ttft_seconds': 1.097, 'ttlt_seconds': 1.097, 'speed_tokens_per_second': 367.41, 'input_tokens': 135, 'output_tokens': 403}
+2026-02-25 13:52:28,781 - 127.0.0.1 - - [25/Feb/2026 13:52:28] "POST /generate_answer HTTP/1.1" 200 -
