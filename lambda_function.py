@@ -55,7 +55,10 @@ def lambda_handler(event, context):
         # Return the generated answer
         return _response(
             200,
-            {"answer": answer,}, 
+            {
+                "answer": answer,
+                #"category": category,
+            }, 
         )
 
     except Exception as e:
