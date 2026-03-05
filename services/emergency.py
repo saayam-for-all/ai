@@ -10,8 +10,9 @@ def response(status, body):
             "Content-Type": "application/json",
             "Access-Control-Allow-Origin": "*"
         },
-        "body": json.dumps(body)
+        "body": json.dumps(body, ensure_ascii=False)
     }
+
 
 # ------------------ Data ------------------
 
@@ -20,12 +21,81 @@ DATA_FILE = os.path.join(BASE_DIR, "emergency_numbers.json")
 
 _cache = None
 
+
 def load_emergency_numbers():
     global _cache
     if _cache is None:
-        with open(DATA_FILE, "r") as f:
+        with open(DATA_FILE, "r", encoding="utf-8") as f:
             _cache = json.load(f)
     return _cache
+
+
+# ------------------ i18n: Numeral Transliteration ------------------
+
+# Mapping of language code to native numeral glyphs (positional, 0-9).
+# Covers the 13 MVP languages. English uses ASCII digits (no mapping needed).
+NUMERAL_MAP = {
+    "hi": "०१२३४५६७८९",       # Hindi (Devanagari)
+    "mr": "०१२३४५६७८९",       # Marathi (Devanagari)
+    "ne": "०१२३४५६७८९",       # Nepali (Devanagari)
+    "bn": "০১২৩৪৫৬৭৮৯",       # Bengali
+    "ta": "௦௧௨௩௪௫௬௭௮௯",       # Tamil
+    "te": "౦౧౨౩౪౫౬౭౮౯",       # Telugu
+    "kn": "೦೧೨೩೪೫೬೭೮೯",       # Kannada
+    "ml": "൦൧൨൩൪൫൬൭൮൯",       # Malayalam
+    "gu": "૦૧૨૩૪૫૬૭૮૯",       # Gujarati
+    "pa": "੦੧੨੩੪੫੬੭੮੯",       # Punjabi (Gurmukhi)
+    "ar": "٠١٢٣٤٥٦٧٨٩",       # Arabic-Indic
+    "ur": "۰۱۲۳۴۵۶۷۸۹",       # Extended Arabic-Indic (Urdu)
+}
+
+ASCII_DIGITS = "0123456789"
+
+# Pre-build translation tables for performance (built once at cold start)
+_TRANS_TABLES = {
+    lang: str.maketrans(ASCII_DIGITS, numerals)
+    for lang, numerals in NUMERAL_MAP.items()
+}
+
+
+def transliterate_number(number_str, language):
+    """
+    Convert ASCII digits in a string to the target language's numeral glyphs.
+    Non-digit characters (spaces, "and", hyphens, etc.) are preserved as-is.
+
+    Returns the original string if language is English or unsupported.
+    """
+    if not language or language == "en" or language not in _TRANS_TABLES:
+        return number_str
+    return number_str.translate(_TRANS_TABLES[language])
+
+
+def localize_services(services, language):
+    """
+    Wrap each service with dial_number (ASCII, for tel: links)
+    and display_number (localized script, for UI rendering).
+
+    Input:  {"police": "911", "ambulance": "911"}
+    Output: {"police": {"dial_number": "911", "display_number": "९११"}, ...}
+
+    Frontend usage:
+        <a href="tel:{dial_number}">{display_number}</a>
+    """
+    if not services:
+        return services
+
+    localized = {}
+    for category, number in services.items():
+        if isinstance(number, str):
+            localized[category] = {
+                "dial_number": number,
+                "display_number": transliterate_number(number, language)
+            }
+        else:
+            # Fallback for unexpected types
+            localized[category] = number
+    return localized
+
 
 # ------------------ Geo helpers ------------------
 
@@ -39,54 +109,64 @@ def get_location_from_ip(ip):
                 "state": data.get("region"),
                 "country": data.get("country", "US")
             }
-    except:
+    except Exception:
         return {"country": "US"}
 
 
 def reverse_geocode(lat, lng):
-    """
-    Uses OpenStreetMap (free, no key) to get city/state/country/zip
-    """
+    """Uses OpenStreetMap (free, no key) to get city/state/country/zip."""
     try:
-        url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lng}"
-        req = urllib.request.Request(url, headers={"User-Agent": "ngo-emergency-api"})
+        url = (
+            f"https://nominatim.openstreetmap.org/reverse"
+            f"?format=json&lat={lat}&lon={lng}"
+        )
+        req = urllib.request.Request(
+            url, headers={"User-Agent": "saayam-emergency-api"}
+        )
         with urllib.request.urlopen(req, timeout=4) as r:
             data = json.load(r)
             addr = data.get("address", {})
             return {
                 "zip": addr.get("postcode"),
-                "city": addr.get("city") or addr.get("town") or addr.get("village"),
+                "city": (
+                    addr.get("city")
+                    or addr.get("town")
+                    or addr.get("village")
+                ),
                 "state": addr.get("state"),
                 "country": addr.get("country_code", "").upper()
             }
-    except:
+    except Exception:
         return None
 
+
 def geocode_place(city=None, state=None, zip_code=None, country=None):
-    """
-    Forward geocode using OpenStreetMap
-    """
+    """Forward geocode using OpenStreetMap."""
     try:
         query_parts = [p for p in [zip_code, city, state, country] if p]
         query = ", ".join(query_parts)
 
-        url = f"https://nominatim.openstreetmap.org/search?format=json&limit=1&q={query}"
-        req = urllib.request.Request(url, headers={"User-Agent": "ngo-emergency-api"})
+        url = (
+            f"https://nominatim.openstreetmap.org/search"
+            f"?format=json&limit=1&q={query}"
+        )
+        req = urllib.request.Request(
+            url, headers={"User-Agent": "saayam-emergency-api"}
+        )
         with urllib.request.urlopen(req, timeout=4) as r:
             results = json.load(r)
             if not results:
                 return None
 
             place = results[0]
-            # reverse lookup for structured data
             return reverse_geocode(place["lat"], place["lon"])
-    except:
+    except Exception:
         return None
 
 
 def get_client_ip(event):
     """
-    Supports:
+    Extract client IP. Supports:
     - API Gateway HTTP API (v2)
     - API Gateway REST API (v1)
     - ALB / CloudFront fallback
@@ -94,13 +174,13 @@ def get_client_ip(event):
     # HTTP API (v2)
     try:
         return event["requestContext"]["http"]["sourceIp"]
-    except:
+    except (KeyError, TypeError):
         pass
 
     # REST API (v1)
     try:
         return event["requestContext"]["identity"]["sourceIp"]
-    except:
+    except (KeyError, TypeError):
         pass
 
     # Header fallback
@@ -116,8 +196,10 @@ def get_client_ip(event):
 
 def find_emergency_services(location, data, requested_service=None):
     zip_code = location.get("zip")
-    city = location.get("city", "").title() if location.get("city") else None
-    state = location.get("state", "").title() if location.get("state") else None
+    city = (location.get("city", "").title()
+            if location.get("city") else None)
+    state = (location.get("state", "").title()
+             if location.get("state") else None)
     country = location.get("country")
 
     if not country:
@@ -129,7 +211,8 @@ def find_emergency_services(location, data, requested_service=None):
         if not services:
             return None
         if requested_service:
-            return {requested_service: services.get(requested_service)} if services.get(requested_service) else None
+            val = services.get(requested_service)
+            return {requested_service: val} if val else None
         return services
 
     # ZIP
@@ -144,7 +227,7 @@ def find_emergency_services(location, data, requested_service=None):
         if zip_services:
             return filter_service(zip_services), "zip"
 
-    #  City
+    # City
     if city:
         city_services = (
             country_data
@@ -156,7 +239,7 @@ def find_emergency_services(location, data, requested_service=None):
         if city_services:
             return filter_service(city_services), "city"
 
-    #  State default
+    # State default
     if state:
         state_services = (
             country_data
@@ -167,18 +250,17 @@ def find_emergency_services(location, data, requested_service=None):
         if state_services:
             return filter_service(state_services), "state"
 
-    #  Country default
+    # Country default
     if country_data.get("default"):
         return filter_service(country_data["default"]), "country"
 
-    #  US fallback
+    # US fallback
     us_default = data.get("US", {}).get("default")
     return filter_service(us_default), "country"
 
+
 def infer_state_country_from_city(city, data):
-    """
-    Search entire dataset to find which state & country a city belongs to.
-    """
+    """Search entire dataset to find which state & country a city belongs to."""
     if not city:
         return None
 
@@ -203,7 +285,17 @@ def infer_state_country_from_city(city, data):
 def lambda_handler(event, context):
     try:
         client_ip = get_client_ip(event)
+
+        # Support both GET (query params) and POST (JSON body)
         params = event.get("queryStringParameters") or {}
+
+        body = event.get("body")
+        if body and str(body).strip():
+            try:
+                body_params = json.loads(body)
+                params.update(body_params)
+            except (json.JSONDecodeError, TypeError):
+                pass
 
         service = params.get("service")
         lat = params.get("lat")
@@ -212,19 +304,20 @@ def lambda_handler(event, context):
         city = params.get("city")
         state = params.get("state")
         country_override = params.get("country")
+        language = params.get("language", "en")
 
         location = {}
 
-        # Load data early (needed for inference)
+        # Load emergency data
         data = load_emergency_numbers()
 
-        # 1️⃣ GPS (strongest)
+        # 1. GPS coordinates (highest priority)
         if lat and lng:
             geo = reverse_geocode(lat, lng)
             if geo:
                 location.update(geo)
 
-        # 2️⃣ ZIP / CITY / STATE → geocode
+        # 2. ZIP / City / State -> geocode
         elif zip_code or city or state:
             geo = geocode_place(
                 zip_code=zip_code,
@@ -235,31 +328,37 @@ def lambda_handler(event, context):
             if geo:
                 location.update(geo)
 
-        # 3️⃣ City-based inference from DATA (no IP!)
+        # 3. City-based inference from dataset
         if city and not location.get("country"):
             inferred = infer_state_country_from_city(city, data)
             if inferred:
                 location.update(inferred)
 
-        # 4️⃣ Manual country override (testing only)
+        # 4. Manual country override
         if country_override:
             location["country"] = country_override.upper()
 
-        # 5️⃣ IP fallback (LAST RESORT)
+        # 5. IP fallback (last resort)
         if not location.get("country"):
             ip_loc = get_location_from_ip(client_ip)
             for k, v in ip_loc.items():
                 if v:
                     location.setdefault(k, v)
 
-        # 6️⃣ Resolve emergency services
+        # 6. Resolve emergency services
         services, level = find_emergency_services(location, data, service)
 
         if not services:
             return response(404, {"error": "Emergency services not found"})
 
+        # 7. Localize: wrap each service with dial_number + display_number
+        #    dial_number    = ASCII digits, for <a href="tel:911">
+        #    display_number = localized script, for UI rendering
+        localized = localize_services(services, language)
+
         return response(200, {
-            "services": services,
+            "services": localized,
+            "language": language,
             "match_level": level,
             "resolved_location": location,
             "client_ip": client_ip
