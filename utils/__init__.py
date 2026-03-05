@@ -5,12 +5,25 @@ Python 3.14+ compatible.
 
 from __future__ import annotations
 
+import os
 from abc import ABC, abstractmethod
 
 from typing import TypedDict, Literal
 
+from dotenv import load_dotenv
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_groq import ChatGroq
+
 from utils.prompts import get_conversational_prompt
-from utils.client import client, _use_groq, _gemini_client
+
+load_dotenv()
+
+# Model config (constants)
+GROQ_MODEL = "llama-3.1-8b-instant"
+GROQ_TEMPERATURE = 0.7
+GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_TEMPERATURE = 0.7
 
 class ChatMessage(TypedDict):
     role: Literal["system", "user", "assistant"]
@@ -38,70 +51,61 @@ class GroqAnswerGenerationService(AnswerGenerationServiceInterface):
 
     def __init__(
         self,
-        model: str = "llama-3.1-8b-instant",
-        temperature: float = 0.7,
-        gemini_model: str = "gemini-2.5-flash",
+        model: str = GROQ_MODEL,
+        temperature: float = GROQ_TEMPERATURE,
+        gemini_model: str = GEMINI_MODEL,
     ):
         self.model = model
         self.temperature = temperature
         self.gemini_model = gemini_model
+        self.gemini_temperature = GEMINI_TEMPERATURE
 
     @staticmethod
     def _normalize_history(
         history: list[dict[str, str]] | None,
-    ) -> list[dict[str, str]]:
+    ) -> list[BaseMessage]:
         if not history:
             return []
         allowed = {"user", "assistant"}
-        return [
-            {"role": str(m["role"]), "content": str(m["content"])}
-            for m in history
-            if isinstance(m, dict)
-            and m.get("role") in allowed
-            and "content" in m
-        ]
-
-    def _generate_with_gemini(self, messages: list[dict[str, str]]) -> str:
-        """Fallback to Gemini API if Groq fails."""
-        if not _gemini_client:
-            raise ValueError("Gemini client not initialized")
-
-        def as_line(m: dict[str, str]) -> str:
-            role = m.get("role", "")
-            content = m.get("content", "")
-            if role == "system":
-                prefix = "System"
-            elif role == "user":
-                prefix = "User"
+        out: list[BaseMessage] = []
+        for m in history:
+            if not (isinstance(m, dict) and m.get("role") in allowed and "content" in m):
+                continue
+            role = str(m["role"])
+            content = str(m["content"])
+            if role == "user":
+                out.append(HumanMessage(content=content))
             elif role == "assistant":
-                prefix = "Assistant"
-            else:
-                prefix = role or "Message"
-            return f"{prefix}: {content}"
+                out.append(AIMessage(content=content))
+        return out
 
-        full_prompt = "\n".join(as_line(m) for m in messages)
-
-        resp = _gemini_client.models.generate_content(
+    def _generate_with_gemini(self, messages: list[BaseMessage]) -> str:
+        """Fallback to Gemini API if Groq fails."""
+        gemini_key = (os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY") or "").strip()
+        if not gemini_key:
+            raise ValueError("Gemini API key missing")
+        llm = ChatGoogleGenerativeAI(
+            api_key=gemini_key,
             model=self.gemini_model,
-            contents=full_prompt,
+            temperature=self.gemini_temperature,
         )
-        return (resp.text or "").strip() if resp.text else ""
+        resp = llm.invoke(messages)
+        content = resp.content if hasattr(resp, "content") else str(resp)
+        return (content or "").strip()
 
-    def _try_groq(self, messages: list[dict[str, str]]) -> str | None:
-        if not (_use_groq and client):
+    def _try_groq(self, messages: list[BaseMessage]) -> str | None:
+        groq_key = (os.getenv("GROQ_API_KEY") or "").strip()
+        if not groq_key:
             return None
         try:
-            resp = client.chat.completions.create(
+            llm = ChatGroq(
+                api_key=groq_key,
                 model=self.model,
-                messages=messages,
                 temperature=self.temperature,
             )
-            content = (
-                resp.choices[0].message.content
-                if resp.choices and resp.choices[0].message
-                else None
-            )
-            return content.strip() if content else None
+            resp = llm.invoke(messages)
+            content = resp.content if hasattr(resp, "content") else str(resp)
+            return (content or "").strip() or None
         except Exception:
             return None
 
@@ -123,10 +127,10 @@ class GroqAnswerGenerationService(AnswerGenerationServiceInterface):
             age=age or "",
         )
 
-        messages: list[dict[str, str]] = [
-            {"role": "system", "content": system_prompt},
+        messages: list[BaseMessage] = [
+            SystemMessage(content=system_prompt),
             *self._normalize_history(conversation_history),
-            {"role": "user", "content": f"Subject: {subject}\nQuestion: {description}"},
+            HumanMessage(content=f"Subject: {subject}\nQuestion: {description}"),
         ]
 
         return (
