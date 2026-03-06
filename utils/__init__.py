@@ -5,25 +5,21 @@ Python 3.14+ compatible.
 
 from __future__ import annotations
 
-import os
 from abc import ABC, abstractmethod
 
 from typing import TypedDict, Literal
 
-from dotenv import load_dotenv
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_groq import ChatGroq
 
+from utils.client import (
+    GROQ_MODEL,
+    GROQ_TEMPERATURE,
+    GEMINI_MODEL,
+    GEMINI_TEMPERATURE,
+    groq_llm,
+    gemini_llm,
+)
 from utils.prompts import get_conversational_prompt
-
-load_dotenv()
-
-# Model config (constants)
-GROQ_MODEL = "llama-3.1-8b-instant"
-GROQ_TEMPERATURE = 0.7
-GEMINI_MODEL = "gemini-2.5-flash"
-GEMINI_TEMPERATURE = 0.7
 
 class ChatMessage(TypedDict):
     role: Literal["system", "user", "assistant"]
@@ -81,29 +77,17 @@ class GroqAnswerGenerationService(AnswerGenerationServiceInterface):
 
     def _generate_with_gemini(self, messages: list[BaseMessage]) -> str:
         """Fallback to Gemini API if Groq fails."""
-        gemini_key = (os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY") or "").strip()
-        if not gemini_key:
-            raise ValueError("Gemini API key missing")
-        llm = ChatGoogleGenerativeAI(
-            api_key=gemini_key,
-            model=self.gemini_model,
-            temperature=self.gemini_temperature,
-        )
-        resp = llm.invoke(messages)
+        if not gemini_llm:
+            raise ValueError("Gemini client not initialized")
+        resp = gemini_llm.invoke(messages)
         content = resp.content if hasattr(resp, "content") else str(resp)
         return (content or "").strip()
 
     def _try_groq(self, messages: list[BaseMessage]) -> str | None:
-        groq_key = (os.getenv("GROQ_API_KEY") or "").strip()
-        if not groq_key:
+        if not groq_llm:
             return None
         try:
-            llm = ChatGroq(
-                api_key=groq_key,
-                model=self.model,
-                temperature=self.temperature,
-            )
-            resp = llm.invoke(messages)
+            resp = groq_llm.invoke(messages)
             content = resp.content if hasattr(resp, "content") else str(resp)
             return (content or "").strip() or None
         except Exception:
