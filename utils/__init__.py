@@ -9,8 +9,17 @@ from abc import ABC, abstractmethod
 
 from typing import TypedDict, Literal
 
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+
+from utils.client import (
+    GROQ_MODEL,
+    GROQ_TEMPERATURE,
+    GEMINI_MODEL,
+    GEMINI_TEMPERATURE,
+    groq_llm,
+    gemini_llm,
+)
 from utils.prompts import get_conversational_prompt
-from utils.client import client, _use_groq, _gemini_client
 
 class ChatMessage(TypedDict):
     role: Literal["system", "user", "assistant"]
@@ -38,70 +47,49 @@ class GroqAnswerGenerationService(AnswerGenerationServiceInterface):
 
     def __init__(
         self,
-        model: str = "llama-3.1-8b-instant",
-        temperature: float = 0.7,
-        gemini_model: str = "gemini-2.5-flash",
+        model: str = GROQ_MODEL,
+        temperature: float = GROQ_TEMPERATURE,
+        gemini_model: str = GEMINI_MODEL,
     ):
         self.model = model
         self.temperature = temperature
         self.gemini_model = gemini_model
+        self.gemini_temperature = GEMINI_TEMPERATURE
 
     @staticmethod
     def _normalize_history(
         history: list[dict[str, str]] | None,
-    ) -> list[dict[str, str]]:
+    ) -> list[BaseMessage]:
         if not history:
             return []
         allowed = {"user", "assistant"}
-        return [
-            {"role": str(m["role"]), "content": str(m["content"])}
-            for m in history
-            if isinstance(m, dict)
-            and m.get("role") in allowed
-            and "content" in m
-        ]
-
-    def _generate_with_gemini(self, messages: list[dict[str, str]]) -> str:
-        """Fallback to Gemini API if Groq fails."""
-        if not _gemini_client:
-            raise ValueError("Gemini client not initialized")
-
-        def as_line(m: dict[str, str]) -> str:
-            role = m.get("role", "")
-            content = m.get("content", "")
-            if role == "system":
-                prefix = "System"
-            elif role == "user":
-                prefix = "User"
+        out: list[BaseMessage] = []
+        for m in history:
+            if not (isinstance(m, dict) and m.get("role") in allowed and "content" in m):
+                continue
+            role = str(m["role"])
+            content = str(m["content"])
+            if role == "user":
+                out.append(HumanMessage(content=content))
             elif role == "assistant":
-                prefix = "Assistant"
-            else:
-                prefix = role or "Message"
-            return f"{prefix}: {content}"
+                out.append(AIMessage(content=content))
+        return out
 
-        full_prompt = "\n".join(as_line(m) for m in messages)
+    def _generate_with_gemini(self, messages: list[BaseMessage]) -> str:
+        """Fallback to Gemini API if Groq fails."""
+        if not gemini_llm:
+            raise ValueError("Gemini client not initialized")
+        resp = gemini_llm.invoke(messages)
+        content = resp.content if hasattr(resp, "content") else str(resp)
+        return (content or "").strip()
 
-        resp = _gemini_client.models.generate_content(
-            model=self.gemini_model,
-            contents=full_prompt,
-        )
-        return (resp.text or "").strip() if resp.text else ""
-
-    def _try_groq(self, messages: list[dict[str, str]]) -> str | None:
-        if not (_use_groq and client):
+    def _try_groq(self, messages: list[BaseMessage]) -> str | None:
+        if not groq_llm:
             return None
         try:
-            resp = client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                temperature=self.temperature,
-            )
-            content = (
-                resp.choices[0].message.content
-                if resp.choices and resp.choices[0].message
-                else None
-            )
-            return content.strip() if content else None
+            resp = groq_llm.invoke(messages)
+            content = resp.content if hasattr(resp, "content") else str(resp)
+            return (content or "").strip() or None
         except Exception:
             return None
 
@@ -123,10 +111,10 @@ class GroqAnswerGenerationService(AnswerGenerationServiceInterface):
             age=age or "",
         )
 
-        messages: list[dict[str, str]] = [
-            {"role": "system", "content": system_prompt},
+        messages: list[BaseMessage] = [
+            SystemMessage(content=system_prompt),
             *self._normalize_history(conversation_history),
-            {"role": "user", "content": f"Subject: {subject}\nQuestion: {description}"},
+            HumanMessage(content=f"Subject: {subject}\nQuestion: {description}"),
         ]
 
         return (
