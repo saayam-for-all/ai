@@ -37,19 +37,22 @@ This document offers a complete overview of the Saayam GroqAPI service, detailin
 
 ```python
 import os
-import json
-from flask import Flask, jsonify, request, make_response
+from flask import Flask, jsonify, request
 from groq import Groq
 import serverless_wsgi
+from dotenv import load_dotenv, find_dotenv
 
-# Initialize Flask app and Groq client
-os.environ["GROQ_API_KEY"] = "*************************"
-client = Groq()
+# Load .env from the project root (for local development)
+load_dotenv(find_dotenv(), override=False)
+
 app = Flask(__name__)
+
+# Initialize Groq client using the GROQ_API_KEY from the environment
+client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 ```
 
   * **`Flask`** handles routing.
-  * **`Groq`** is the LLM client; the API key is set via an environment variable.
+  * **`Groq`** is the LLM client; the API key is read from the `GROQ_API_KEY` environment variable (or `.env` in local dev).
   * **`serverless_wsgi`** adapts Flask for Lambda.
 
 ### 3.1 `/predict_categories` Endpoint
@@ -164,6 +167,47 @@ def lambda_handler(event, context):
 
   * **Normalizes** the incoming API Gateway path.
   * **Delegates** to `serverless_wsgi` for routing.
+
+### 3.5 Environment Configuration (`GROQ_API_KEY`)
+
+The service uses the `GROQ_API_KEY` environment variable to authenticate with Groq.
+
+  * **In AWS Lambda:** set `GROQ_API_KEY` in the Lambda **Environment variables** section.
+  * **In local development:** either create a `.env` file in the project root or set the variable in your shell.
+
+Example `.env` file:
+
+```bash
+GROQ_API_KEY=your-real-api-key-here
+```
+
+Shell examples (temporary for the current terminal):
+
+  * **macOS/Linux (bash/zsh):**
+
+    ```bash
+    export GROQ_API_KEY=your-real-api-key-here
+    ```
+
+  * **Windows PowerShell:**
+
+    ```powershell
+    $env:GROQ_API_KEY = "your-real-api-key-here"
+    ```
+
+  * **Windows Command Prompt (cmd.exe):**
+
+    ```cmd
+    set GROQ_API_KEY=your-real-api-key-here
+    ```
+
+To persist the variable across new Windows terminals, you can use:
+
+```cmd
+setx GROQ_API_KEY "your-real-api-key-here"
+```
+
+and then open a **new** terminal window.
 
 -----
 
