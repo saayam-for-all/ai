@@ -8,8 +8,12 @@ from typing import List
 from flask import Flask, jsonify, request
 from groq import Groq
 import serverless_wsgi
+from dotenv import load_dotenv, find_dotenv
 
-# ---------- App setup ----------
+# ---------- Environment & App setup ----------
+# Load .env from current directory or parent directories so a project-level .env is picked up.
+load_dotenv(find_dotenv(), override=False)
+
 app = Flask(__name__)
 app.config["PROPAGATE_EXCEPTIONS"] = True
 
@@ -22,7 +26,7 @@ def add_cors_headers(response):
     return response
 
 # ---------- Groq client ----------
-# Read key from environment (set GROQ_API_KEY in shell or .env)
+# Read key from environment (set GROQ_API_KEY in shell, Lambda env, or .env)
 print("GROQ key present at startup:", bool(os.getenv("GROQ_API_KEY")))
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
@@ -177,15 +181,4 @@ def lambda_handler(event, context):
 
 # ---------- Local dev runner ----------
 if __name__ == "__main__":
-    # Load .env for local dev if present
-    try:
-        from dotenv import load_dotenv
-        load_dotenv()
-    except Exception:
-        pass
-
-    # Recreate client in case GROQ_API_KEY came from .env after import time
-    if not os.getenv("GROQ_API_KEY"):
-        print("WARNING: GROQ_API_KEY is not set. Set it before calling endpoints that hit Groq.")
-
     app.run(host="0.0.0.0", port=8000, debug=True)
