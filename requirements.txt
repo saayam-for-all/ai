@@ -1,8 +1,13 @@
 flask
+flask-cors
+flask-sqlalchemy
+sqlalchemy
+python-dotenv
+requests
+
 transformers
 meta-ai-api
 google-generativeai
 openai
 groq
-python-dotenv
 tiktoken
