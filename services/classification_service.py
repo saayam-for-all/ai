@@ -1,22 +1,12 @@
 import json
 from langchain_core.messages import HumanMessage
 from utils.categories_with_description import TAXONOMY
-from utils.client import groq_llm, gemini_llm, _use_groq, _use_gemini, GROQ_MODEL, GROQ_TEMPERATURE, GEMINI_MODEL
+from utils.client import groq_llm, gemini_llm, _use_groq, _use_gemini
 from utils.categories import category_name_to_number
 
 
 class GroqClassificationService:
-    def __init__(
-        self,
-        model: str = GROQ_MODEL,
-        temperature: float = GROQ_TEMPERATURE,
-        top_p: float = 0.3,
-        gemini_model: str = GEMINI_MODEL,
-    ):
-        self.model = model
-        self.temperature = temperature
-        self.top_p = top_p
-        self.gemini_model = gemini_model
+    def __init__(self):
         self.categories_with_desc = "\n".join(
             [f"{k}: {v}" for k, v in TAXONOMY.items()]
         )
@@ -102,7 +92,7 @@ Return format:
 
         if _use_groq and groq_llm:
             try:
-                print(f"LOG: Attempting Groq classification with model {self.model}...")
+                print(f"LOG: Attempting Groq classification with model...")
                 resp = groq_llm.invoke(
                     [HumanMessage(content=prompt)],
                     response_format={"type": "json_object"},
