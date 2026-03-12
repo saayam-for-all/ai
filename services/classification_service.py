@@ -1,29 +1,24 @@
 import json
+from langchain_core.messages import HumanMessage
 from utils.categories_with_description import TAXONOMY
-from utils.client import client, _use_groq, _gemini_client
+from utils.client import groq_llm, gemini_llm, _use_groq, _use_gemini
 from utils.categories import category_name_to_number
 
+
 class GroqClassificationService:
-    def __init__(self, model="llama-3.1-8b-instant", temperature=0.8, top_p=0.3):
-        self.model = model
-        self.temperature = temperature
-        self.top_p = top_p
+    def __init__(self):
         self.categories_with_desc = "\n".join(
             [f"{k}: {v}" for k, v in TAXONOMY.items()]
         )
-        self.gemini_model = "gemini-2.0-flash" 
 
     def _predict_with_gemini(self, prompt: str) -> list:
-        if not _gemini_client:
+        if not gemini_llm:
             raise ValueError("Gemini client not initialized")
-            
-        response = _gemini_client.models.generate_content(
-            model=self.gemini_model,
-            contents=prompt
-        )
-        text = response.text.strip()
-        # Handle cases where Gemini might return the JSON structure requested in the prompt
-        if text.startswith('{'):
+
+        resp = gemini_llm.invoke([HumanMessage(content=prompt)])
+        text = (resp.content if hasattr(resp, "content") else str(resp)).strip()
+
+        if text.startswith("{"):
             try:
                 data = json.loads(text)
                 categories = data.get("categories", [])
@@ -40,13 +35,13 @@ class GroqClassificationService:
     def _parse_ranked_categories(self, response_data: dict) -> list:
         """Parse the response and return ranked categories with numbers."""
         categories = response_data.get("categories", [])
-        
+
         # If single category format, convert to list
         if "category" in response_data and not categories:
             single_cat = response_data.get("category")
             if single_cat:
                 categories = [{"category": single_cat, "confidence": 1.0}]
-        
+
         # Map category names to numbers and sort by confidence
         ranked_results = []
         for item in categories:
@@ -58,7 +53,7 @@ class GroqClassificationService:
                 confidence = 1.0
             else:
                 continue
-                
+
             cat_number = category_name_to_number.get(cat_name)
             if cat_number:
                 ranked_results.append({
@@ -66,7 +61,7 @@ class GroqClassificationService:
                     "category_name": cat_name,
                     "confidence": confidence
                 })
-        
+
         # Sort by confidence (highest first)
         ranked_results.sort(key=lambda x: x["confidence"], reverse=True)
         return ranked_results
@@ -95,30 +90,27 @@ Return format:
 }}
 """
 
-        if _use_groq and client:
+        if _use_groq and groq_llm:
             try:
-                print(f"LOG: Attempting Groq classification with model {self.model}...")
-                response = client.chat.completions.create(
-                    model=self.model,
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=self.temperature,
-                    top_p=self.top_p,
-                    response_format={"type": "json_object"}
+                print(f"LOG: Attempting Groq classification with model...")
+                resp = groq_llm.invoke(
+                    [HumanMessage(content=prompt)],
+                    response_format={"type": "json_object"},
                 )
-                
-                # Parse the JSON response
-                res_content = response.choices[0].message.content.strip()
+                res_content = (resp.content if hasattr(resp, "content") else str(resp)).strip()
                 res_data = json.loads(res_content)
                 return self._parse_ranked_categories(res_data)
-                
+
             except (json.JSONDecodeError, KeyError, TypeError) as e:
-                print(f"LOG ERROR: Groq attempt failed: {str(e)}") 
+                print(f"LOG ERROR: Groq attempt failed: {str(e)}")
 
         print("LOG: Falling back to Gemini...")
-        gemini_result = self._predict_with_gemini(prompt)
-        if gemini_result:
-            return self._parse_ranked_categories({"categories": gemini_result})
+        if _use_gemini and gemini_llm:
+            gemini_result = self._predict_with_gemini(prompt)
+            if gemini_result:
+                return self._parse_ranked_categories({"categories": gemini_result})
         return []
+
 
 def predict_categories(description):
     service = GroqClassificationService()
