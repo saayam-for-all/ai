@@ -280,80 +280,99 @@ def infer_state_country_from_city(city, data):
     return None
 
 
-# ------------------ Lambda ------------------
+# ------------------ Classes ------------------
 
-def lambda_handler(event, context):
-    try:
-        client_ip = get_client_ip(event)
 
-        # Support both GET (query params) and POST (JSON body)
-        params = event.get("queryStringParameters") or {}
+def _parse_params(event):
+    """Extract params from query string and/or JSON body."""
+    params = dict(event.get("queryStringParameters") or {})
+    body = event.get("body")
+    if body and str(body).strip():
+        try:
+            params.update(json.loads(body))
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return params
 
-        body = event.get("body")
-        if body and str(body).strip():
-            try:
-                body_params = json.loads(body)
-                params.update(body_params)
-            except (json.JSONDecodeError, TypeError):
-                pass
 
-        service = params.get("service")
+class LocationResolver:
+    """Resolves location from GPS, geocoding, city inference, or IP fallback."""
+
+    def __init__(self, client_ip):
+        self.client_ip = client_ip
+
+    def resolve(self, params, data):
+        location = {}
         lat = params.get("lat")
         lng = params.get("lng")
         zip_code = params.get("zip")
         city = params.get("city")
         state = params.get("state")
         country_override = params.get("country")
-        language = params.get("language", "en")
 
-        location = {}
-
-        # Load emergency data
-        data = load_emergency_numbers()
-
-        # 1. GPS coordinates (highest priority)
         if lat and lng:
             geo = reverse_geocode(lat, lng)
             if geo:
                 location.update(geo)
-
-        # 2. ZIP / City / State -> geocode
         elif zip_code or city or state:
             geo = geocode_place(
-                zip_code=zip_code,
-                city=city,
-                state=state,
-                country=country_override
+                zip_code=zip_code, city=city,
+                state=state, country=country_override
             )
             if geo:
                 location.update(geo)
 
-        # 3. City-based inference from dataset
         if city and not location.get("country"):
             inferred = infer_state_country_from_city(city, data)
             if inferred:
                 location.update(inferred)
 
-        # 4. Manual country override
         if country_override:
             location["country"] = country_override.upper()
 
-        # 5. IP fallback (last resort)
-        if not location.get("country"):
-            ip_loc = get_location_from_ip(client_ip)
+        if not location.get("country") and self.client_ip:
+            ip_loc = get_location_from_ip(self.client_ip)
             for k, v in ip_loc.items():
                 if v:
                     location.setdefault(k, v)
 
-        # 6. Resolve emergency services
-        services, level = find_emergency_services(location, data, service)
+        return location
+
+
+class EmergencyServiceResolver:
+    """Loads emergency data and resolves services by location."""
+
+    def load_data(self):
+        return load_emergency_numbers()
+
+    def find_services(self, location, requested_service=None):
+        return find_emergency_services(
+            location, self.load_data(), requested_service
+        )
+
+
+# ------------------ Lambda ------------------
+
+
+def lambda_handler(event, context):
+    try:
+        client_ip = get_client_ip(event)
+        params = _parse_params(event)
+
+        service_resolver = EmergencyServiceResolver()
+        data = service_resolver.load_data()
+
+        location_resolver = LocationResolver(client_ip)
+        location = location_resolver.resolve(params, data)
+
+        services, level = service_resolver.find_services(
+            location, params.get("service")
+        )
 
         if not services:
             return response(404, {"error": "Emergency services not found"})
 
-        # 7. Localize: wrap each service with dial_number + display_number
-        #    dial_number    = ASCII digits, for <a href="tel:911">
-        #    display_number = localized script, for UI rendering
+        language = params.get("language", "en")
         localized = localize_services(services, language)
 
         return response(200, {
