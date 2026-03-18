@@ -1,5 +1,5 @@
 import json
-from services.search_orgs import find_nonprofits
+from utils.search_orgs import find_nonprofits
 
 def lambda_handler(event, context):
     try:
