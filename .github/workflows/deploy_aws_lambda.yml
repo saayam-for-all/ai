@@ -46,3 +46,11 @@ jobs:
           aws lambda update-function-code \
             --function-name ${{ secrets.GEN_ANS_AWS_LAMBDA_ARN }} \
             --zip-file fileb://deployment.zip
+          aws lambda wait function-updated \
+            --function-name ${{ secrets.GEN_ANS_AWS_LAMBDA_ARN }}
+
+      - name: Set Lambda timeout (DB + LLM need more than default 3s)
+        run: |
+          aws lambda update-function-configuration \
+            --function-name ${{ secrets.GEN_ANS_AWS_LAMBDA_ARN }} \
+            --timeout 120
