@@ -26,6 +26,7 @@ jobs:
       - name: Copy application files
         run: |
           cp -r *.py package/ || true
+          cp -r services package/services
 
       - name: Create deployment zip
         run: |
