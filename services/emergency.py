@@ -6,6 +6,18 @@ import urllib.request
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_FILE = os.path.join(BASE_DIR, "emergency_numbers.json")
 
+# Module-level cache: reused across Lambda invocations in the same warm container (same as pre-refactor).
+_emergency_numbers_cache = None
+
+
+def _load_emergency_numbers():
+    global _emergency_numbers_cache
+    if _emergency_numbers_cache is None:
+        with open(DATA_FILE, "r", encoding="utf-8") as f:
+            _emergency_numbers_cache = json.load(f)
+    return _emergency_numbers_cache
+
+
 NUMERAL_MAP = {
     "hi": "०१२३४५६७८९",
     "mr": "०१२३४५६७८९",
@@ -155,7 +167,7 @@ class LocationResolver:
         if country_override:
             location["country"] = country_override.upper()
 
-        if not location.get("country") and self.client_ip:
+        if not location.get("country"):
             ip_loc = self._get_location_from_ip(self.client_ip)
             for k, v in ip_loc.items():
                 if v:
@@ -165,14 +177,8 @@ class LocationResolver:
 
 
 class EmergencyServiceResolver:
-    def __init__(self):
-        self._cache = None
-
     def _load_data(self):
-        if self._cache is None:
-            with open(DATA_FILE, "r", encoding="utf-8") as f:
-                self._cache = json.load(f)
-        return self._cache
+        return _load_emergency_numbers()
 
     def _find_services(self, location, data, requested_service=None):
         zip_code = location.get("zip")
