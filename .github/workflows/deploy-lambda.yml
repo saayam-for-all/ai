@@ -1,0 +1,51 @@
+name: Deploy AWS Lambda
+
+on:
+  push:
+    branches:
+      - emergency_contacts   # change this to your branch name
+
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt -t package
+
+      - name: Copy application files
+        run: |
+          cp -r *.py package/ || true
+
+      - name: Create deployment zip
+        run: |
+          cd package
+          zip -r ../lambda.zip .
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-access-key-id: ${{ secrets.EMR_CON_AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.EMR_CON_AWS_SECRET_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Deploy to Lambda
+        run: |
+          aws lambda update-function-code \
+            --function-name ${{ secrets.EMR_CON_AWS_LAMBDA_ARN }} \
+            --zip-file fileb://lambda.zip
+
+      - name: Wait for update to finish
+        run: |
+          aws lambda wait function-updated \
+            --function-name ${{ secrets.EMR_CON_AWS_LAMBDA_ARN }}
