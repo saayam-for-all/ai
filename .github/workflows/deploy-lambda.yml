@@ -14,6 +14,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Prepare package directory
+        run: mkdir -p package
 
       - name: Copy application files
         run: |
