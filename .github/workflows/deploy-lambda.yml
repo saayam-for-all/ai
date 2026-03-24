@@ -14,18 +14,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install dependencies
-        run: |
-          pip install -r requirements.txt -t package
 
       - name: Copy application files
         run: |
-          cp -r *.py package/ || true
+          cp -r *.py package/
           cp -r services package/services
 
       - name: Create deployment zip
