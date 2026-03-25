@@ -14,7 +14,7 @@ def lambda_handler(event, context):
         else:
             # Scenario: 'body' exists and is already a dictionary
             body = raw_body
-        
+
         # Handle API Gateway variations
         if isinstance(body, str):
             body = json.loads(body)
@@ -26,11 +26,19 @@ def lambda_handler(event, context):
 
         ranked_categories = predict_categories(description)
 
+        ranked_categories = [
+            item
+            for _, item in sorted(
+                enumerate(ranked_categories),
+                key=lambda entry: (
+                    -entry[1].get("confidence", 0.0),
+                    entry[0],
+                ),
+            )
+        ]
+
         # Return ranked categories with numbers
-        return _response(200, {
-            "categories": ranked_categories,
-            "top_category": ranked_categories[0] if ranked_categories else None
-        })
+        return _response(200, {"categories": ranked_categories})
 
     except Exception as e:
         return _response(500, {"error": str(e)})
@@ -41,7 +49,7 @@ def _response(status_code, body):
         "statusCode": status_code,
         "headers": {
             "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*"
+            "Access-Control-Allow-Origin": "*",
         },
-        "body": body
+        "body": body,
     }
