@@ -13,20 +13,22 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
+      - name: Prepare package directory
+        run: mkdir -p package
 
-      - name: Install dependencies and prepare package
+      - name: Build dependencies in Lambda Python 3.11 container
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt -t package
+          docker run --rm \
+            -v "$PWD":/var/task \
+            public.ecr.aws/lambda/python:3.11 \
+            /bin/sh -c "
+              python -m pip install --upgrade pip &&
+              pip install -r requirements.txt -t package
+            "
 
-          # Copy all .py files
+      - name: Copy application code
+        run: |
           cp -r *.py package/
-
-          # Copy utils folder
           cp -r utils package/utils
 
       - name: Zip deployment package
@@ -49,7 +51,7 @@ jobs:
           aws lambda wait function-updated \
             --function-name ${{ secrets.GEN_ANS_AWS_LAMBDA_ARN }}
 
-      - name: Set Lambda timeout (DB + LLM need more than default 3s)
+      - name: Set Lambda timeout
         run: |
           aws lambda update-function-configuration \
             --function-name ${{ secrets.GEN_ANS_AWS_LAMBDA_ARN }} \
