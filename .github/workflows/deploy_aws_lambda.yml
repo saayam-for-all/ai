@@ -14,13 +14,13 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Prepare package directory
-        run: mkdir -p package
+        run: rm -rf package deployment.zip && mkdir -p package
 
-      - name: Build dependencies in Lambda Python 3.11 container
+      - name: Build dependencies in Lambda compatible container
         run: |
           docker run --rm \
             -v "$PWD":/var/task \
-            public.ecr.aws/lambda/python:3.11 \
+            public.ecr.aws/sam/build-python3.11:latest \
             /bin/sh -c "
               python -m pip install --upgrade pip &&
               pip install -r requirements.txt -t package
