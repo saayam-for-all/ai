@@ -28,7 +28,7 @@ def _db_parameter_path() -> str:
     region = os.getenv("SAAYAM_REGION", "Virginia")
     group = os.getenv("SAAYAM_GROUP", "Database")
     role = os.getenv("SAAYAM_ROLE", "user")
-    return f"/dev/saayam/db/{region}/{group}/{role}"
+    return f"/dev/saayam/db/{region}/GenAI/{role}"
 
 
 def _load_db_config() -> dict[str, Any]:
