@@ -3,12 +3,16 @@
 import os
 import json
 import traceback
-from typing import List
+from typing import Dict, List, Optional
 
 from flask import Flask, jsonify, request
 from groq import Groq
 import serverless_wsgi
 from dotenv import load_dotenv, find_dotenv
+try:
+    import psycopg2
+except ImportError:  # pragma: no cover
+    psycopg2 = None
 
 # ---------- Environment & App setup ----------
 # Load .env from current directory or parent directories so a project-level .env is picked up.
@@ -31,6 +35,7 @@ print("GROQ key present at startup:", bool(os.getenv("GROQ_API_KEY")))
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 MODEL_NAME = "llama-3.1-8b-instant"
+DB_SCHEMA = os.getenv("DB_SCHEMA", "virginia_dev_saayam_rdbms")
 
 # ---------- Categories / Prompts ----------
 categories: List[str] = [
@@ -91,6 +96,175 @@ def _parse_categories(raw: str) -> List[str]:
     parts = [p.strip() for p in raw.replace("\n", ",").split(",")]
     return [p for p in parts if p in categories][:3]
 
+
+def _first_non_empty(data: dict, keys: List[str]) -> str:
+    for key in keys:
+        value = data.get(key)
+        if isinstance(value, str):
+            value = value.strip()
+            if value:
+                return value
+    return ""
+
+
+def _normalize_history(history: Optional[list]) -> List[Dict[str, str]]:
+    if not isinstance(history, list):
+        return []
+
+    normalized: List[Dict[str, str]] = []
+    for msg in history:
+        if not isinstance(msg, dict):
+            continue
+        role = str(msg.get("role", "")).strip().lower()
+        content = str(msg.get("content", "")).strip()
+        if not content:
+            continue
+
+        if role in {"ai", "bot", "model"}:
+            role = "assistant"
+        elif role not in {"user", "assistant", "system"}:
+            continue
+
+        normalized.append({"role": role, "content": content})
+    return normalized
+
+
+def _extract_request_payload() -> dict:
+    """
+    Accept both direct JSON payloads and nested proxy-like payloads:
+      { ...fields... }
+      { "body": { ...fields... } }
+      { "body": "{\"...\": \"...\"}" }
+    """
+    data = request.get_json(force=True, silent=True) or {}
+    if not isinstance(data, dict):
+        return {}
+
+    nested = data.get("body")
+    if isinstance(nested, dict):
+        merged = dict(data)
+        merged.pop("body", None)
+        merged.update(nested)
+        return merged
+
+    if isinstance(nested, str):
+        try:
+            parsed = json.loads(nested)
+            if isinstance(parsed, dict):
+                merged = dict(data)
+                merged.pop("body", None)
+                merged.update(parsed)
+                return merged
+        except json.JSONDecodeError:
+            pass
+
+    return data
+
+
+def _get_db_connection():
+    if psycopg2 is None:
+        raise RuntimeError("psycopg2 is not installed")
+
+    required = ["DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASSWORD"]
+    missing = [name for name in required if not os.getenv(name)]
+    if missing:
+        raise RuntimeError(f"Missing DB env vars: {', '.join(missing)}")
+
+    return psycopg2.connect(
+        host=os.getenv("DB_HOST"),
+        port=os.getenv("DB_PORT"),
+        dbname=os.getenv("DB_NAME"),
+        user=os.getenv("DB_USER"),
+        password=os.getenv("DB_PASSWORD"),
+    )
+
+
+def _format_additional_info_for_prompt(additional_info: List[Dict[str, object]]) -> str:
+    lines: List[str] = []
+    for entry in additional_info:
+        question = entry.get("question")
+        answers = entry.get("answers", [])
+        if not question or not isinstance(answers, list) or not answers:
+            continue
+        rendered = ", ".join(str(ans) for ans in answers if ans not in (None, ""))
+        if rendered:
+            lines.append(f"- {question}: {rendered}")
+    return "\n".join(lines)
+
+
+def get_request_full_details(user_id: str, req_id: str) -> Dict[str, object]:
+    query = f"""
+        SELECT
+            r.req_id,
+            r.req_user_id,
+            r.req_cat_id,
+            r.req_subj,
+            r.req_desc,
+            r.req_loc,
+            m.field_name_key AS question,
+            m.field_type,
+            l.item_value AS list_answer,
+            rai.field_value
+        FROM {DB_SCHEMA}.request r
+        LEFT JOIN {DB_SCHEMA}.req_add_info rai
+            ON r.req_id = rai.req_id
+        LEFT JOIN {DB_SCHEMA}.req_add_info_metadata m
+            ON rai.field_id = m.field_id
+        LEFT JOIN {DB_SCHEMA}.list_item_metadata l
+            ON rai.item_id = l.item_id
+        WHERE r.req_user_id = %s
+          AND r.req_id = %s
+        ORDER BY rai.field_id;
+    """
+    conn = None
+    try:
+        conn = _get_db_connection()
+        cur = conn.cursor()
+        cur.execute(query, (user_id, req_id))
+        rows = cur.fetchall()
+        cols = [desc[0] for desc in cur.description]
+        if not rows:
+            return {"error": f"No data found for user_id={user_id}, req_id={req_id}"}
+
+        first = rows[0]
+        col = {name: idx for idx, name in enumerate(cols)}
+        result: Dict[str, object] = {
+            "req_id": first[col["req_id"]],
+            "req_user_id": first[col["req_user_id"]],
+            "req_cat_id": first[col["req_cat_id"]],
+            "req_subj": first[col["req_subj"]],
+            "req_desc": first[col["req_desc"]],
+            "req_loc": first[col["req_loc"]],
+            "additional_info": [],
+        }
+
+        grouped: Dict[str, Dict[str, object]] = {}
+        for row in rows:
+            question = row[col["question"]]
+            if not question:
+                continue
+            entry = grouped.setdefault(
+                str(question),
+                {
+                    "question": str(question),
+                    "field_type": row[col["field_type"]],
+                    "answers": [],
+                },
+            )
+            list_answer = row[col["list_answer"]]
+            field_value = row[col["field_value"]]
+            answer = list_answer if list_answer not in (None, "") else field_value
+            if answer not in (None, "") and answer not in entry["answers"]:
+                entry["answers"].append(str(answer))
+
+        result["additional_info"] = list(grouped.values())
+        return result
+    except Exception as exc:
+        return {"error": str(exc)}
+    finally:
+        if conn:
+            conn.close()
+
 # ---------- Core LLM calls ----------
 def predict_categories(subject: str, description: str) -> List[str]:
     prompt = f"""
@@ -121,16 +295,39 @@ Output (comma-separated categories):
     return result
 
 
-def chat_with_llama(category: str, subject: str, description: str) -> str:
+def chat_with_llama(
+    category: str,
+    subject: str,
+    description: str,
+    location: str = "",
+    gender: str = "",
+    age: str = "",
+    conversation_history: Optional[List[Dict[str, str]]] = None,
+) -> str:
     role_prompt = category_prompts.get(
         category,
         "You are a helpful expert from Saayam. Answer the question clearly and kindly:",
     )
-    full_prompt = f"{role_prompt}\n\nSubject: {subject}\nQuestion: {description}"
+
+    base_prompt = (
+        f"{role_prompt}\n\n"
+        f"Subject: {subject}\n"
+        f"Question: {description}\n"
+        f"Location: {location}\n"
+        f"Gender: {gender}\n"
+        f"Age: {age}"
+    )
+    messages: List[Dict[str, str]] = [{"role": "user", "content": base_prompt}]
+    if conversation_history:
+        messages = [
+            {"role": "system", "content": role_prompt},
+            *conversation_history,
+            {"role": "user", "content": f"Subject: {subject}\nQuestion: {description}"},
+        ]
 
     resp = client.chat.completions.create(
         model=MODEL_NAME,
-        messages=[{"role": "user", "content": full_prompt}],
+        messages=messages,
         temperature=0.7,
     )
     return resp.choices[0].message.content.strip()
@@ -140,10 +337,12 @@ def chat_with_llama(category: str, subject: str, description: str) -> str:
 def home():
     return jsonify({"message": "API is running"})
 
-@app.route("/predict_categories", methods=["POST"])
+@app.route("/predict_categories", methods=["POST", "OPTIONS"])
 def predict_categories_api():
     try:
-        data = request.get_json(force=True) or {}
+        if request.method == "OPTIONS":
+            return ("", 200)
+        data = _extract_request_payload()
         subject = (data.get("subject") or "").strip()
         description = (data.get("description") or "").strip()
         if not subject or not description:
@@ -155,22 +354,107 @@ def predict_categories_api():
         traceback.print_exc()
         return jsonify({"error": "internal_error"}), 500
 
-@app.route("/generate_answer", methods=["POST"])
+@app.route("/generate_answer", methods=["POST", "OPTIONS"])
 def generate_answer_api():
     try:
-        data = request.get_json(force=True) or {}
-        category = (data.get("category") or "").strip()
-        subject = (data.get("subject") or "").strip()
-        question = (data.get("description") or "").strip()
-        if not category or not subject or not question:
-            return jsonify({"error": "Category, subject, and description are required"}), 400
-
-        answer = chat_with_llama(category, subject, question)
-        # jsonify(answer) returns a JSON string (what your existing client likely expects)
+        if request.method == "OPTIONS":
+            return ("", 200)
+        data = _extract_request_payload()
+        answer, error_message, status_code = _generate_answer_from_payload(data)
+        if error_message:
+            return jsonify({"error": error_message}), status_code
+        # Backward compatibility for existing consumers expecting a JSON string.
         return jsonify(answer), 200
     except Exception:
         traceback.print_exc()
         return jsonify({"error": "internal_error"}), 500
+
+
+def _generate_answer_from_payload(data: dict):
+    try:
+        category = _first_non_empty(data, ["category", "category_id"])
+        subject = _first_non_empty(data, ["subject"])
+        question = _first_non_empty(data, ["description", "question"])
+        location = _first_non_empty(data, ["location"])
+        gender = _first_non_empty(data, ["gender"])
+        age = _first_non_empty(data, ["age"])
+        lookup_error = ""
+
+        # Wiki-aligned fallback: if user_id + req_id are provided, load request context from DB.
+        user_id = _first_non_empty(data, ["user_id", "req_user_id"])
+        req_id = _first_non_empty(data, ["req_id", "request_id", "id"])
+        if user_id and req_id and (not category or not subject or not question):
+            request_details = get_request_full_details(user_id, req_id)
+            if "error" in request_details:
+                lookup_error = str(request_details["error"])
+            else:
+                category = category or str(request_details.get("req_cat_id") or "")
+                subject = subject or str(request_details.get("req_subj") or "")
+                location = location or str(request_details.get("req_loc") or "")
+                if not question:
+                    base_desc = str(request_details.get("req_desc") or "")
+                    additional_info = request_details.get("additional_info") or []
+                    context = _format_additional_info_for_prompt(additional_info)
+                    question = (
+                        f"{base_desc}\n\nAdditional details:\n{context}"
+                        if context
+                        else base_desc
+                    )
+
+        conversation_history = _normalize_history(
+            data.get("conversation_history", data.get("chat_history"))
+        )
+        if not category or not subject or not question:
+            message = "category/category_id, subject, and description/question are required"
+            if lookup_error:
+                message = f"{message}. DB lookup error: {lookup_error}"
+            return None, message, 400
+
+        answer = chat_with_llama(
+            category,
+            subject,
+            question,
+            location=location,
+            gender=gender,
+            age=age,
+            conversation_history=conversation_history,
+        )
+        return answer, None, 200
+    except Exception:
+        traceback.print_exc()
+        return None, "internal_error", 500
+
+
+@app.route("/generate_answer_api", methods=["POST", "OPTIONS"])
+def generate_followup_answer_api():
+    # UI expects payload shape: { body: { answer: "<text>" } }.
+    # Keep top-level `answer` as a compatibility convenience.
+    try:
+        if request.method == "OPTIONS":
+            return ("", 200)
+        data = _extract_request_payload()
+        answer, error_message, status_code = _generate_answer_from_payload(data)
+        if error_message:
+            return jsonify({"error": error_message}), status_code
+        return jsonify({"answer": answer, "body": {"answer": answer}}), 200
+    except Exception:
+        traceback.print_exc()
+        return jsonify({"error": "internal_error"}), 500
+
+
+@app.route("/v1/genai/predict_categories", methods=["POST", "OPTIONS"])
+def v1_predict_categories_api():
+    return predict_categories_api()
+
+
+@app.route("/v1/genai/generate_answer", methods=["POST", "OPTIONS"])
+def v1_generate_answer_api():
+    return generate_answer_api()
+
+
+@app.route("/v1/genai/generate_answer_api", methods=["POST", "OPTIONS"])
+def v1_generate_followup_answer_api():
+    return generate_followup_answer_api()
 
 # ---------- Lambda entry ----------
 def lambda_handler(event, context):
