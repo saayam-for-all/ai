@@ -5,3 +5,4 @@ flask==3.0.0
 langchain-core
 langchain-groq
 langchain-google-genai
+cryptography==42.0.8

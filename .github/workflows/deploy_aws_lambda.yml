@@ -23,13 +23,15 @@ jobs:
           rm -rf package deployment.zip
           mkdir -p package
 
-          # Build dependencies in Amazon Linux so native wheels are
-          # compatible with AWS Lambda runtime (avoids GLIBC mismatch).
-          docker run --rm \
-            -v "$PWD":/var/task \
-            -w /var/task \
-            public.ecr.aws/sam/build-python3.11:latest \
-            /bin/sh -c "pip install --upgrade pip && pip install -r requirements.txt -t package"
+          # Install Lambda-compatible wheels to avoid GLIBC runtime mismatch.
+          pip install --upgrade pip
+          pip install \
+            --requirement requirements.txt \
+            --target package \
+            --platform manylinux2014_x86_64 \
+            --implementation cp \
+            --python-version 3.11 \
+            --only-binary=:all:
 
           # Copy application code into package
           cp -r *.py package/
