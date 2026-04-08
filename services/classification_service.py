@@ -222,27 +222,14 @@ class GroqClassificationService:
 
             candidates = get_direct_children(category_id)
 
-        return selected_path
-
-        if _use_groq and groq_llm:
-            try:
-                print(f"LOG: Attempting Groq classification with model...")
-                resp = groq_llm.invoke(
-                    [HumanMessage(content=prompt)],
-                    response_format={"type": "json_object"},
-                )
-                res_content = (resp.content if hasattr(resp, "content") else str(resp)).strip()
-                res_data = json.loads(res_content)
-                return self._parse_ranked_categories(res_data)
-
-            except (json.JSONDecodeError, KeyError, TypeError) as e:
-                print(f"LOG ERROR: Groq attempt failed: {str(e)}")
-
-        print("LOG: Falling back to Gemini...")
-        if _use_gemini and gemini_llm:
-            gemini_result = self._predict_with_gemini(prompt)
-            if gemini_result:
-                return self._parse_ranked_categories({"categories": gemini_result})
+        # Return only the deepest leaf category from the selected path.
+        leaf_categories = [
+            item
+            for item in selected_path
+            if not get_direct_children(item["category_number"])
+        ]
+        if leaf_categories:
+            return [leaf_categories[-1]]
         return []
 
 
