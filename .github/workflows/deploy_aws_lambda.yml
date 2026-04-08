@@ -21,7 +21,15 @@ jobs:
       - name: Install dependencies and prepare package
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt -t package
+          rm -rf package deployment.zip
+          mkdir -p package
+          pip install \
+            --platform manylinux2014_x86_64 \
+            --implementation cp \
+            --python-version 311 \
+            --only-binary=:all: \
+            -r requirements.txt \
+            -t package
 
           # Copy all .py files
           cp -r *.py package/
