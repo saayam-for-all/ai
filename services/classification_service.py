@@ -81,6 +81,101 @@ class GroqClassificationService:
             return mapped
         return None
 
+    def _collect_leaf_candidates(self, root_id: str | None = None) -> list[str]:
+        leaf_ids = []
+        for category_id in help_categories.keys():
+            if root_id:
+                if category_id != root_id and not category_id.startswith(f"{root_id}."):
+                    continue
+            if not get_direct_children(category_id):
+                leaf_ids.append(category_id)
+        return leaf_ids
+
+    def _build_prompt_for_top_k_leaves(
+        self, description: str, leaf_candidates: list[str], top_k: int
+    ) -> str:
+        candidate_lines = []
+        for category_id in leaf_candidates:
+            category_name = help_categories.get(category_id, "")
+            category_description = TAXONOMY.get(category_name, "")
+            if category_description:
+                candidate_lines.append(
+                    f"{category_id}: {category_name} - {category_description}"
+                )
+            else:
+                candidate_lines.append(f"{category_id}: {category_name}")
+
+        return "\n".join(
+            [
+                "You are a classifier. Select the best matching leaf categories for the request.",
+                f"Return JSON only as: {{\"categories\": [{{\"category\": \"CATEGORY_ID\", \"confidence\": 0.0}}]}} with up to {top_k} items.",
+                "Rules: only choose from the provided IDs, no duplicates, confidence must be between 0.0 and 1.0, sorted highest confidence first.",
+                f"Leaf categories:\n{chr(10).join(candidate_lines)}",
+                f"Description: {description}",
+            ]
+        )
+
+    def _normalize_top_k_response(
+        self, response_data: dict, candidate_set: set[str], top_k: int
+    ) -> list[dict]:
+        raw_items = response_data.get("categories", [])
+        normalized = []
+        seen = set()
+        for item in raw_items:
+            if not isinstance(item, dict):
+                continue
+            category_id = self._normalize_category_id(item.get("category"), candidate_set)
+            if not category_id or category_id in seen:
+                continue
+            normalized.append(
+                {
+                    "category": category_id,
+                    "confidence": self._normalize_confidence(item.get("confidence")),
+                }
+            )
+            seen.add(category_id)
+            if len(normalized) >= top_k:
+                break
+        normalized.sort(key=lambda x: x["confidence"], reverse=True)
+        return normalized
+
+    def _predict_top_leaf_categories(self, description: str, top_k: int = 3) -> list[dict]:
+        root_id = "6" if is_elderly_context(description) else None
+        leaf_candidates = self._collect_leaf_candidates(root_id)
+        if not leaf_candidates:
+            return []
+
+        prompt = self._build_prompt_for_top_k_leaves(description, leaf_candidates, top_k)
+        candidate_set = set(leaf_candidates)
+
+        if _use_groq and groq_llm:
+            try:
+                response = groq_llm.invoke(
+                    [HumanMessage(content=prompt)],
+                    response_format={"type": "json_object"},
+                )
+                text = response.content if hasattr(response, "content") else str(response)
+                if text:
+                    parsed = json.loads(text.strip())
+                    normalized = self._normalize_top_k_response(
+                        parsed, candidate_set, top_k
+                    )
+                    if normalized:
+                        return normalized
+            except (json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
+                print(f"LOG ERROR: Groq top-k attempt failed: {str(e)}")
+
+        if _use_gemini and gemini_llm:
+            try:
+                response = gemini_llm.invoke([HumanMessage(content=prompt)])
+                text = response.content if hasattr(response, "content") else str(response)
+                if text:
+                    parsed = json.loads(text.strip())
+                    return self._normalize_top_k_response(parsed, candidate_set, top_k)
+            except (json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
+                print(f"LOG ERROR: Gemini top-k attempt failed: {str(e)}")
+        return []
+
     def _predict_with_gemini_single(
         self, prompt: str, candidates: set[str]
     ) -> dict | None:
@@ -181,56 +276,21 @@ class GroqClassificationService:
         return self._predict_with_gemini_single(prompt, candidate_set)
 
     def predict_categories(self, description: str) -> list:
-        selected_path = []
-        candidates = get_top_level_categories()
-
-        if is_elderly_context(description):
-            category_id = "6"
-            category_name = help_categories.get(category_id)
-            if category_name:
-                selected_path.append(
-                    {
-                        "category_number": category_id,
-                        "category_name": category_name,
-                        "confidence": 1.0,
-                    }
-                )
-                candidates = get_direct_children(category_id)
-            else:
-                candidates = []
-
-        while candidates:
-            result = self._predict_one_level(description, candidates)
-            if not result:
-                break
-
-            category_id = result.get("category")
-            if not category_id:
-                break
-
+        top_leaf_results = self._predict_top_leaf_categories(description, top_k=3)
+        formatted = []
+        for item in top_leaf_results:
+            category_id = item.get("category")
             category_name = help_categories.get(category_id)
             if not category_name:
-                break
-
-            selected_path.append(
+                continue
+            formatted.append(
                 {
                     "category_number": category_id,
                     "category_name": category_name,
-                    "confidence": result.get("confidence", 0.0),
+                    "confidence": item.get("confidence", 0.0),
                 }
             )
-
-            candidates = get_direct_children(category_id)
-
-        # Return only the deepest leaf category from the selected path.
-        leaf_categories = [
-            item
-            for item in selected_path
-            if not get_direct_children(item["category_number"])
-        ]
-        if leaf_categories:
-            return [leaf_categories[-1]]
-        return []
+        return formatted
 
 
 def predict_categories(description):
