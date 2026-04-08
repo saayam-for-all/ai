@@ -89,6 +89,7 @@ help_categories = {
     "6.9": "MEAL_SUPPORT",
 }
 
+
 # Reverse mapping: category name -> category number
 def get_category_number(category_name: str) -> str | None:
     """Get the category number for a given category name."""
@@ -96,6 +97,29 @@ def get_category_number(category_name: str) -> str | None:
         if name == category_name:
             return number
     return None
+
+
+def get_top_level_categories() -> list[str]:
+    """Return top-level category IDs plus the general category."""
+    top_level = []
+    for category_id in help_categories.keys():
+        if category_id == "0.0.0.0.0" or "." not in category_id:
+            top_level.append(category_id)
+    return top_level
+
+
+def get_direct_children(parent_id: str) -> list[str]:
+    """Return immediate children of the given category ID."""
+    children = []
+    parent_prefix = f"{parent_id}."
+    parent_depth = parent_id.count(".")
+    for category_id in help_categories.keys():
+        if not category_id.startswith(parent_prefix):
+            continue
+        if category_id.count(".") == parent_depth + 1:
+            children.append(category_id)
+    return children
+
 
 # Create a dictionary for faster lookups
 category_name_to_number = {name: number for number, name in help_categories.items()}

@@ -1,7 +1,6 @@
 TAXONOMY = {
     # General
     "GENERAL_CATEGORY": "General or uncategorized assistance requests.",
-
     # Food & Essentials
     "FOOD_AND_ESSENTIALS": "Parent category for all food and basic essentials-related assistance.",
     "FOOD_ASSISTANCE": "Help users find food banks, pantries, and government meal programs.",
@@ -12,14 +11,12 @@ TAXONOMY = {
     "NUTRITIONAL_MEAL_PLANNING": "Guidance on nutritious meal planning and balanced diets.",
     "CULTURAL_CUISINE_GUIDANCE": "Help with preparing or understanding specific cultural or traditional cuisines.",
     "OTHER_COOKING_HELP": "Other cooking-related assistance not covered by the above.",
-
     # Clothing
     "CLOTHING_ASSISTANCE": "Parent category for all clothing-related assistance and services.",
-    "DONATE_CLOTHES": "Allow users (donors) to donate clothes based on their location.",
-    "BORROW_CLOTHES": "Allow users to borrow clothes easily via the platform.",
-    "EMERGENCY_CLOTHING_ASSISTANCE": "Enable users in crisis situations (e.g., natural disasters, sudden displacement) to request clothing help.",
-    "TAILORING": "Users can request clothing repair (e.g., seams, zippers) via volunteers or local tailoring partners.",
-
+    "DONATE_CLOTHES": "Use when the user offers to donate or give away clothes.",
+    "BORROW_CLOTHES": "Use when the user needs clothes for themselves or family.",
+    "EMERGENCY_CLOTHING_ASSISTANCE": "Use when urgent clothing is needed due to crisis or displacement.",
+    "TAILORING": "Use for clothing repairs like seams, zippers, or alterations.",
     # Housing
     "HOUSING_ASSISTANCE": "Parent category for all housing-related assistance and services.",
     "LEASE_SUPPORT": "Assistance understanding or navigating lease agreements and landlord matters.",
@@ -45,7 +42,6 @@ TAXONOMY = {
     "BOOKING_PACKERS_MOVERS_SUPPORT": "Assistance booking or coordinating packers and movers.",
     "BUY_THINGS": "Help buying secondhand or new furniture and home essentials.",
     "SELL_THINGS": "Help selling furniture, household items, or other belongings.",
-
     # Education & Career
     "EDUCATION_CAREER_SUPPORT": "Parent category for education and career-related help.",
     "COLLEGE_APPLICATION_HELP": "Guidance for navigating college application tasks.",
@@ -61,7 +57,6 @@ TAXONOMY = {
     "STUDY_GROUP_FORMATION": "Help forming or joining study groups.",
     "CAREER_GUIDANCE": "Career advice, resume review, and job search support.",
     "EDUCATION_RESOURCE_SHARING": "Sharing or finding educational resources (books, notes, materials).",
-
     # Healthcare & Wellness
     "HEALTHCARE_AND_WELLNESS": "Parent category for health-related assistance and non-clinical wellness support.",
     "MEDICAL_CONSULTATION": "General or specialty medical consultation and guidance.",
@@ -80,7 +75,6 @@ TAXONOMY = {
     "MENTAL_WELLBEING_SUPPORT": "Access general mental health resources or referrals.",
     "MEDICATION_REMINDERS": "Set up non-clinical reminders for OTC medication or supplements.",
     "HEALTH_EDUCATION_GUIDANCE": "Wellness awareness on hygiene, sleep, nutrition, etc.",
-
     # Elderly & Community
     "ELDERLY_COMMUNITY_ASSISTANCE": "Parent category for elderly and community-related support.",
     "SENIOR_RELOCATION_SUPPORT": "Help seniors find housing and assist with the moving process.",
