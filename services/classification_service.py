@@ -1,7 +1,6 @@
 import json
 from langchain_core.messages import HumanMessage
 from utils.categories_with_description import TAXONOMY
-from utils.client import client, _use_groq, _gemini_client
 from utils.categories import (
     help_categories,
     category_name_to_number,
@@ -11,7 +10,6 @@ from utils.categories import (
 from utils.routing_for_categories import is_elderly_context
 
 from utils.client import groq_llm, gemini_llm, _use_groq, _use_gemini
-from utils.categories import category_name_to_number
 
 
 class GroqClassificationService:
@@ -86,27 +84,14 @@ class GroqClassificationService:
     def _predict_with_gemini_single(
         self, prompt: str, candidates: set[str]
     ) -> dict | None:
-        if not _gemini_client:
-            raise ValueError("Gemini client not initialized")
-
-        response = _gemini_client.models.generate_content(
-            model=self.gemini_model, contents=prompt
-        )
-        text = response.text
-        if not text:
-            return None
-        text = text.strip()
-    def __init__(self):
-        self.categories_with_desc = "\n".join(
-            [f"{k}: {v}" for k, v in TAXONOMY.items()]
-        )
-
-    def _predict_with_gemini(self, prompt: str) -> list:
         if not gemini_llm:
             raise ValueError("Gemini client not initialized")
 
-        resp = gemini_llm.invoke([HumanMessage(content=prompt)])
-        text = (resp.content if hasattr(resp, "content") else str(resp)).strip()
+        response = gemini_llm.invoke([HumanMessage(content=prompt)])
+        text = response.content if hasattr(response, "content") else str(response)
+        if not text:
+            return None
+        text = text.strip()
 
         if text.startswith("{"):
             try:
@@ -164,18 +149,17 @@ class GroqClassificationService:
         prompt = self._build_prompt_for_candidates(description, candidates)
         candidate_set = set(candidates)
 
-        if _use_groq and client:
+        if _use_groq and groq_llm:
             res_content = None
             try:
                 print(f"LOG: Attempting Groq classification with model {self.model}...")
-                response = client.chat.completions.create(
-                    model=self.model,
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=self.temperature,
-                    top_p=self.top_p,
+                response = groq_llm.invoke(
+                    [HumanMessage(content=prompt)],
                     response_format={"type": "json_object"},
                 )
-                message_content = response.choices[0].message.content
+                message_content = (
+                    response.content if hasattr(response, "content") else str(response)
+                )
                 if not message_content:
                     raise ValueError("Groq response content is empty")
                 res_content = message_content.strip()
