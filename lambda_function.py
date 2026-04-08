@@ -26,17 +26,6 @@ def lambda_handler(event, context):
 
         ranked_categories = predict_categories(description)
 
-        ranked_categories = [
-            item
-            for _, item in sorted(
-                enumerate(ranked_categories),
-                key=lambda entry: (
-                    -entry[1].get("confidence", 0.0),
-                    entry[0],
-                ),
-            )
-        ]
-
         # Return ranked categories with numbers
         return _response(200, {"categories": ranked_categories})
 
