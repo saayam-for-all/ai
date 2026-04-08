@@ -3,7 +3,7 @@ name: Deploy to AWS Lambda
 on:
   push:
     branches:
-      - conversational-chatbot-aws
+      - predict-endpoint-v2
 
 jobs:
   deploy:
