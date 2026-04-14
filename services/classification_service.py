@@ -127,8 +127,33 @@ class GroqClassificationService:
             return mapped
         return None
 
+    def _extract_groq_usage(self, response) -> dict:
+        usage = getattr(response, "usage", None)
+        if not usage:
+            return {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+        return {
+            "prompt_tokens": getattr(usage, "prompt_tokens", 0),
+            "completion_tokens": getattr(usage, "completion_tokens", 0),
+            "total_tokens": getattr(usage, "total_tokens", 0),
+        }
+
+    def _extract_gemini_usage(self, response) -> dict:
+        usage = getattr(response, "usage_metadata", None)
+        if not usage:
+            return {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+        prompt = getattr(usage, "prompt_token_count", 0) or 0
+        completion = getattr(usage, "candidates_token_count", 0) or 0
+        total = getattr(usage, "total_token_count", None)
+        if total is None:
+            total = prompt + completion
+        return {
+            "prompt_tokens": prompt,
+            "completion_tokens": completion,
+            "total_tokens": total,
+        }
+
     def _predict_with_gemini_single(
-        self, prompt: str, candidates: set[str]
+        self, prompt: str, candidates: set[str], accumulator: dict, depth: int
     ) -> dict | None:
         if not _gemini_client:
             raise ValueError("Gemini client not initialized")
@@ -136,6 +161,19 @@ class GroqClassificationService:
         response = _gemini_client.models.generate_content(
             model=self.gemini_model, contents=prompt
         )
+        usage = self._extract_gemini_usage(response)
+        accumulator["total_calls"] += 1
+        accumulator["total_prompt_tokens"] += usage["prompt_tokens"]
+        accumulator["total_completion_tokens"] += usage["completion_tokens"]
+        accumulator["total_tokens"] += usage["total_tokens"]
+        accumulator["calls"].append({
+            "provider": "gemini",
+            "model": self.gemini_model,
+            "depth": depth,
+            "prompt_tokens": usage["prompt_tokens"],
+            "completion_tokens": usage["completion_tokens"],
+            "total_tokens": usage["total_tokens"],
+        })
         text = response.text
         if not text:
             return None
@@ -153,7 +191,7 @@ class GroqClassificationService:
         return None
 
     def _predict_with_gemini_ranked(
-        self, prompt: str, candidates: set[str]
+        self, prompt: str, candidates: set[str], accumulator: dict, depth: int
     ) -> list[dict]:
         if not _gemini_client:
             raise ValueError("Gemini client not initialized")
@@ -161,6 +199,19 @@ class GroqClassificationService:
         response = _gemini_client.models.generate_content(
             model=self.gemini_model, contents=prompt
         )
+        usage = self._extract_gemini_usage(response)
+        accumulator["total_calls"] += 1
+        accumulator["total_prompt_tokens"] += usage["prompt_tokens"]
+        accumulator["total_completion_tokens"] += usage["completion_tokens"]
+        accumulator["total_tokens"] += usage["total_tokens"]
+        accumulator["calls"].append({
+            "provider": "gemini",
+            "model": self.gemini_model,
+            "depth": depth,
+            "prompt_tokens": usage["prompt_tokens"],
+            "completion_tokens": usage["completion_tokens"],
+            "total_tokens": usage["total_tokens"],
+        })
         text = response.text
         if not text:
             return []
@@ -208,7 +259,7 @@ class GroqClassificationService:
         return ranked_results
 
     def _predict_one_level(
-        self, description: str, candidates: list[str]
+        self, description: str, candidates: list[str], accumulator: dict, depth: int
     ) -> dict | None:
         if not candidates:
             return None
@@ -227,6 +278,19 @@ class GroqClassificationService:
                     top_p=self.top_p,
                     response_format={"type": "json_object"},
                 )
+                usage = self._extract_groq_usage(response)
+                accumulator["total_calls"] += 1
+                accumulator["total_prompt_tokens"] += usage["prompt_tokens"]
+                accumulator["total_completion_tokens"] += usage["completion_tokens"]
+                accumulator["total_tokens"] += usage["total_tokens"]
+                accumulator["calls"].append({
+                    "provider": "groq",
+                    "model": self.model,
+                    "depth": depth,
+                    "prompt_tokens": usage["prompt_tokens"],
+                    "completion_tokens": usage["completion_tokens"],
+                    "total_tokens": usage["total_tokens"],
+                })
                 message_content = response.choices[0].message.content
                 if not message_content:
                     raise ValueError("Groq response content is empty")
@@ -244,10 +308,10 @@ class GroqClassificationService:
                 print(f"LOG ERROR: Groq attempt failed: {str(e)}")
 
         print("LOG: Falling back to Gemini...")
-        return self._predict_with_gemini_single(prompt, candidate_set)
+        return self._predict_with_gemini_single(prompt, candidate_set, accumulator=accumulator, depth=depth)
 
     def _predict_ranked_level(
-        self, description: str, candidates: list[str]
+        self, description: str, candidates: list[str], accumulator: dict, depth: int
     ) -> list[dict]:
         if not candidates:
             return []
@@ -266,6 +330,19 @@ class GroqClassificationService:
                     top_p=self.top_p,
                     response_format={"type": "json_object"},
                 )
+                usage = self._extract_groq_usage(response)
+                accumulator["total_calls"] += 1
+                accumulator["total_prompt_tokens"] += usage["prompt_tokens"]
+                accumulator["total_completion_tokens"] += usage["completion_tokens"]
+                accumulator["total_tokens"] += usage["total_tokens"]
+                accumulator["calls"].append({
+                    "provider": "groq",
+                    "model": self.model,
+                    "depth": depth,
+                    "prompt_tokens": usage["prompt_tokens"],
+                    "completion_tokens": usage["completion_tokens"],
+                    "total_tokens": usage["total_tokens"],
+                })
                 res_content = response.choices[0].message.content
                 if not res_content:
                     raise ValueError("Groq response content is empty")
@@ -281,23 +358,32 @@ class GroqClassificationService:
                 print(f"LOG ERROR: Groq attempt failed: {str(e)}")
 
         print("LOG: Falling back to Gemini...")
-        return self._predict_with_gemini_ranked(prompt, candidate_set)
+        return self._predict_with_gemini_ranked(prompt, candidate_set, accumulator=accumulator, depth=depth)
 
-    def predict_categories(self, description: str) -> list:
+    def predict_categories(self, description: str) -> tuple:
         candidates = get_top_level_categories()
+
+        usage_accumulator = {
+            "total_calls": 0,
+            "total_prompt_tokens": 0,
+            "total_completion_tokens": 0,
+            "total_tokens": 0,
+            "calls": [],
+        }
+        depth = 0
 
         if is_elderly_context(description):
             category_id = "6"
             candidates = get_direct_children(category_id)
 
         while candidates:
-            ranked_level = self._predict_ranked_level(description, candidates)
+            ranked_level = self._predict_ranked_level(description, candidates, accumulator=usage_accumulator, depth=depth)
             if not ranked_level:
-                return []
+                return [], usage_accumulator
 
             top_choice = ranked_level[0].get("category")
             if not top_choice:
-                return []
+                return [], usage_accumulator
 
             next_candidates = get_direct_children(top_choice)
             if not next_candidates:
@@ -316,11 +402,12 @@ class GroqClassificationService:
                     )
                     if len(results) >= 3:
                         break
-                return results
+                return results, usage_accumulator
 
             candidates = next_candidates
+            depth += 1
 
-        return []
+        return [], usage_accumulator
 
 
 def predict_categories(description):
