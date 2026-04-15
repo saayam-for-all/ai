@@ -1,4 +1,5 @@
 python-dotenv
 langchain-core
 pydantic
-langchain-groqlangchain-google-genai
+langchain-groq
+langchain-google-genai
