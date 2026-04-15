@@ -27,7 +27,7 @@ jobs:
           cp -r *.py package/
 
           # Copy services folder
-          cp -r services package/services
+          cp -r utils package/utils
 
       - name: Zip deployment package
         run: |
