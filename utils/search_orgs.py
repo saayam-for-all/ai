@@ -14,7 +14,7 @@ class Organization(BaseModel):
     organization_name: str = Field(description="Name of the organization")
     org_type: str = Field(description="Type of organization: 'nonprofit' or 'for-profit'")
     size: str = Field(description="Size of the organization: 'small', 'medium', or 'large'")
-    rating: str = Field(description="Rating or reputation score of the organization (e.g., Charity Navigator rating for nonprofits, Google/BBB rating for for-profits). Use 'N/A' if not available.")
+    rating: float = Field(description="Rating normalized to a 0.0-5.0 scale with one decimal place (e.g., Charity Navigator 95/100 becomes 4.8). Use 0.0 if not available.")
     location: str = Field(description="Address of the organization")
     contact: str = Field(description="Phone number of the organization")
     email: str = Field(description="Email address of the organization")
@@ -59,7 +59,7 @@ def build_prompt(subject: str, description: str, location: str):
             "Exclude unverified forums, low-trust sites, or questionable sources. "
             "You must return exactly 3 nonprofit organizations and 3 for-profit organizations (6 total). "
             "For each organization, include its type (nonprofit or for-profit), size (small, medium, or large), "
-            "and a rating (Charity Navigator score for nonprofits, Google or BBB rating for for-profits; use 'N/A' if unavailable)."
+            "and a rating normalized to a 0.0-5.0 scale with one decimal place (e.g., a Charity Navigator score of 95/100 becomes 4.8; Google/BBB ratings are already on a 5-point scale). Use 0.0 if unavailable."
         ),
         (
             "human",
@@ -75,7 +75,7 @@ def build_prompt(subject: str, description: str, location: str):
                 "Prioritize organizations closest to the provided location.\n"
                 "For each organization include: name, org_type (nonprofit or for-profit), "
                 "size (small/medium/large based on employee count or operational scale), "
-                "rating (Charity Navigator for nonprofits, Google/BBB for for-profits, or N/A), "
+                "rating (normalized to 0.0-5.0 scale, one decimal place; convert Charity Navigator by dividing by 20; use 0.0 if unavailable), "
                 "address, phone number, email, source URL, web URL, mission statement, "
                 "description of services, and a 3-line summary of relevance to this request."
             ),
