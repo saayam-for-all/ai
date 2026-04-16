@@ -1,14 +1,37 @@
+"""
+app/routes/search.py
+"""
+
 from flask import Blueprint, request, jsonify
 from app.auth.current_user import get_current_user
 from app.services.universal_search_service import UniversalSearchService
 
+# url_prefix="/api" so the route decorator is just "/search" (not "/api/search")
+# The original file had url_prefix="/api" AND @route("/api/search") which
+# would produce the path /api/api/search — fixed here.
 search_bp = Blueprint("search", __name__, url_prefix="/api")
 
 
-@search_bp.route("/api/search", methods=["GET"])
+@search_bp.route("/search", methods=["GET"])
 def universal_search():
+    """
+    GET /api/search?q=<query>&page=<int>&limit=<int>
+
+    Returns JSON:
+    {
+        "success": bool,
+        "message": str,
+        "query": str,
+        "page": int,
+        "limit": int,
+        "total": int,
+        "auto_navigate": bool,   # true = UI should redirect to target directly
+        "target": dict | null,   # the single destination when auto_navigate=true
+        "results": [...]
+    }
+    """
     query = request.args.get("q", "").strip()
-    page = request.args.get("page", 1, type=int)
+    page  = request.args.get("page",  1,  type=int)
     limit = request.args.get("limit", 10, type=int)
 
     current_user = get_current_user()
