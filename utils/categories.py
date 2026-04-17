@@ -121,5 +121,20 @@ def get_direct_children(parent_id: str) -> list[str]:
     return children
 
 
+def get_category_hierarchy(category_id: str) -> str:
+    """Build a human-readable hierarchy path for a given category ID.
+
+    Example: "4.3.1" -> "Education Career Support > Tutoring > Math"
+    """
+    parts = category_id.split(".")
+    path = []
+    for i in range(1, len(parts) + 1):
+        ancestor_id = ".".join(parts[:i])
+        name = help_categories.get(ancestor_id, "")
+        if name:
+            path.append(name.replace("_", " ").title())
+    return " > ".join(path)
+
+
 # Create a dictionary for faster lookups
 category_name_to_number = {name: number for number, name in help_categories.items()}
