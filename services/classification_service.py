@@ -6,6 +6,7 @@ from utils.categories import (
     category_name_to_number,
     get_top_level_categories,
     get_direct_children,
+    get_category_hierarchy,
 )
 from utils.routing_for_categories import is_elderly_context
 
@@ -398,6 +399,7 @@ class GroqClassificationService:
                             "category_number": category_id,
                             "category_name": category_name,
                             "confidence": item.get("confidence", 0.0),
+                            "hierarchy": get_category_hierarchy(category_id),
                         }
                     )
                     if len(results) >= 3:
