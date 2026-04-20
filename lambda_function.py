@@ -24,10 +24,10 @@ def lambda_handler(event, context):
         if not description:
             return _response(400, {"error": "Description is required"})
 
-        ranked_categories = predict_categories(description)
+        ranked_categories, token_usage = predict_categories(description)
 
         # Return ranked categories with numbers
-        return _response(200, {"categories": ranked_categories})
+        return _response(200, {"categories": ranked_categories, "token_usage": token_usage})
 
     except Exception as e:
         return _response(500, {"error": str(e)})
