@@ -6,3 +6,4 @@ utils/*.pyc
 *.zip
 *test.py
 *.csv
+.idea

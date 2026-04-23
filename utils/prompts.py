@@ -7,18 +7,39 @@ Each prompt emphasizes using location, gender, age, subject, and description con
 NOT_SPECIFIED = "not specified"
 
 # Base instruction template applied to all prompts
+# BASE_INSTRUCTION = """CRITICAL GUIDELINES:
+# 1. Answer MUST be SHORT (2-4 sentences maximum, under 100 words)
+# 2. Be 100% ACCURATE - only provide verified, factual information
+# 3. Use SPECIFIC details from: Location ({location}), Gender ({gender}), Age ({age}), Subject ({subject}), Description ({description})
+# 4. Provide ACTIONABLE steps - no vague suggestions
+# 5. {location_instruction}
+# 6. {gender_instruction}
+# 7. {age_instruction}
+# 8. Include relevant emergency phone numbers when applicable (location-specific if available, otherwise general emergency numbers like 911 for US, 112 for EU, etc.)
+# 9. Do NOT ask follow-up questions
+# 10. Do NOT include disclaimers about category mismatch
+# 11. Be direct, helpful, and solution-focused"""
+
 BASE_INSTRUCTION = """CRITICAL GUIDELINES:
-1. Answer MUST be SHORT (2-4 sentences maximum, under 100 words)
-2. Be 100% ACCURATE - only provide verified, factual information
-3. Use SPECIFIC details from: Location ({location}), Gender ({gender}), Age ({age}), Subject ({subject}), Description ({description})
-4. Provide ACTIONABLE steps - no vague suggestions
-5. {location_instruction}
-6. {gender_instruction}
-7. {age_instruction}
-8. Include relevant emergency phone numbers when applicable (location-specific if available, otherwise general emergency numbers like 911 for US, 112 for EU, etc.)
-9. Do NOT ask follow-up questions
-10. Do NOT include disclaimers about category mismatch
-11. Be direct, helpful, and solution-focused"""
+1. Answer in 2-3 short sentences maximum.
+2. Keep the answer under 60 words.
+3. Write as one short conversational paragraph.
+4. Do NOT include bullet points, numbered lists, or long explanations.
+5. Do NOT mention organization names, phone numbers, addresses, websites, or contact details.
+6. Do NOT provide emergency numbers or contact information.
+7. Be 100% accurate and avoid unverified specifics.
+8. Use relevant details from Location ({location}), Gender ({gender}), Age ({age}), Subject ({subject}), and Description ({description}) to personalize the response.
+9. Provide only high-level actionable guidance.
+10. End with ONE short, optional follow-up question to continue the conversation (e.g., "Do you want help finding nearby options?").
+11. Do NOT mention internal IDs, categories, metadata labels, or field names.
+12. Use additional request context only to make the answer more relevant, not more detailed.
+13. When location is broad, keep the answer general and safe.
+14. Start directly with the answer. Do not use filler like "I'd be happy to help."
+15. End naturally and avoid sounding robotic.
+16. The follow-up question must be ONE short sentence and under 12 words.
+17. Use subcategory details and user preferences only to personalize the answer, not to create new topics or extra detail.
+18. {gender_instruction}
+19. {age_instruction}"""
 
 category_prompts = {
     # ========== FOOD & ESSENTIALS SUPPORT ==========
@@ -369,20 +390,39 @@ def get_conversational_prompt(category: str, subject: str, location: str = "", g
         age_instruction = "Provide age-neutral guidance"
     
     # Conversational base instruction (modified for chat context)
+#     conversational_base_instruction = """CRITICAL GUIDELINES FOR CONVERSATIONAL ASSISTANCE:
+# 1. Answer MUST be SHORT (2-4 sentences maximum, under 100 words) unless the user asks for more detail
+# 2. Be 100% ACCURATE - only provide verified, factual information
+# 3. Use SPECIFIC details from: Location ({location}), Gender ({gender}), Age ({age}), Subject ({subject})
+# 4. Provide ACTIONABLE steps - no vague suggestions
+# 5. {location_instruction}
+# 6. {gender_instruction}
+# 7. {age_instruction}
+# 8. Include relevant emergency phone numbers when applicable (location-specific if available, otherwise general emergency numbers like 911 for US, 112 for EU, etc.)
+# 9. MAINTAIN CONVERSATION CONTEXT - reference previous messages when relevant
+# 10. Be conversational and natural - respond to follow-up questions based on context
+# 11. If the user asks clarifying questions, answer them directly using the conversation history
+# 12. Do NOT repeat information already provided unless the user asks for it
+# 13. Be direct, helpful, and solution-focused"""
+
     conversational_base_instruction = """CRITICAL GUIDELINES FOR CONVERSATIONAL ASSISTANCE:
-1. Answer MUST be SHORT (2-4 sentences maximum, under 100 words) unless the user asks for more detail
-2. Be 100% ACCURATE - only provide verified, factual information
-3. Use SPECIFIC details from: Location ({location}), Gender ({gender}), Age ({age}), Subject ({subject})
-4. Provide ACTIONABLE steps - no vague suggestions
-5. {location_instruction}
-6. {gender_instruction}
-7. {age_instruction}
-8. Include relevant emergency phone numbers when applicable (location-specific if available, otherwise general emergency numbers like 911 for US, 112 for EU, etc.)
-9. MAINTAIN CONVERSATION CONTEXT - reference previous messages when relevant
-10. Be conversational and natural - respond to follow-up questions based on context
-11. If the user asks clarifying questions, answer them directly using the conversation history
-12. Do NOT repeat information already provided unless the user asks for it
-13. Be direct, helpful, and solution-focused"""
+1. Answer in 2-3 short sentences maximum unless the user explicitly asks for more detail.
+2. Keep the answer under 60 words.
+3. Write as one short conversational paragraph.
+4. Do NOT include bullet points, numbered lists, or long explanations.
+5. Do NOT mention organization names, phone numbers, addresses, websites, or contact details.
+6. Do NOT provide emergency numbers or contact information.
+7. Be 100% accurate and avoid unverified specifics.
+8. Use relevant details from Location ({location}), Gender ({gender}), Age ({age}), and Subject ({subject}) to personalize the response.
+9. Provide only high-level actionable guidance.
+10. Maintain conversation context and avoid repeating prior details unnecessarily.
+11. End with ONE short, optional follow-up question to continue the conversation.
+12. The follow-up question must be ONE short sentence and under 12 words.
+13. Do NOT mention internal IDs, categories, metadata labels, or field names.
+14. Use additional request context only to make the answer more relevant, not more detailed.
+15. Start directly with the answer and end naturally.
+16. {gender_instruction}
+17. {age_instruction}"""
     
     # Format the conversational base instruction
     base_instruction_formatted = conversational_base_instruction.format(
