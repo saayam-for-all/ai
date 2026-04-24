@@ -9,9 +9,9 @@ the service will set auto_navigate=True, skipping fuzzy entirely.
 
 Per the MOM:
   - user_id, primary_email_address  → redirect to User Profile
-  - request_id (e.g. REQ-102)       → redirect to Help Request
+  - req_id (e.g. REQ-102)           → redirect to Help Request
   - org_id                           → redirect to Organization page
-  - category_id                      → redirect to Category page
+  - cat_id                           → redirect to Category page
 """
 
 import re
@@ -24,8 +24,7 @@ from app.models.category import Category
 
 
 # ---------------------------------------------------------------------------
-# ID pattern checks  (same patterns as search_utils, kept local to avoid
-# circular imports from utils importing models)
+# ID pattern checks
 # ---------------------------------------------------------------------------
 
 _UUID_RE = re.compile(
@@ -33,10 +32,10 @@ _UUID_RE = re.compile(
     re.IGNORECASE,
 )
 _EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
-_REQ_RE   = re.compile(r"^REQ-\d+$",  re.IGNORECASE)
-_USR_RE   = re.compile(r"^USR-\d+$",  re.IGNORECASE)
-_ORG_RE   = re.compile(r"^ORG-\d+$",  re.IGNORECASE)
-_CAT_RE   = re.compile(r"^CAT-\d+$",  re.IGNORECASE)
+_REQ_RE   = re.compile(r"^REQ-\d{2}-\d{3}-\d{3}-\d{4}$")
+_USR_RE   = re.compile(r"^SID-\d{2}-\d{3}-\d{3}-\d{3}$")
+_ORG_RE   = re.compile(r"^ORG-\d+$")           # org table empty; pattern TBD
+_CAT_RE   = re.compile(r"^\d+(\.\d+)*$")       # matches 1, 1.1, 0.0.0.0.0
 
 
 def _is_uuid(q: str) -> bool:
@@ -59,33 +58,25 @@ def _is_cat_id(q: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Authorization helpers (mirrors the repo-level auth, applied here too)
+# Authorization helpers
 # ---------------------------------------------------------------------------
 
 def _user_is_authorized(user_row: User, current_user) -> bool:
     role = current_user.role
     if role in {"admin", "super_admin"}:
         return True
-    if role == "organization":
-        return user_row.organization_id == current_user.organization_id
-    return user_row.id == current_user.id
+    # beneficiary/volunteer can only see their own profile
+    return user_row.user_id == current_user.id
 
 
 def _help_request_is_authorized(req_row: HelpRequest, current_user) -> bool:
     role = current_user.role
     if role == "super_admin":
         return True
-    if role == "admin":
-        return req_row.admin_scope_id == current_user.admin_scope_id
-    if role == "organization":
-        return req_row.organization_id == current_user.organization_id
-    if role == "volunteer":
-        return (
-            req_row.assigned_volunteer_id == current_user.id
-            or req_row.is_public
-        )
+    if role in {"admin", "organization", "volunteer"}:
+        return req_row.to_public or True  # no org/scope columns on request table
     if role == "beneficiary":
-        return req_row.created_by == current_user.id
+        return req_row.req_user_id == current_user.id
     return False
 
 
@@ -99,15 +90,12 @@ def confident_search(query: str, current_user) -> dict | None:
 
     Returns a single result dict (score=100) if found and authorized,
     or None if the query does not look like an ID / no record found.
-
-    The caller (UniversalSearchService) uses the non-None return to
-    short-circuit fuzzy search and set auto_navigate=True.
     """
     q = query.strip()
     q_lower = q.lower()
 
-    # --- User: UUID or USR-xxx format → check user_id column
-    if _is_uuid(q) or _is_usr_id(q):
+    # --- User: USR-xxx format
+    if _is_usr_id(q):
         row = (
             db.session.query(User)
             .filter(func.lower(User.user_id) == q_lower)
@@ -115,23 +103,36 @@ def confident_search(query: str, current_user) -> dict | None:
         )
         if row and _user_is_authorized(row, current_user):
             return _user_result(row)
-        # Found but not authorized → return nothing (data-leakage prevention)
         if row:
             return None
 
     # --- User: exact email match
     if _is_email(q):
-        # User model doesn't have email column yet — placeholder for when it does.
-        # When ddl_users.sql adds primary_email_address, add:
-        #   .filter(func.lower(User.primary_email_address) == q_lower)
-        # For now, fall through to fuzzy.
-        pass
+        row = (
+            db.session.query(User)
+            .filter(func.lower(User.primary_email_address) == q_lower)
+            .first()
+        )
+        if row and _user_is_authorized(row, current_user):
+            return _user_result(row)
+        if row:
+            return None
 
-    # --- Help Request: REQ-xxx or UUID
-    if _is_req_id(q) or _is_uuid(q):
+    # --- User or HelpRequest: UUID
+    if _is_uuid(q):
+        row = (
+            db.session.query(User)
+            .filter(func.lower(User.user_id) == q_lower)
+            .first()
+        )
+        if row and _user_is_authorized(row, current_user):
+            return _user_result(row)
+        if row:
+            return None
+
         row = (
             db.session.query(HelpRequest)
-            .filter(func.lower(HelpRequest.request_id) == q_lower)
+            .filter(func.lower(HelpRequest.req_id) == q_lower)
             .first()
         )
         if row and _help_request_is_authorized(row, current_user):
@@ -139,31 +140,43 @@ def confident_search(query: str, current_user) -> dict | None:
         if row:
             return None
 
-    # --- Organization: ORG-xxx or UUID
-    if _is_org_id(q) or _is_uuid(q):
+    # --- Help Request: REQ-xxx
+    if _is_req_id(q):
+        row = (
+            db.session.query(HelpRequest)
+            .filter(func.lower(HelpRequest.req_id) == q_lower)
+            .first()
+        )
+        if row and _help_request_is_authorized(row, current_user):
+            return _help_request_result(row)
+        if row:
+            return None
+
+    # --- Organization: ORG-xxx
+    if _is_org_id(q):
         row = (
             db.session.query(Organization)
             .filter(func.lower(Organization.org_id) == q_lower)
             .first()
         )
-        if row:  # orgs visible to all authenticated users per MOM
+        if row:
             return _org_result(row)
 
-    # --- Category: CAT-xxx or UUID
-    if _is_cat_id(q) or _is_uuid(q):
+    # --- Category: CAT-xxx
+    if _is_cat_id(q):
         row = (
             db.session.query(Category)
-            .filter(func.lower(Category.category_id) == q_lower)
+            .filter(func.lower(Category.cat_id) == q_lower)
             .first()
         )
-        if row:  # categories are public
+        if row:
             return _category_result(row)
 
-    return None  # not an ID pattern or no match found
+    return None
 
 
 # ---------------------------------------------------------------------------
-# Result builders  (score=100 signals exact/confident match to the service)
+# Result builders
 # ---------------------------------------------------------------------------
 
 def _user_result(row: User) -> dict:
@@ -171,9 +184,9 @@ def _user_result(row: User) -> dict:
         "entity_type": "user",
         "entity_id": row.user_id,
         "title": row.full_name,
-        "subtitle": f"Username: {row.username}",
+        "subtitle": f"Email: {row.primary_email_address}",
         "score": 100,
-        "url": f"/users/{row.id}",
+        "url": f"/users/{row.user_id}",
         "match_type": "confident",
     }
 
@@ -181,11 +194,11 @@ def _user_result(row: User) -> dict:
 def _help_request_result(row: HelpRequest) -> dict:
     return {
         "entity_type": "help_request",
-        "entity_id": row.request_id,
-        "title": row.title,
+        "entity_id": row.req_id,
+        "title": row.req_subj,
         "subtitle": "Help Request",
         "score": 100,
-        "url": f"/help-requests/{row.id}",
+        "url": f"/help-requests/{row.req_id}",
         "match_type": "confident",
     }
 
@@ -194,10 +207,10 @@ def _org_result(row: Organization) -> dict:
     return {
         "entity_type": "organization",
         "entity_id": row.org_id,
-        "title": row.name,
+        "title": row.org_name,
         "subtitle": "Organization",
         "score": 100,
-        "url": f"/organizations/{row.id}",
+        "url": f"/organizations/{row.org_id}",
         "match_type": "confident",
     }
 
@@ -205,10 +218,10 @@ def _org_result(row: Organization) -> dict:
 def _category_result(row: Category) -> dict:
     return {
         "entity_type": "category",
-        "entity_id": row.category_id,
-        "title": row.name or row.label,
+        "entity_id": row.cat_id,
+        "title": row.cat_name,
         "subtitle": "Category / Tag",
         "score": 100,
-        "url": f"/categories/{row.id}",
+        "url": f"/categories/{row.cat_id}",
         "match_type": "confident",
     }

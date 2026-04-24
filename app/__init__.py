@@ -6,13 +6,12 @@ from app.routes.search import search_bp
 def create_app():
     app = Flask(__name__)
 
-    # load config
     app.config.from_object("config.Config")
 
-    # initialize extensions
     db.init_app(app)
 
-    # register routes
+    from app.models import user, help_request, organization, category, company  # noqa: F401
+
     app.register_blueprint(search_bp)
 
     return app

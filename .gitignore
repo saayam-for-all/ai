@@ -172,3 +172,7 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# Local DB inspection / credential scripts — never commit these
+check_ids.py
+.env.local
