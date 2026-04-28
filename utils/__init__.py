@@ -37,6 +37,7 @@ class AnswerGenerationServiceInterface(ABC):
         location: str | None = None,
         gender: str | None = None,
         age: str | None = None,
+        additional_info: list[dict] | None = None,
         conversation_history: list[dict[str, str]] | None = None,
     ) -> str:
         """Generate an answer string."""
@@ -101,6 +102,7 @@ class GroqAnswerGenerationService(AnswerGenerationServiceInterface):
         location: str | None = None,
         gender: str | None = None,
         age: str | None = None,
+        additional_info: list[dict] | None = None,
         conversation_history: list[dict[str, str]] | None = None,
     ) -> str:
         system_prompt = get_conversational_prompt(
@@ -109,12 +111,24 @@ class GroqAnswerGenerationService(AnswerGenerationServiceInterface):
             location=location or "",
             gender=gender or "",
             age=age or "",
+            additional_info=additional_info,
         )
+
+        human_content = f"Subject: {subject}\nQuestion: {description}"
+        if additional_info:
+            info_lines = []
+            for item in additional_info:
+                q = item.get("question", "")
+                answers = item.get("answers", [])
+                if q and answers:
+                    info_lines.append(f"- {q}: {', '.join(str(a) for a in answers)}")
+            if info_lines:
+                human_content += "\n\nAdditional context:\n" + "\n".join(info_lines)
 
         messages: list[BaseMessage] = [
             SystemMessage(content=system_prompt),
             *self._normalize_history(conversation_history),
-            HumanMessage(content=f"Subject: {subject}\nQuestion: {description}"),
+            HumanMessage(content=human_content),
         ]
 
         return (

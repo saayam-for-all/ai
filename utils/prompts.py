@@ -259,7 +259,7 @@ Address the user's specific need from {description}. Use {location} context. Pro
 }
 
 
-def get_prompt(category: str, subject: str, description: str, location: str = "", gender: str = "", age: str = "") -> str:
+def get_prompt(category: str, subject: str, description: str, location: str = "", gender: str = "", age: str = "", additional_info: list[dict] | None = None) -> str:
     """
     Get the formatted prompt for a category with all context variables filled in.
     
@@ -270,6 +270,7 @@ def get_prompt(category: str, subject: str, description: str, location: str = ""
         location: User's location (optional, empty string if not provided)
         gender: User's gender (optional, empty string if not provided)
         age: User's age (optional, empty string if not provided)
+        additional_info: Extra Q&A fields from the request (optional)
         
     Returns:
         Formatted prompt string ready for LLM
@@ -323,10 +324,20 @@ def get_prompt(category: str, subject: str, description: str, location: str = ""
         description=description
     )
     
+    if additional_info:
+        info_lines = []
+        for item in additional_info:
+            q = item.get("question", "")
+            answers = item.get("answers", [])
+            if q and answers:
+                info_lines.append(f"- {q}: {', '.join(str(a) for a in answers)}")
+        if info_lines:
+            formatted_prompt += "\n\nADDITIONAL REQUEST DETAILS:\n" + "\n".join(info_lines)
+
     return formatted_prompt
 
 
-def get_conversational_prompt(category: str, subject: str, location: str = "", gender: str = "", age: str = "") -> str:
+def get_conversational_prompt(category: str, subject: str, location: str = "", gender: str = "", age: str = "", additional_info: list[dict] | None = None) -> str:
     """
     Get a conversational system prompt for chat-based interactions with context maintenance.
     This prompt is optimized for maintaining conversation context across multiple turns.
@@ -337,6 +348,7 @@ def get_conversational_prompt(category: str, subject: str, location: str = "", g
         location: User's location (optional, empty string if not provided)
         gender: User's gender (optional, empty string if not provided)
         age: User's age (optional, empty string if not provided)
+        additional_info: Extra Q&A fields from the request (optional)
         
     Returns:
         Formatted system prompt string for conversational LLM
@@ -417,6 +429,16 @@ CONVERSATION CONTEXT:
 - If the user asks about something mentioned earlier, refer back to that context
 - Build upon previous information rather than starting from scratch each time"""
     
+    if additional_info:
+        info_lines = []
+        for item in additional_info:
+            q = item.get("question", "")
+            answers = item.get("answers", [])
+            if q and answers:
+                info_lines.append(f"- {q}: {', '.join(str(a) for a in answers)}")
+        if info_lines:
+            conversational_context += "\n\nADDITIONAL REQUEST DETAILS:\n" + "\n".join(info_lines)
+
     return formatted_prompt + conversational_context
 
 

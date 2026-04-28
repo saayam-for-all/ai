@@ -36,6 +36,7 @@ def lambda_handler(event, context):
         subject = (data.get("req_subj") or "").strip()
         description = (data.get("req_desc") or "").strip()
         location = data.get("req_loc")
+        additional_info = data.get("additional_info") or []
 
         if not description:
             return _response(400, {"error": "description missing (req_desc empty)"})
@@ -50,6 +51,7 @@ def lambda_handler(event, context):
                 subject=subject,
                 description=description,
                 location=location,
+                additional_info=additional_info,
                 conversation_history=conversation_history,
             )
             if not answer:
