@@ -11,4 +11,5 @@ google-generativeai
 openai
 groq
 tiktoken
-psycopg2 
+psycopg2
+mangum
