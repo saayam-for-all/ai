@@ -12,8 +12,8 @@ def generate_ai_answer(
     location: str | None = None,
     gender: str | None = None,
     age: str | None = None,
-    additional_info: list[dict] | None = None,
     conversation_history: list[dict[str, str]] | None = None,
+    additional_info: list[dict] | None = None,
 ) -> str:
     """Legacy function wrapper for backward compatibility."""
     service = GroqAnswerGenerationService()
@@ -24,6 +24,6 @@ def generate_ai_answer(
         location=location,
         gender=gender,
         age=age,
-        additional_info=additional_info,
         conversation_history=conversation_history,
+        additional_info=additional_info,
     )
