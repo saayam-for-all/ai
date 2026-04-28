@@ -60,7 +60,7 @@ Phase 2 — Fuzzy Search (DB team: pg_trgm)
 {
   "success": true,
   "message": "Search completed",
-  "query": "Arup",
+  "query": "Arun",
   "auto_navigate": false,
   "target": null,
   "results": []
