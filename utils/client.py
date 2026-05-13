@@ -1,19 +1,47 @@
-import os
-from dotenv import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_groq import ChatGroq
 
-# Load .env only if it exists (primarily for local testing)
-load_dotenv()
+import boto3
+from botocore.exceptions import BotoCoreError, ClientError
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+GROQ_PARAM = "/dev/saayam/GenAI/groq/key"
+GEMINI_PARAM = "/dev/saayam/GenAI/gemini/key"
+
+GROQ_API_KEY = None
+GEMINI_API_KEY = None
+
+# Fetching keys from parameter store
+try:
+    ssm = boto3.client("ssm")
+    response = ssm.get_parameters(
+        Names=[GROQ_PARAM, GEMINI_PARAM],
+        WithDecryption=True
+    )
+
+    params = {p["Name"]: p["Value"] for p in response.get("Parameters", [])}
+
+    missing = [n for n in [GROQ_PARAM, GEMINI_PARAM] if n not in params]
+    if missing:
+        logger.warning("INIT: Parameters not found in SSM: %s", missing)
+
+    GROQ_API_KEY = params.get(GROQ_PARAM)
+    GEMINI_API_KEY = params.get(GEMINI_PARAM)
+
+except (BotoCoreError, ClientError) as e:
+    logger.error("INIT: Failed to fetch from Parameter Store: %s", str(e))
+
+except Exception as e:
+    logger.exception("INIT: Unexpected error fetching from Parameter Store: %s", str(e))
 
 # Model config (constants)
 GROQ_MODEL = "llama-3.1-8b-instant"
 GROQ_TEMPERATURE = 0.7
 GEMINI_MODEL = "gemini-2.5-flash"
 GEMINI_TEMPERATURE = 0.7
-
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
 
 # --- BOOTSTRAP LOGGING ---
 print(f"INIT LOG: Groq Key Found: {bool(GROQ_API_KEY)}")
