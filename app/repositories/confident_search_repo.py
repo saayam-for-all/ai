@@ -15,6 +15,7 @@ Per the MOM:
 """
 
 import re
+from typing import Optional
 from sqlalchemy import func
 from app.extensions import db
 from app.models.user import User
@@ -84,7 +85,7 @@ def _help_request_is_authorized(req_row: HelpRequest, current_user) -> bool:
 # Public interface
 # ---------------------------------------------------------------------------
 
-def confident_search(query: str, current_user) -> dict | None:
+def confident_search(query: str, current_user) -> Optional[dict]:
     """
     Attempt an exact-ID lookup across all relevant entities.
 

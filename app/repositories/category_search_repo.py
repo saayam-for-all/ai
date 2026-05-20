@@ -1,3 +1,6 @@
-def search_categories(query: str, current_user, per_entity_limit: int = 10) -> list[dict]:
+from typing import List
+
+
+def search_categories(query: str, current_user, per_entity_limit: int = 10) -> List[dict]:
     # Fuzzy search — DB team (pg_trgm) implementation pending
     return []

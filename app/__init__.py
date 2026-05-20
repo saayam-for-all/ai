@@ -12,6 +12,6 @@ def create_app():
 
     from app.models import user, help_request, organization, category, company  # noqa: F401
 
-    app.register_blueprint(search_bp)
+    app.register_blueprint(search_bp, url_prefix=app.config.get("API_URL_PREFIX", "/api"))
 
     return app

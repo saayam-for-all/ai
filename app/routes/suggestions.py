@@ -1,25 +1,25 @@
 """
-app/routes/search.py
+app/routes/suggestions.py
 """
 
 from flask import Blueprint, request, jsonify
 from app.auth.current_user import get_current_user
-from app.services.universal_search_service import UniversalSearchService
+from app.services.suggestion_service import SuggestionService
 
-# The API prefix is configured at app startup so the route can be mounted
-# to different gateway stages or deployment paths without changing code.
-search_bp = Blueprint("search", __name__)
+# The API prefix is configured at app startup so this route can be mounted
+# under whatever gateway stage path is required.
+suggestions_bp = Blueprint("suggestions", __name__)
 
 
-@search_bp.route("/search", methods=["GET", "POST"])
-def universal_search():
+@suggestions_bp.route("/suggestions", methods=["GET", "POST"])
+def suggestions():
     """
-    POST /<api-prefix>/search
+    GET /<api-prefix>/suggestions?q=<query>&limit=<int>
+    POST /<api-prefix>/suggestions
 
     JSON payload:
     {
         "q": "<query>",
-        "page": <int>,
         "limit": <int>
     }
 
@@ -28,11 +28,8 @@ def universal_search():
         "success": bool,
         "message": str,
         "query": str,
-        "page": int,
         "limit": int,
         "total": int,
-        "auto_navigate": bool,   # true = UI should redirect to target directly
-        "target": dict | null,   # the single destination when auto_navigate=true
         "results": [...]
     }
     """
@@ -43,26 +40,16 @@ def universal_search():
                 "success": False,
                 "message": "Invalid or missing JSON body",
                 "query": "",
-                "page": 1,
                 "limit": 10,
                 "total": 0,
-                "auto_navigate": False,
-                "target": None,
                 "results": [],
             }), 400
 
         query = str(data.get("q", "")).strip()
-        page = data.get("page", 1)
         limit = data.get("limit", 10)
     else:
         query = request.args.get("q", "").strip()
-        page = request.args.get("page", 1, type=int)
         limit = request.args.get("limit", 10, type=int)
-
-    try:
-        page = int(page)
-    except (TypeError, ValueError):
-        page = 1
 
     try:
         limit = int(limit)
@@ -70,11 +57,9 @@ def universal_search():
         limit = 10
 
     current_user = get_current_user()
-
-    service = UniversalSearchService()
-    response = service.search(
+    service = SuggestionService()
+    response = service.suggest(
         query=query,
-        page=page,
         limit=limit,
         current_user=current_user,
     )

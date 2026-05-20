@@ -1,3 +1,4 @@
+from typing import List
 from sqlalchemy import or_, func
 from app.extensions import db
 from app.utils.search_utils import normalize_query, build_contains_pattern, score_text_match
@@ -6,7 +7,7 @@ from app.utils.search_utils import normalize_query, build_contains_pattern, scor
 # from app.models.company import Company
 
 
-def search_companies(query: str, current_user, per_entity_limit: int = 10) -> list[dict]:
+def search_companies(query: str, current_user, per_entity_limit: int = 10) -> List[dict]:
     """
     Keep safe for now if Company is not finalized in the data model.
     """

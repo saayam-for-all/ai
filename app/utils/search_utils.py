@@ -1,4 +1,5 @@
 import re
+from typing import List, Optional
 
 
 def normalize_query(query: str) -> str:
@@ -6,7 +7,7 @@ def normalize_query(query: str) -> str:
     return (query or "").strip().lower()
 
 
-def tokenize_query(query: str) -> list[str]:
+def tokenize_query(query: str) -> List[str]:
     """
     Split the query into simple lowercase tokens.
     Example: 'Dry Cleaning' -> ['dry', 'cleaning']
@@ -27,10 +28,10 @@ def build_contains_pattern(query: str) -> str:
 
 def score_text_match(
     query: str,
-    entity_id: str | None = None,
-    primary_text: str | None = None,
-    secondary_text: str | None = None,
-    tags: list[str] | None = None,
+    entity_id: Optional[str] = None,
+    primary_text: Optional[str] = None,
+    secondary_text: Optional[str] = None,
+    tags: Optional[List[str]] = None,
 ) -> int:
     """
     Simple deterministic scoring for MVP.
@@ -73,7 +74,7 @@ def score_text_match(
     return score
 
 
-def should_auto_navigate(results: list[dict]) -> bool:
+def should_auto_navigate(results: List[dict]) -> bool:
     """
     Safe MVP rule:
     auto-navigate only if there is exactly one result

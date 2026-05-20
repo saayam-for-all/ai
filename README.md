@@ -28,9 +28,9 @@ Phase 2 — Fuzzy Search (DB team: pg_trgm)
 
 ## API
 
-### `GET /api/search?q=<query>`
+### `POST /api/search`
 
-**Query Parameters:**
+**JSON Body:**
 - `q` — search query (2–200 characters, required)
 - `page` — page number (default: 1)
 - `limit` — results per page (default: 10, max: 20)
@@ -67,13 +67,50 @@ Phase 2 — Fuzzy Search (DB team: pg_trgm)
 }
 ```
 
+### `GET /api/suggestions?q=<query>&limit=<int>`
+
+**Query Parameters:**
+- `q` — partial term to autocomplete (required)
+- `limit` — maximum suggestions to return (default: 10, max: 20)
+
+**Response — Suggestions:**
+```json
+{
+  "success": true,
+  "message": "Suggestions fetched",
+  "query": "SID-00",
+  "limit": 10,
+  "total": 3,
+  "results": [
+    {
+      "entity_type": "user",
+      "entity_id": "SID-00-000-000-058",
+      "title": "Shenghan Cheng",
+      "subtitle": "Email: abcd@b.com",
+      "url": "/users/SID-00-000-000-058",
+      "score": 100,
+      "match_type": "id_prefix"
+    },
+    {
+      "entity_type": "help_request",
+      "entity_id": "REQ-00-000-000-0018",
+      "title": "Need urgent help with prescription pickup",
+      "subtitle": "Help Request",
+      "url": "/help-requests/REQ-00-000-000-0018",
+      "score": 95,
+      "match_type": "id_prefix"
+    }
+  ]
+}
+```
+
 ## Setup
 
 ### 1. Clone and create virtual environment
 ```bash
 git clone https://github.com/saayam-for-all/ai.git
 cd ai
-python -m venv venv
+python3 -m venv venv
 venv\Scripts\activate      # Windows
 source venv/bin/activate   # Mac/Linux
 ```
@@ -131,7 +168,7 @@ ai/
 │   ├── services/universal_search_service.py # Orchestrates Phase 1 + Phase 2
 │   └── utils/search_utils.py                # Helpers
 ├── lambda_handler.py                        # AWS Lambda entry point
-├── config.py                                # Reads DATABASE_URL from env
+├── config.py                                # Loads database URL from env or Secrets Manager
 ├── requirements.txt
 └── test_confident_search.py                 # Integration tests
 ```
@@ -139,7 +176,7 @@ ai/
 ## AWS Lambda Deployment
 
 **Handler:** `lambda_handler.handler`
-**Runtime:** Python 3.13
+**Runtime:** Python 3.9
 **Required environment variable:**
 ```
 DATABASE_URL = postgresql+psycopg2://<user>:<password>@<host>:5432/virginia_dev_saayam_rdbms?sslmode=require
@@ -153,3 +190,5 @@ DATABASE_URL = postgresql+psycopg2://<user>:<password>@<host>:5432/virginia_dev_
 | DB      | Fuzzy search repos (pg_trgm) — stubs ready for them |
 | DevOps  | Lambda deployment + API Gateway URL                 |
 | Frontend| Calls `/api/search?q=<query>`, reads `auto_navigate`|
+
+> Authentication is expected to come from API Gateway. The app reads `X-Api-User-Id` and `X-Api-User-Role` by default, or the headers configured via `AUTH_USER_ID_HEADER` and `AUTH_USER_ROLE_HEADER`.

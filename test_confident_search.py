@@ -47,6 +47,7 @@ Prerequisites
 
 import os
 import sys
+from typing import Optional
 
 # ---------------------------------------------------------------------------
 # SEED DATA – replace with real IDs from your DB before running
@@ -69,8 +70,8 @@ from dataclasses import dataclass
 class MockUser:
     id: int
     role: str
-    organization_id: int | None = None
-    admin_scope_id: int | None = None
+    organization_id: Optional[int] = None
+    admin_scope_id: Optional[int] = None
 
 
 ROLES = {

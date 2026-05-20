@@ -1,5 +1,6 @@
 import os
 from dataclasses import dataclass
+from typing import Optional
 from flask import g, request
 
 
@@ -7,8 +8,8 @@ from flask import g, request
 class CurrentUser:
     id: str
     role: str
-    organization_id: int | None = None
-    admin_scope_id: int | None = None
+    organization_id: Optional[int] = None
+    admin_scope_id: Optional[int] = None
 
 
 def get_current_user() -> CurrentUser:
@@ -24,6 +25,14 @@ def get_current_user() -> CurrentUser:
             organization_id=getattr(user, "organization_id", None),
             admin_scope_id=getattr(user, "admin_scope_id", None),
         )
+
+    user_id_header = os.getenv("AUTH_USER_ID_HEADER", "X-Api-User-Id")
+    user_role_header = os.getenv("AUTH_USER_ROLE_HEADER", "X-Api-User-Role")
+    user_id = request.headers.get(user_id_header)
+    user_role = request.headers.get(user_role_header)
+
+    if user_id and user_role:
+        return CurrentUser(id=user_id, role=user_role)
 
     if os.getenv("FLASK_ENV") == "development":
         return CurrentUser(
