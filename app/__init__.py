@@ -1,6 +1,7 @@
 from flask import Flask
 from app.extensions import db
 from app.routes.search import search_bp
+from app.routes.suggestions import suggestions_bp
 
 
 def create_app():
@@ -12,6 +13,8 @@ def create_app():
 
     from app.models import user, help_request, organization, category, company  # noqa: F401
 
-    app.register_blueprint(search_bp, url_prefix=app.config.get("API_URL_PREFIX", "/api"))
+    api_prefix = app.config.get("API_URL_PREFIX", "/api")
+    app.register_blueprint(search_bp, url_prefix=api_prefix)
+    app.register_blueprint(suggestions_bp, url_prefix=api_prefix)
 
     return app

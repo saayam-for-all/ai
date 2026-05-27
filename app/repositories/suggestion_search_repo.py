@@ -4,6 +4,7 @@ app/repositories/suggestion_search_repo.py
 
 from typing import List
 from sqlalchemy import or_, func
+from sqlalchemy.exc import ProgrammingError
 from app.extensions import db
 from app.models.user import User
 from app.models.help_request import HelpRequest
@@ -208,17 +209,20 @@ def _search_companies(query: str, current_user, per_entity_limit: int) -> List[d
     q_prefix = _build_prefix(query)
     q_contains = _build_contains(query)
 
-    matched_rows = (
-        db.session.query(Company)
-        .filter(
-            or_(
-                func.lower(Company.company_id).like(q_prefix),
-                func.lower(Company.name).like(q_contains),
+    try:
+        matched_rows = (
+            db.session.query(Company)
+            .filter(
+                or_(
+                    func.lower(Company.company_id).like(q_prefix),
+                    func.lower(Company.name).like(q_contains),
+                )
             )
+            .limit(per_entity_limit)
+            .all()
         )
-        .limit(per_entity_limit)
-        .all()
-    )
+    except ProgrammingError:
+        return []
 
     results = []
     for row in matched_rows:
