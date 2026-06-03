@@ -12,6 +12,7 @@ import time
 import tiktoken
 import logging
 import transformers
+import joblib
 
 # Suppress transformers logging to reduce clutter
 transformers.logging.set_verbosity_error()
@@ -73,7 +74,8 @@ categories = [
 ]
 
 # Zero-shot classification pipeline (unchanged)
-classifier = pipeline("zero-shot-classification", model="facebook/bart-large-mnli")
+#classifier = pipeline("zero-shot-classification", model="facebook/bart-large-mnli")
+category_model = joblib.load("category_model.pkl")
 
 # Initialize tokenizer for token counting (for OpenAI models)
 openai_tokenizer = tiktoken.encoding_for_model("gpt-3.5-turbo")
@@ -91,10 +93,27 @@ def predict_categories():
     description = data.get("description")
     if not subject or not description:
         return jsonify({"error": "Subject and description required"}), 400
-    prompt = f"{subject}. {description}"
+    # prompt = f"{subject}. {description}"
+    
+    # try:
+    #     result = classifier(prompt, categories)
+    #     return jsonify({"predicted_categories": result['labels'][:3]})
+    # except Exception as e:
+    #     return jsonify({"error": str(e)}), 500
+    text = f"{subject}. {description}"
     try:
-        result = classifier(prompt, categories)
-        return jsonify({"predicted_categories": result['labels'][:3]})
+        predicted_category = category_model.predict([text])[0]
+
+        probabilities = category_model.predict_proba([text])[0]
+        classes = category_model.classes_
+
+        top_indices = probabilities.argsort()[-3:][::-1]
+        top_categories = [classes[i] for i in top_indices]
+
+        return jsonify({
+            "predicted_categories": top_categories
+        })
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
