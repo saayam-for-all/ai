@@ -1,7 +1,7 @@
 import json
 from utils.categories_with_description import TAXONOMY
 from utils.client import client, _use_groq, _gemini_client
-from utils.categories import (
+from utils.predict_category_list import (
     help_categories,
     category_name_to_number,
     get_top_level_categories,
