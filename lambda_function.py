@@ -1,26 +1,28 @@
 import json
 from utils.subject_generator import generate_subject_from_description
 from services.classification_service import predict_categories
+from utils.categories import help_categories
+from utils.generate_answer_service import generate_ai_answer
+from utils.request_db import get_request_full_details
+
+
+def _parse_event_body(event: dict) -> dict:
+    raw_body = event.get("body")
+    if isinstance(raw_body, str):
+        return json.loads(raw_body)
+    if isinstance(raw_body, dict):
+        return raw_body
+    return event
 
 
 def lambda_handler(event, context):
     """Main classification handler"""
     try:
-        raw_body = event.get("body")
-        if raw_body is None:
-            body = event
-        elif isinstance(raw_body, str):
-            body = json.loads(raw_body)
-        else:
-            body = raw_body
-
-        if isinstance(body, str):
-            body = json.loads(body)
-
+        body = _parse_event_body(event)
         description = body.get("description")
 
         if not description:
-            return _response(400, {"error": "Description is required"})
+            return _response(400, {"error": "description missing (req_desc empty)"})
 
         ranked_categories, token_usage = predict_categories(description)
 
@@ -30,19 +32,60 @@ def lambda_handler(event, context):
         return _response(500, {"error": str(e)})
 
 
+def generate_answer_handler(event, context):
+    """Answer generation handler"""
+    try:
+        body = _parse_event_body(event)
+        user_id = body.get("user_id")
+        req_id = body.get("req_id") or body.get("request_id")
+        conversation_history = body.get("conversation_history")
+
+        if not user_id or not req_id:
+            return _response(
+                400,
+                {"error": "user_id and req_id (or request_id) are required"},
+            )
+
+        data = get_request_full_details(str(user_id), str(req_id))
+        if err := data.get("error"):
+            status = 404 if "No data found" in str(err) else 502
+            return _response(status, {"error": err})
+
+        category_id = data.get("req_cat_id")
+        subject = (data.get("req_subj") or "").strip()
+        description = (data.get("req_desc") or "").strip()
+        location = data.get("req_loc")
+
+        if not description:
+            return _response(400, {"error": "description missing (req_desc empty)"})
+        if not subject:
+            return _response(400, {"error": "subject missing (req_subj empty)"})
+
+        category = help_categories.get(str(category_id)) or "General"
+
+        try:
+            answer = generate_ai_answer(
+                category=category,
+                subject=subject,
+                description=description,
+                location=location,
+                conversation_history=conversation_history,
+            )
+            if not answer:
+                raise ValueError("Error: Empty response")
+        except Exception:
+            answer = "Error: Failed to generate answer"
+
+        return _response(200, {"answer": answer})
+
+    except Exception as e:
+        return _response(500, {"error": str(e)})
+
+
 def generate_subject_handler(event, context):
     """Subject generation handler"""
-    print("DEBUG EVENT:", json.dumps(event))
-
     try:
-        raw_body = event.get("body")
-        if raw_body is None:
-            body = event
-        elif isinstance(raw_body, str):
-            body = json.loads(raw_body)
-        else:
-            body = raw_body
-
+        body = _parse_event_body(event)
         description = body.get("description")
         max_length = 70
 
@@ -65,11 +108,12 @@ def generate_subject_handler(event, context):
 
 
 def _response(status_code, body):
+    payload = json.dumps(body) if isinstance(body, dict) else body
     return {
         "statusCode": status_code,
         "headers": {
             "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*"
+            "Access-Control-Allow-Origin": "*",
         },
-        "body": body
+        "body": body,
     }
