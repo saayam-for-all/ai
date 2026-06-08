@@ -14,7 +14,7 @@ def _parse_event_body(event: dict) -> dict:
     return event
 
 
-def lambda_handler(event, context):
+def generate_answer_lambda_handler(event, context):
     try:
         body = _parse_event_body(event)
         user_id = body.get("user_id")
