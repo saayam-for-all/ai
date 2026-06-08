@@ -4,8 +4,6 @@ on:
   push:
     branches:
       - dev
-      - generate-subject
-      - feature/ujjwal-generate-groq-gemini-answer
 
 jobs:
   deploy:

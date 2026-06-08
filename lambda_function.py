@@ -7,6 +7,7 @@ from utils.request_db import get_request_full_details
 
 
 def _parse_event_body(event: dict) -> dict:
+    """Parse event body from different input formats"""
     raw_body = event.get("body")
     if isinstance(raw_body, str):
         return json.loads(raw_body)
@@ -16,26 +17,76 @@ def _parse_event_body(event: dict) -> dict:
 
 
 def lambda_handler(event, context):
-    """Main classification handler"""
+    """
+    Unified Lambda handler that routes requests to appropriate service.
+    Supports: predict_category, generate_subject, generate_answer
+    """
     try:
         body = _parse_event_body(event)
-        description = body.get("description")
+        service = body.get("service", "predict_category").lower().strip()
 
-        if not description:
-            return _response(400, {"error": "description missing (req_desc empty)"})
-
-        ranked_categories, token_usage = predict_categories(description)
-
-        return _response(200, {"categories": ranked_categories, "token_usage": token_usage})
+        # Route to appropriate handler
+        if service == "predict_category":
+            return _handle_predict_category(body, context)
+        elif service == "generate_subject":
+            return _handle_generate_subject(body, context)
+        elif service == "generate_answer":
+            return _handle_generate_answer(body, context)
+        else:
+            return _response(400, {"error": f"Unknown service: {service}. Supported: predict_category, generate_subject, generate_answer"})
 
     except Exception as e:
         return _response(500, {"error": str(e)})
 
 
-def generate_answer_handler(event, context):
-    """Answer generation handler"""
+def _handle_predict_category(body, context):
+    """Handle category prediction service"""
     try:
-        body = _parse_event_body(event)
+        description = body.get("description")
+
+        if not description:
+            return _response(400, {"error": "description is required"})
+
+        ranked_categories, token_usage = predict_categories(description)
+
+        return _response(200, {
+            "service": "predict_category",
+            "categories": ranked_categories,
+            "token_usage": token_usage
+        })
+
+    except Exception as e:
+        return _response(500, {"error": f"Category prediction failed: {str(e)}"})
+
+
+def _handle_generate_subject(body, context):
+    """Handle subject generation service"""
+    try:
+        description = body.get("description")
+        max_length = body.get("max_length", 70)
+
+        if not description:
+            return _response(400, {"error": "description is required"})
+
+        subject = generate_subject_from_description(
+            description=description,
+            max_length=max_length
+        )
+
+        return _response(200, {
+            "service": "generate_subject",
+            "subject": subject,
+            "max_length": max_length,
+            "description_length": len(description)
+        })
+
+    except Exception as e:
+        return _response(500, {"error": f"Subject generation failed: {str(e)}"})
+
+
+def _handle_generate_answer(body, context):
+    """Handle answer generation service"""
+    try:
         user_id = body.get("user_id")
         req_id = body.get("req_id") or body.get("request_id")
         conversation_history = body.get("conversation_history")
@@ -72,48 +123,29 @@ def generate_answer_handler(event, context):
                 conversation_history=conversation_history,
             )
             if not answer:
-                raise ValueError("Error: Empty response")
-        except Exception:
-            answer = "Error: Failed to generate answer"
-
-        return _response(200, {"answer": answer})
-
-    except Exception as e:
-        return _response(500, {"error": str(e)})
-
-
-def generate_subject_handler(event, context):
-    """Subject generation handler"""
-    try:
-        body = _parse_event_body(event)
-        description = body.get("description")
-        max_length = 70
-
-        if not description:
-            return _response(400, {"error": "Description is required"})
-
-        subject = generate_subject_from_description(
-            description=description,
-            max_length=max_length
-        )
+                raise ValueError("Empty response")
+        except Exception as e:
+            answer = f"Error: Failed to generate answer - {str(e)}"
 
         return _response(200, {
-            "subject": subject,
-            "max_length": max_length,
-            "description_length": len(description)
+            "service": "generate_answer",
+            "answer": answer,
+            "category": category,
+            "user_id": user_id,
+            "request_id": req_id
         })
 
     except Exception as e:
-        return _response(500, {"error": str(e)})
+        return _response(500, {"error": f"Answer generation failed: {str(e)}"})
 
 
 def _response(status_code, body):
-    payload = json.dumps(body) if isinstance(body, dict) else body
+    """Format Lambda response"""
     return {
         "statusCode": status_code,
         "headers": {
             "Content-Type": "application/json",
             "Access-Control-Allow-Origin": "*",
         },
-        "body": body,
+        "body": json.dumps(body) if isinstance(body, dict) else body,
     }
