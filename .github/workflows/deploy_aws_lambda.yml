@@ -3,7 +3,7 @@ name: Deploy to AWS Lambda
 on:
   push:
     branches:
-      - predict-endpoint-v2
+      - generate-subject
 
 jobs:
   deploy:
@@ -20,23 +20,21 @@ jobs:
 
       - name: Install dependencies and prepare package
         run: |
+          python -m pip install --upgrade pip
           rm -rf package deployment.zip
           mkdir -p package
-
-          python -m pip install --upgrade pip
-
           pip install \
             --platform manylinux2014_x86_64 \
-            --target package \
             --implementation cp \
-            --python-version 3.11 \
-            --abi cp311 \
+            --python-version 311 \
             --only-binary=:all: \
-            --upgrade \
-            -r requirements.txt
+            -r requirements.txt \
+            -t package
 
+          # Copy all .py files
           cp -r *.py package/
-          cp -r services package/services
+
+          # Copy utils folder
           cp -r utils package/utils
 
       - name: Zip deployment package
@@ -47,12 +45,12 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.PRED_CAT_AWS_ACCESS_KEY }}
-          aws-secret-access-key: ${{ secrets.PRED_CAT_AWS_SECRET_KEY }}
+          aws-access-key-id: ${{ secrets.GEN_SUB_AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.GEN_SUB_AWS_SECRET_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Deploy to AWS Lambda
         run: |
           aws lambda update-function-code \
-            --function-name ${{ secrets.PRED_CAT_AWS_LAMBDA_ARN }} \
+            --function-name ${{ secrets.GEN_SUB_AWS_LAMBDA_ARN }} \
             --zip-file fileb://deployment.zip
