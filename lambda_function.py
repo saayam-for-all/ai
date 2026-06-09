@@ -4,7 +4,12 @@ from services.classification_service import predict_categories
 from utils.categories import help_categories
 from utils.generate_answer_service import generate_ai_answer
 from utils.request_db import get_request_full_details
+from services.emergency import get_emergency_services
+from utils.search_orgs import find_organizations
 
+# -------------------------------------------------------------
+# Common Utility Helpers
+# -------------------------------------------------------------
 
 def _parse_event_body(event: dict) -> dict:
     """Parse event body from different input formats"""
@@ -16,88 +21,134 @@ def _parse_event_body(event: dict) -> dict:
     return event
 
 
-def lambda_handler(event, context):
-    """
-    Unified Lambda handler that routes requests to appropriate service.
-    Supports: predict_category, generate_subject, generate_answer, emergency_contacts, search_orgs
-    """
+def get_client_ip(event):
+    """Extract client IP from request event headers/context"""
     try:
-        # Check if service is specified in query parameters or body
-        q_params = event.get("queryStringParameters") or {}
-        service = q_params.get("service")
+        return event["requestContext"]["http"]["sourceIp"]
+    except (KeyError, TypeError):
+        pass
+    try:
+        return event["requestContext"]["identity"]["sourceIp"]
+    except (KeyError, TypeError):
+        pass
+    headers = event.get("headers") or {}
+    xff = headers.get("X-Forwarded-For") or headers.get("x-forwarded-for")
+    if xff:
+        return xff.split(",")[0].strip()
+    return None
 
-        body = _parse_event_body(event)
-        if not service:
-            service = body.get("service", "predict_category") if isinstance(body, dict) else "predict_category"
 
-        service = str(service).lower().strip()
+def _parse_params(event):
+    """Combine queryStringParameters and body parameter values"""
+    params = dict(event.get("queryStringParameters") or {})
+    body = event.get("body")
+    if body and str(body).strip():
+        try:
+            params.update(json.loads(body))
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return params
 
-        # Route to appropriate handler
-        if service == "predict_category":
-            return _handle_predict_category(body, context)
-        elif service == "generate_subject":
-            return _handle_generate_subject(body, context)
-        elif service == "generate_answer":
-            return _handle_generate_answer(body, context)
-        elif service == "emergency_contacts":
-            return _handle_emergency_contacts(event, body, context)
-        elif service in ["search_orgs", "search_org", "find_nonprofits"]:
-            return _handle_search_orgs(body, context)
+
+def _response(status_code, body):
+    """Format Lambda response as API Gateway compatible JSON payload"""
+    return {
+        "statusCode": status_code,
+        "headers": {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+        },
+        "body": json.dumps(body, ensure_ascii=False) if isinstance(body, dict) else body,
+    }
+
+
+# -------------------------------------------------------------
+# Dedicated AWS Lambda Entry Point Handlers
+# -------------------------------------------------------------
+
+# 1. Predict Category
+def predict_category_handler(event, context):
+    """AWS Lambda entry point for predict_category service"""
+    try:
+        raw_body = event.get("body")
+        if raw_body is None:
+            # Scenario: No 'body' key exists at all. The event IS the data.
+            body = event
+        elif isinstance(raw_body, str):
+            # Scenario: 'body' exists and is a stringified JSON
+            body = json.loads(raw_body)
         else:
-            return _response(400, {"error": f"Unknown service: {service}. Supported: predict_category, generate_subject, generate_answer, emergency_contacts, search_orgs"})
+            # Scenario: 'body' exists and is already a dictionary
+            body = raw_body
+
+        # Handle API Gateway variations
+        if isinstance(body, str):
+            body = json.loads(body)
+
+        description = body.get("description")
+
+        if not description:
+            return _response(400, {"error": "Description is required"})
+
+        ranked_categories, token_usage = predict_categories(description)
+
+        # Return ranked categories with numbers
+        return _response(200, {"categories": ranked_categories, "token_usage": token_usage})
 
     except Exception as e:
         return _response(500, {"error": str(e)})
 
 
-def _handle_predict_category(body, context):
-    """Handle category prediction service"""
+# 2. More Organizations (Search Orgs)
+def search_orgs_handler(event, context):
+    """AWS Lambda entry point for search_orgs service"""
     try:
+        raw_body = event.get("body")
+        if isinstance(raw_body, str):
+            # API Gateway -> body is a JSON string
+            body = json.loads(raw_body)
+        else:
+            # Direct invoke / raw JSON -> event itself is the body
+            body = event
+
+        subject = body.get("subject")
         description = body.get("description")
+        location = body.get("location")
 
-        if not description:
-            return _response(400, {"error": "description is required"})
+        if not description or not description.strip():
+            return _response(400, {"error": "Description is required"})
+        if not subject or not subject.strip():
+            subject = ""
+        if not location or not location.strip():
+            location = "United States"
+            print("No location provided, defaulting to United States")
 
-        ranked_categories, token_usage = predict_categories(description)
-
-        return _response(200, {
-            "service": "predict_category",
-            "categories": ranked_categories,
-            "token_usage": token_usage
-        })
-
-    except Exception as e:
-        return _response(500, {"error": f"Category prediction failed: {str(e)}"})
-
-
-def _handle_generate_subject(body, context):
-    """Handle subject generation service"""
-    try:
-        description = body.get("description")
-        max_length = body.get("max_length", 70)
-
-        if not description:
-            return _response(400, {"error": "description is required"})
-
-        subject = generate_subject_from_description(
-            description=description,
-            max_length=max_length
+        orgs = find_organizations(
+            subject=subject, description=description, location=location
         )
 
-        return _response(200, {
-            "service": "generate_subject",
-            "subject": subject,
-            "max_length": max_length,
-            "description_length": len(description)
-        })
-
+        return _response(200, orgs)
     except Exception as e:
-        return _response(500, {"error": f"Subject generation failed: {str(e)}"})
+        return _response(500, {"error": str(e)})
 
 
-def _handle_generate_answer(body, context):
-    """Handle answer generation service"""
+# 3. Emergency Contacts
+def emergency_contacts_handler(event, context):
+    """AWS Lambda entry point for emergency_contacts service"""
     try:
+        client_ip = get_client_ip(event)
+        params = _parse_params(event)
+        result = get_emergency_services(params, client_ip)
+        return _response(result["status"], result["body"])
+    except Exception as e:
+        return _response(500, {"error": str(e)})
+
+
+# 4. Generate Answer
+def generate_answer_handler(event, context):
+    """AWS Lambda entry point for generate_answer service"""
+    try:
+        body = _parse_event_body(event)
         user_id = body.get("user_id")
         req_id = body.get("req_id") or body.get("request_id")
         conversation_history = body.get("conversation_history")
@@ -134,97 +185,88 @@ def _handle_generate_answer(body, context):
                 conversation_history=conversation_history,
             )
             if not answer:
-                raise ValueError("Empty response")
-        except Exception as e:
-            answer = f"Error: Failed to generate answer - {str(e)}"
+                raise ValueError("Error: Empty response")
+        except Exception:
+            answer = "Error: Failed to generate answer"
+
+        return _response(200, {"answer": answer})
+
+    except Exception as e:
+        return _response(500, {"error": str(e)})
+
+
+# 5. Generate Subject
+def generate_subject_handler(event, context):
+    """AWS Lambda entry point for generate_subject service"""
+    print("DEBUG EVENT:", json.dumps(event))
+
+    try:
+        raw_body = event.get("body")
+        if raw_body is None:
+            # Scenario: No 'body' key exists at all. The event IS the data.
+            body = event
+        elif isinstance(raw_body, str):
+            # Scenario: 'body' exists and is a stringified JSON
+            body = json.loads(raw_body)
+        else:
+            # Scenario: 'body' exists and is already a dictionary
+            body = raw_body
+
+        description = body.get("description")
+        max_length = 70
+
+        # Validate description
+        if not description:
+            return _response(400, {"error": "Description is required"})
+
+        subject = generate_subject_from_description(
+            description=description,
+            max_length=max_length
+        )
 
         return _response(200, {
-            "service": "generate_answer",
-            "answer": answer,
-            "category": category,
-            "user_id": user_id,
-            "request_id": req_id
+            "subject": subject,
+            "max_length": max_length,
+            "description_length": len(description)
         })
 
     except Exception as e:
-        return _response(500, {"error": f"Answer generation failed: {str(e)}"})
+        return _response(500, {"error": str(e)})
 
 
-def _handle_emergency_contacts(event, body, context):
-    """Handle emergency contacts retrieval service"""
+# -------------------------------------------------------------
+# Unified Entry Point (Fallback routing)
+# -------------------------------------------------------------
+
+def lambda_handler(event, context):
+    """
+    Unified Lambda handler that routes requests to appropriate service.
+    Supports: predict_category, generate_subject, generate_answer, emergency_contacts, search_orgs
+    """
     try:
-        from services.emergency import get_emergency_services
+        # Check if service is specified in query parameters or body
+        q_params = event.get("queryStringParameters") or {}
+        service = q_params.get("service")
 
-        client_ip = _get_client_ip(event)
+        body = _parse_event_body(event)
+        if not service:
+            service = body.get("service", "predict_category") if isinstance(body, dict) else "predict_category"
 
-        # Combine queryStringParameters and body params
-        params = dict(event.get("queryStringParameters") or {})
-        if isinstance(body, dict):
-            # Exclude structural API Gateway event fields if body is the event itself
-            if body is event:
-                for key in ["lat", "lng", "zip", "city", "state", "country", "service", "language"]:
-                    if key in body:
-                        params[key] = body[key]
-            else:
-                params.update(body)
+        service = str(service).lower().strip()
 
-        result = get_emergency_services(params, client_ip)
-        return _response(result["status"], result["body"])
+        # Route to appropriate handler
+        if service == "predict_category":
+            return predict_category_handler(event, context)
+        elif service == "generate_subject":
+            return generate_subject_handler(event, context)
+        elif service == "generate_answer":
+            return generate_answer_handler(event, context)
+        elif service == "emergency_contacts":
+            return emergency_contacts_handler(event, context)
+        elif service in ["search_orgs", "search_org", "find_nonprofits"]:
+            return search_orgs_handler(event, context)
+        else:
+            return _response(400, {"error": f"Unknown service: {service}. Supported: predict_category, generate_subject, generate_answer, emergency_contacts, search_orgs"})
 
     except Exception as e:
-        return _response(500, {"error": f"Emergency contacts service failed: {str(e)}"})
-
-
-def _get_client_ip(event):
-    """Extract client IP from request event headers/context"""
-    try:
-        return event["requestContext"]["http"]["sourceIp"]
-    except (KeyError, TypeError):
-        pass
-    try:
-        return event["requestContext"]["identity"]["sourceIp"]
-    except (KeyError, TypeError):
-        pass
-    headers = event.get("headers") or {}
-    xff = headers.get("X-Forwarded-For") or headers.get("x-forwarded-for")
-    if xff:
-        return xff.split(",")[0].strip()
-    return None
-
-
-def _handle_search_orgs(body, context):
-    """Handle search organizations service"""
-    try:
-        from utils.search_orgs import find_organizations
-
-        subject = body.get("subject")
-        description = body.get("description")
-        location = body.get("location")
-
-        if not description or not description.strip():
-            return _response(400, {"error": "description is required"})
-        if not subject or not subject.strip():
-            subject = ""
-        if not location or not location.strip():
-            location = "United States"
-            print("No location provided, defaulting to United States")
-
-        orgs = find_organizations(
-            subject=subject, description=description, location=location
-        )
-
-        return _response(200, orgs)
-    except Exception as e:
-        return _response(500, {"error": f"Search organizations failed: {str(e)}"})
-
-
-def _response(status_code, body):
-    """Format Lambda response"""
-    return {
-        "statusCode": status_code,
-        "headers": {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*",
-        },
-        "body": json.dumps(body) if isinstance(body, dict) else body,
-    }
+        return _response(500, {"error": str(e)})

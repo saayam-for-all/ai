@@ -6,7 +6,8 @@ on:
       - dev
 
 jobs:
-  deploy:
+  build:
+    name: Build & Package
     runs-on: ubuntu-latest
 
     steps:
@@ -37,6 +38,72 @@ jobs:
           cd package
           zip -r ../deployment.zip .
 
+      - name: Upload zip artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-package
+          path: deployment.zip
+
+  deploy-predict-category:
+    name: Deploy Predict Category
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download zip artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: deployment-package
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.PRED_CAT_AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.PRED_CAT_AWS_SECRET_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Deploy to AWS Lambda
+        run: |
+          aws lambda update-function-code \
+            --function-name ${{ secrets.PRED_CAT_AWS_LAMBDA_ARN }} \
+            --zip-file fileb://deployment.zip
+          aws lambda wait function-updated \
+            --function-name ${{ secrets.PRED_CAT_AWS_LAMBDA_ARN }}
+
+  deploy-generate-subject:
+    name: Deploy Generate Subject
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download zip artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: deployment-package
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.GEN_SUB_AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.GEN_SUB_AWS_SECRET_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Deploy to AWS Lambda
+        run: |
+          aws lambda update-function-code \
+            --function-name ${{ secrets.GEN_SUB_AWS_LAMBDA_ARN }} \
+            --zip-file fileb://deployment.zip
+          aws lambda wait function-updated \
+            --function-name ${{ secrets.GEN_SUB_AWS_LAMBDA_ARN }}
+
+  deploy-generate-answer:
+    name: Deploy Generate Answer
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download zip artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: deployment-package
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -57,3 +124,53 @@ jobs:
           aws lambda update-function-configuration \
             --function-name ${{ secrets.GEN_ANS_AWS_LAMBDA_ARN }} \
             --timeout 120
+
+  deploy-emergency-contacts:
+    name: Deploy Emergency Contacts
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download zip artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: deployment-package
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.EMR_CON_AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.EMR_CON_AWS_SECRET_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Deploy to AWS Lambda
+        run: |
+          aws lambda update-function-code \
+            --function-name ${{ secrets.EMR_CON_AWS_LAMBDA_ARN }} \
+            --zip-file fileb://deployment.zip
+          aws lambda wait function-updated \
+            --function-name ${{ secrets.EMR_CON_AWS_LAMBDA_ARN }}
+
+  deploy-more-organizations:
+    name: Deploy More Organizations
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download zip artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: deployment-package
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.MORE_ORG_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.MORE_ORG_AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Deploy to AWS Lambda
+        run: |
+          aws lambda update-function-code \
+            --function-name ${{ secrets.MORE_ORG_LAMBDA_ARN }} \
+            --zip-file fileb://deployment.zip
+          aws lambda wait function-updated \
+            --function-name ${{ secrets.MORE_ORG_LAMBDA_ARN }}
