@@ -1,212 +1,189 @@
-# Generate Answer API (AWS Lambda)
+# Saayam AI Services (AWS Lambda)
 
-A serverless backend service that generates **context-aware, actionable AI responses** for user help requests on the Saayam platform.
+A suite of serverless backend services built on AWS Lambda that provides context-aware AI capabilities, classification, search, and emergency contact resolution for the Saayam platform.
 
-This service uses:
-
-* **Groq (Llama 3.1)** as the primary LLM (fast, low latency)
-* **Gemini 2.5 Flash** as a fallback for reliability
+These services run independently as separate Lambda functions or under a single unified routing Lambda function.
 
 ---
 
-## Overview
+## 🏗️ Architecture & Deployment Model
 
-The Generate Answer API takes a **user request ID**, fetches full request details from a database, and generates a helpful response tailored to the user’s situation.
+This codebase supports two hosting paradigms:
+1. **Unified Endpoint Routing**: Routing all service requests through a single entry point (`lambda_function.lambda_handler`) using a `"service"` selector parameter.
+2. **Independent Microservices (Recommended)**: Deploying five separate AWS Lambda functions sharing the same deployment package, each pointing to its own dedicated handler entry point.
 
-It supports context categories such as:
+### Handlers & Configurations
 
-* Food & Essentials
-* Clothing Support
-* Housing Support
-* Education & Career
-* Healthcare & Wellness
-* Elderly Support
-
-### Key Idea
-
-The Generate Answer Lambda Function Pipeline:
-
-1. Receives `user_id`, `req_id`, and `conversation_history`
-2. Fetches structured data from a PostgreSQL-compatible Amazon Aurora database
-3. Maps the request to a category
-4. Builds a category-specific prompt
-5. Generates an answer using LLMs
+| Lambda Service | Entry Point Handler | Recommended Memory | Recommended Timeout |
+| :--- | :--- | :--- | :--- |
+| **Predict Category** | `lambda_function.predict_category_handler` | 256 MB | 15 seconds |
+| **Generate Subject** | `lambda_function.generate_subject_handler` | 256 MB | 15 seconds |
+| **Generate Answer** | `lambda_function.generate_answer_handler` | 1024 MB | 60 seconds |
+| **Emergency Contacts** | `lambda_function.emergency_contacts_handler` | 256 MB | 15 seconds |
+| **More Organizations** | `lambda_function.search_orgs_handler` | 512 MB | 45 seconds |
 
 ---
 
-## System Architecture
+## 📂 Project Structure
 
-```
-Client Request
-     ↓
-API Gateway (POST /generate-answer)
-     ↓
-AWS Lambda (lambda_function.py)
-     ↓
-Amazon Aurora RDS - PostgreSQL (Fetch Request Data)
-     ↓
-Category Mapping
-     ↓
-Prompt Generation
-     ↓
-LLM Invocation (Groq → Gemini fallback)
-     ↓
-Generated Answer
-     ↓
-API Response
-```
-
----
-
-## Project Structure
-
-```
-.
-├── lambda_function.py             # Lambda entry point
-├── requirements.txt               # Dependencies
+```text
+ai/
+├── .github/workflows/
+│   └── deploy_aws_lambda.yml      # CI/CD pipeline deploying all 5 functions in parallel
+├── services/
+│   ├── emergency.py               # Emergency contact geolocation and lookup logic
+│   ├── emergency_numbers.json     # Global emergency numbers database by country/state/city
+│   └── classification_service.py  # Category prediction algorithms
 ├── utils/
-│   ├── __init__.py                # Core LLM orchestration logic
-│   ├── generate_answer_service.py # Wrapper for answer generation
-│   ├── client.py                  # Groq & Gemini initialization
-│   ├── prompts.py                 # Category-based prompt templates
-│   ├── categories.py              # Category ID → name mapping
-│   └── request_db.py              # PostgreSQL data fetching
-├── .github/workflows/             # CI/CD deployment (optional)
+│   ├── categories.py              # Category mappings
+│   ├── categories_with_description.py # Category description mappings
+│   ├── client.py                  # SSM Parameter Store LLM client bootstrap (Groq/Gemini)
+│   ├── generate_answer_service.py # Core answer generation service
+│   ├── request_db.py              # Database request details fetcher
+│   ├── search_orgs.py             # More Organizations (search nonprofits/for-profits)
+│   └── subject_generator.py       # Subject line generation service
+├── lambda_function.py             # Entry points for all AWS Lambda functions
+├── requirements.txt               # Pipeline dependencies
+└── README.md                      # This file
 ```
 
 ---
 
-## API Contract
+## 🔑 Environment & Secrets Configuration
 
-### Endpoint
+All services leverage **AWS SSM Parameter Store** (and IAM Roles) to access keys rather than exposing them as raw environment variables.
+* **SSM Parameter Names**:
+  - `/dev/saayam/GenAI/groq/key` (Groq API Key)
+  - `/dev/saayam/GenAI/gemini/key` (Gemini API Key)
 
-```
-POST /generate-answer
-```
+---
 
-### Request Body
+## 🧪 Service Details & curl Test Cases
 
+### 1. Predict Category
+Classifies description text into a ranked list of help categories.
+
+#### request Payload
 ```json
 {
-  "user_id": "string",
-  "req_id": "string",
-  "conversation_history": [
-    { "role": "user", "content": "..." },
-    { "role": "assistant", "content": "..." }
-  ]
+  "description": "Need help with tutoring in math"
 }
 ```
 
-### Fields
-
-| Field                | Required | Description                        |
-| -------------------- | -------- | ---------------------------------- |
-| user_id              | Yes      | ID of the user                     |
-| req_id               | Yes      | ID of the help request             |
-| conversation_history | No       | Previous chat messages for context |
+#### curl Command
+```bash
+curl -X POST https://<api-gateway-url>/predict-category \
+  -H "Content-Type: application/json" \
+  -d '{
+    "description": "Need help with tutoring in math"
+  }'
+```
 
 ---
 
-### Response
+### 2. Generate Subject
+Generates a short, descriptive subject line from a user's request details.
 
+#### request Payload
 ```json
 {
-  "answer": "Based on your situation, here are some options..."
+  "description": "Need help finding and leasing the best apartment  in San Jose under 1500$ budget"
 }
 ```
 
----
-
-##  Environment Variables
-
-Set in **Lambda → Configuration → Environment Variables**:
-
-```env
-GROQ_API_KEY=your_groq_api_key
-GEMINI_API_KEY=your_gemini_api_key
-```
-
-### Required Services
-
-* AWS Lambda
-* API Gateway
-
----
-
-##  Deployment
-
-These steps are performed by GitHub Actions on successful push to the branch
-
-### 1. Build Lambda Layer
-
+#### curl Command
 ```bash
-docker run --rm -v "$PWD":/app -w /app amazonlinux:2023 bash -c "
-  dnf install -y python3.11-pip &&
-  python3.11 -m pip install \
-    --platform manylinux2014_aarch64 \
-    --only-binary=:all: \
-    -r requirements.txt -t python
-"
-```
-
-```bash
-zip -r layer.zip python
+curl -X POST https://<api-gateway-url>/generate-subject \
+  -H "Content-Type: application/json" \
+  -d '{
+    "description": "Need help finding and leasing the best apartment  in San Jose under 1500$ budget"
+  }'
 ```
 
 ---
 
-### 2. Package Code
+### 3. Generate Answer
+Generates structured context-aware responses to user help requests based on database records.
 
-```bash
-zip -r deploy-package.zip . -x "python/*" "layer.zip" "*.git*"
-```
-
----
-
-### 3. Create Lambda
-
-* Runtime: Python 3.11
-* Architecture: arm64
-* Handler: `lambda_function.lambda_handler`
-
----
-
-##  Design Decisions
-
-### 1. Privacy focused ID-based request system
-
-- Avoids exposing PII on every request
-- Simplifies modification and querying on user and request data
-
-### 2. Category-specific prompting
-
-- Improves answer relevance by tailoring prompts to domain
-- Allows for quick prompt creation adhereing to the catergory
-- Enables conversation history session to focus on a single topic
-
-<!-- ---
-
-##  Known Gaps / Improvements
-
-* Add **error handling standardization**
-* Improve **prompt safety (avoid repetition attacks)**
-* Add **rate limiting / logging**
-* Include **sample database schema**
-* Add **end-to-end test cases** -->
-
----
-
-##  Example Request
-
+#### request Payload
 ```json
 {
-  "user_id": "SID-00-000-000-050",
-  "req_id": "REQ-00-000-000-0085",
-  "conversation_history": [
-    {
-      "role": "user",
-      "content": "I need help finding food"
-    }
-  ]
+  "user_id": "SID-00-000-02-356",
+  "req_id": "REQ-00-000-000-0377",
+  "conversation_history": []
 }
 ```
+
+#### curl Command
+```bash
+curl -X POST https://<api-gateway-url>/generate-answer \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "SID-00-000-02-356",
+    "req_id": "REQ-00-000-000-0377",
+    "conversation_history": []
+  }'
+```
+
+---
+
+### 4. Emergency Contacts
+Resolves matching emergency numbers based on query parameters (latitude/longitude, zipcode, or IP geolocation).
+
+#### request Payload (Body or Query string)
+```json
+{
+  "zip": "95112",
+  "country": "US",
+  "language": "en"
+}
+```
+
+#### curl Command (POST)
+```bash
+curl -X POST https://<api-gateway-url>/emergency-contacts \
+  -H "Content-Type: application/json" \
+  -d '{
+    "zip": "95112",
+    "country": "US",
+    "language": "en"
+  }'
+```
+
+#### curl Command (GET query fallback)
+```bash
+curl -X GET "https://<api-gateway-url>/emergency-contacts?zip=95112&country=US&language=en"
+```
+
+---
+
+### 5. More Organizations
+Returns 6 verified organizations (3 nonprofit, 3 for-profit) close to the user's location related to their request.
+
+#### request Payload
+```json
+{
+  "subject": "shelter",
+  "description": "i am on the streets now i dont have a place to stay please help",
+  "location": "San Jose, CA"
+}
+```
+
+#### curl Command
+```bash
+curl -X POST https://<api-gateway-url>/more-organizations \
+  -H "Content-Type: application/json" \
+  -d '{
+    "subject": "shelter",
+    "description": "i am on the streets now i dont have a place to stay please help",
+    "location": "San Jose, CA"
+  }'
+```
+
+---
+
+## 🚀 CI/CD GitHub Actions Deployment
+
+Any push to the `dev` branch triggers the multi-job parallel deploy workflow defined in `.github/workflows/deploy_aws_lambda.yml`. 
+
+To ensure successful deployments, define the respective AWS credentials (`*_ACCESS_KEY`, `*_SECRET_KEY`, and `*_LAMBDA_ARN`) as repository action secrets in GitHub.
