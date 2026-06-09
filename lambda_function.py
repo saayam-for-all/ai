@@ -19,11 +19,18 @@ def _parse_event_body(event: dict) -> dict:
 def lambda_handler(event, context):
     """
     Unified Lambda handler that routes requests to appropriate service.
-    Supports: predict_category, generate_subject, generate_answer
+    Supports: predict_category, generate_subject, generate_answer, emergency_contacts
     """
     try:
+        # Check if service is specified in query parameters or body
+        q_params = event.get("queryStringParameters") or {}
+        service = q_params.get("service")
+
         body = _parse_event_body(event)
-        service = body.get("service", "predict_category").lower().strip()
+        if not service:
+            service = body.get("service", "predict_category") if isinstance(body, dict) else "predict_category"
+
+        service = str(service).lower().strip()
 
         # Route to appropriate handler
         if service == "predict_category":
@@ -32,8 +39,10 @@ def lambda_handler(event, context):
             return _handle_generate_subject(body, context)
         elif service == "generate_answer":
             return _handle_generate_answer(body, context)
+        elif service == "emergency_contacts":
+            return _handle_emergency_contacts(event, body, context)
         else:
-            return _response(400, {"error": f"Unknown service: {service}. Supported: predict_category, generate_subject, generate_answer"})
+            return _response(400, {"error": f"Unknown service: {service}. Supported: predict_category, generate_subject, generate_answer, emergency_contacts"})
 
     except Exception as e:
         return _response(500, {"error": str(e)})
@@ -137,6 +146,48 @@ def _handle_generate_answer(body, context):
 
     except Exception as e:
         return _response(500, {"error": f"Answer generation failed: {str(e)}"})
+
+
+def _handle_emergency_contacts(event, body, context):
+    """Handle emergency contacts retrieval service"""
+    try:
+        from services.emergency import get_emergency_services
+
+        client_ip = _get_client_ip(event)
+
+        # Combine queryStringParameters and body params
+        params = dict(event.get("queryStringParameters") or {})
+        if isinstance(body, dict):
+            # Exclude structural API Gateway event fields if body is the event itself
+            if body is event:
+                for key in ["lat", "lng", "zip", "city", "state", "country", "service", "language"]:
+                    if key in body:
+                        params[key] = body[key]
+            else:
+                params.update(body)
+
+        result = get_emergency_services(params, client_ip)
+        return _response(result["status"], result["body"])
+
+    except Exception as e:
+        return _response(500, {"error": f"Emergency contacts service failed: {str(e)}"})
+
+
+def _get_client_ip(event):
+    """Extract client IP from request event headers/context"""
+    try:
+        return event["requestContext"]["http"]["sourceIp"]
+    except (KeyError, TypeError):
+        pass
+    try:
+        return event["requestContext"]["identity"]["sourceIp"]
+    except (KeyError, TypeError):
+        pass
+    headers = event.get("headers") or {}
+    xff = headers.get("X-Forwarded-For") or headers.get("x-forwarded-for")
+    if xff:
+        return xff.split(",")[0].strip()
+    return None
 
 
 def _response(status_code, body):
