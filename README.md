@@ -1,4 +1,4 @@
-# Saayam AI Services (AWS Lambda)
+# Saayam For All AI Services (AWS Lambda)
 
 A suite of serverless backend services built on AWS Lambda that provides context-aware AI capabilities, classification, search, and emergency contact resolution for the Saayam platform.
 
@@ -6,7 +6,7 @@ These services run independently as separate Lambda functions or under a single 
 
 ---
 
-## 🏗️ Architecture & Deployment Model
+## Architecture & Deployment Model
 
 This codebase supports two hosting paradigms:
 1. **Unified Endpoint Routing**: Routing all service requests through a single entry point (`lambda_function.lambda_handler`) using a `"service"` selector parameter.
@@ -24,7 +24,7 @@ This codebase supports two hosting paradigms:
 
 ---
 
-## 📂 Project Structure
+## Project Structure
 
 ```text
 ai/
@@ -49,7 +49,7 @@ ai/
 
 ---
 
-## 🔑 Environment & Secrets Configuration
+## Environment & Secrets Configuration
 
 All services leverage **AWS SSM Parameter Store** (and IAM Roles) to access keys rather than exposing them as raw environment variables.
 * **SSM Parameter Names**:
@@ -58,7 +58,7 @@ All services leverage **AWS SSM Parameter Store** (and IAM Roles) to access keys
 
 ---
 
-## 🧪 Service Details & curl Test Cases
+## Service Details & curl Test Cases
 
 ### 1. Predict Category
 Classifies description text into a ranked list of help categories.
@@ -182,7 +182,7 @@ curl -X POST https://<api-gateway-url>/more-organizations \
 
 ---
 
-## 🚀 CI/CD GitHub Actions Deployment
+## CI/CD GitHub Actions Deployment
 
 Any push to the `dev` branch triggers the multi-job parallel deploy workflow defined in `.github/workflows/deploy_aws_lambda.yml`. 
 
