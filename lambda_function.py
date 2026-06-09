@@ -19,7 +19,7 @@ def _parse_event_body(event: dict) -> dict:
 def lambda_handler(event, context):
     """
     Unified Lambda handler that routes requests to appropriate service.
-    Supports: predict_category, generate_subject, generate_answer, emergency_contacts
+    Supports: predict_category, generate_subject, generate_answer, emergency_contacts, search_orgs
     """
     try:
         # Check if service is specified in query parameters or body
@@ -41,8 +41,10 @@ def lambda_handler(event, context):
             return _handle_generate_answer(body, context)
         elif service == "emergency_contacts":
             return _handle_emergency_contacts(event, body, context)
+        elif service in ["search_orgs", "search_org", "find_nonprofits"]:
+            return _handle_search_orgs(body, context)
         else:
-            return _response(400, {"error": f"Unknown service: {service}. Supported: predict_category, generate_subject, generate_answer, emergency_contacts"})
+            return _response(400, {"error": f"Unknown service: {service}. Supported: predict_category, generate_subject, generate_answer, emergency_contacts, search_orgs"})
 
     except Exception as e:
         return _response(500, {"error": str(e)})
@@ -188,6 +190,32 @@ def _get_client_ip(event):
     if xff:
         return xff.split(",")[0].strip()
     return None
+
+
+def _handle_search_orgs(body, context):
+    """Handle search organizations service"""
+    try:
+        from utils.search_orgs import find_organizations
+
+        subject = body.get("subject")
+        description = body.get("description")
+        location = body.get("location")
+
+        if not description or not description.strip():
+            return _response(400, {"error": "description is required"})
+        if not subject or not subject.strip():
+            subject = ""
+        if not location or not location.strip():
+            location = "United States"
+            print("No location provided, defaulting to United States")
+
+        orgs = find_organizations(
+            subject=subject, description=description, location=location
+        )
+
+        return _response(200, orgs)
+    except Exception as e:
+        return _response(500, {"error": f"Search organizations failed: {str(e)}"})
 
 
 def _response(status_code, body):
