@@ -1,17 +1,58 @@
 import os
+import logging
+import boto3
 from groq import Groq
 from google import genai
-from dotenv import load_dotenv
+from botocore.exceptions import BotoCoreError, ClientError
 
-# Load .env only if it exists (primarily for local testing)
-load_dotenv()
+logger = logging.getLogger(__name__)
 
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+DEFAULT_GROQ_PARAM = "/dev/saayam/GenAI/groq/key"
+DEFAULT_GEMINI_PARAM = "/dev/saayam/GenAI/gemini/key"
+
+
+def _load_keys_from_ssm() -> tuple[str | None, str | None]:
+    groq_param = os.getenv("GROQ_API_KEY_PARAM", DEFAULT_GROQ_PARAM)
+    gemini_param = os.getenv("GEMINI_API_KEY_PARAM", DEFAULT_GEMINI_PARAM)
+    session = boto3.session.Session()
+    region = (
+        session.region_name
+        or os.getenv("AWS_REGION")
+        or os.getenv("AWS_DEFAULT_REGION")
+    )
+
+    if not region:
+        return None, None
+
+    try:
+        ssm = session.client("ssm", region_name=region)
+        response = ssm.get_parameters(
+            Names=[groq_param, gemini_param],
+            WithDecryption=True,
+        )
+        params = {
+            param["Name"]: param["Value"] for param in response.get("Parameters", [])
+        }
+        missing = [name for name in [groq_param, gemini_param] if name not in params]
+        if missing:
+            logger.warning("INIT WARN: Parameters not found in SSM: %s", missing)
+        return params.get(groq_param), params.get(gemini_param)
+    except (BotoCoreError, ClientError) as e:
+        logger.warning("INIT WARN: Failed to fetch API keys from SSM: %s", str(e))
+    except Exception as e:
+        logger.exception("INIT ERROR: Unexpected SSM fetch error: %s", str(e))
+    return None, None
+
+
+GROQ_API_KEY, GEMINI_API_KEY = _load_keys_from_ssm()
+groq_source = "ssm" if GROQ_API_KEY else "missing"
+gemini_source = "ssm" if GEMINI_API_KEY else "missing"
 
 # --- BOOTSTRAP LOGGING ---
 print(f"INIT LOG: Groq Key Found: {bool(GROQ_API_KEY)}")
 print(f"INIT LOG: Gemini Key Found: {bool(GEMINI_API_KEY)}")
+print(f"INIT LOG: Groq Key Source: {groq_source}")
+print(f"INIT LOG: Gemini Key Source: {gemini_source}")
 
 # --- Groq Initialization ---
 client = None

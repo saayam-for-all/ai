@@ -1,4 +1,4 @@
 groq==0.37.1
 google-genai
-python-dotenv==1.0.1
+boto3
 flask==3.0.0
