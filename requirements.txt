@@ -1,5 +1,6 @@
 flask
 transformers
+torch
 meta-ai-api
 google-generativeai
 openai
