@@ -8,39 +8,98 @@ from utils.request_db import get_request_full_details
 def _parse_event_body(event: dict) -> dict:
     raw_body = event.get("body")
     if isinstance(raw_body, str):
-        return json.loads(raw_body)
+        try:
+            return json.loads(raw_body)
+        except json.JSONDecodeError:
+            return {}
     if isinstance(raw_body, dict):
-        return raw_body
-    return event
+        merged = dict(event)
+        merged.update(raw_body)
+        return merged
+    return event if isinstance(event, dict) else {}
+
+
+def _first_non_empty(body: dict, *keys: str) -> str:
+    for key in keys:
+        value = body.get(key)
+        if isinstance(value, str):
+            value = value.strip()
+            if value:
+                return value
+    return ""
+
+
+def _format_additional_info(data: dict) -> str:
+    details = data.get("additional_info") or []
+    if not isinstance(details, list):
+        return ""
+    lines = []
+    for item in details:
+        if not isinstance(item, dict):
+            continue
+        question = item.get("question")
+        answers = item.get("answers")
+        if not question or not isinstance(answers, list):
+            continue
+        cleaned = [str(a) for a in answers if a not in (None, "")]
+        if cleaned:
+            lines.append(f"- {question}: {', '.join(cleaned)}")
+    return "\n".join(lines)
 
 
 def lambda_handler(event, context):
     try:
+        if isinstance(event, dict):
+            method = (
+                event.get("httpMethod")
+                or event.get("requestContext", {})
+                .get("http", {})
+                .get("method")
+            )
+            if method == "OPTIONS":
+                return _response(200, {})
+
         body = _parse_event_body(event)
-        user_id = body.get("user_id")
-        req_id = body.get("req_id") or body.get("request_id")
+
+        category_id = _first_non_empty(body, "category_id", "category")
+        subject = _first_non_empty(body, "subject")
+        description = _first_non_empty(body, "description", "question")
+        location = _first_non_empty(body, "location")
+        gender = _first_non_empty(body, "gender")
+        age = _first_non_empty(body, "age")
+
+        user_id = _first_non_empty(body, "user_id", "req_user_id")
+        req_id = _first_non_empty(body, "req_id", "request_id", "id")
         conversation_history = body.get("conversation_history")
 
-        if not user_id or not req_id:
+        if user_id and req_id and (not category_id or not subject or not description):
+            data = get_request_full_details(str(user_id), str(req_id))
+            if err := data.get("error"):
+                return _response(
+                    400,
+                    {
+                        "error": (
+                            "category/category_id, subject, and description/question are required. "
+                            f"DB lookup error: {err}"
+                        )
+                    },
+                )
+
+            category_id = category_id or str(data.get("req_cat_id") or "")
+            subject = subject or str(data.get("req_subj") or "")
+            description = description or str(data.get("req_desc") or "")
+            location = location or _first_non_empty(data, "req_loc")
+
+            if description:
+                context = _format_additional_info(data)
+                if context:
+                    description = f"{description}\n\nAdditional details:\n{context}"
+
+        if not category_id or not subject or not description:
             return _response(
                 400,
-                {"error": "user_id and req_id (or request_id) are required"},
+                {"error": "category/category_id, subject, and description/question are required"},
             )
-
-        data = get_request_full_details(str(user_id), str(req_id))
-        if err := data.get("error"):
-            status = 404 if "No data found" in str(err) else 502
-            return _response(status, {"error": err})
-
-        category_id = data.get("req_cat_id")
-        subject = (data.get("req_subj") or "").strip()
-        description = (data.get("req_desc") or "").strip()
-        location = data.get("req_loc")
-
-        if not description:
-            return _response(400, {"error": "description missing (req_desc empty)"})
-        if not subject:
-            return _response(400, {"error": "subject missing (req_subj empty)"})
 
         category = help_categories.get(str(category_id)) or "General"
 
@@ -57,19 +116,21 @@ def lambda_handler(event, context):
         except Exception:
             answer = "Error: Failed to generate answer"
 
-        return _response(200, {"answer": answer})
+        # UI reads `body.answer`; keep top-level `answer` for compatibility.
+        return _response(200, {"answer": answer, "body": {"answer": answer}})
 
     except Exception as e:
         return _response(500, {"error": str(e)})
 
 
 def _response(status_code, body):
-    payload = json.dumps(body) if isinstance(body, dict) else body
     return {
         "statusCode": status_code,
         "headers": {
             "Content-Type": "application/json",
             "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Headers": "Content-Type, Authorization",
+            "Access-Control-Allow-Methods": "GET, OPTIONS, POST",
         },
         "body": body,
     }
