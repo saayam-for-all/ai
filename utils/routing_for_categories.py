@@ -1,25 +1,12 @@
 # Routing helpers for category selection.
 
-STRONG_ELDERLY_TRIGGERS = (
-    "elderly",
-    "elder",
-    "senior",
+import re
+
+
+DIRECT_ELDERLY_TRIGGERS = (
     "senior citizen",
     "senior living",
     "senior housing",
-    "older adult",
-    "older person",
-    "older relative",
-    "older family member",
-    "retired",
-    "retiree",
-    "grandparent",
-    "grandmother",
-    "grandfather",
-    "grandma",
-    "grandpa",
-    "grandson",
-    "granddaughter",
     "retirement home",
     "retirement community",
     "senior center",
@@ -27,16 +14,29 @@ STRONG_ELDERLY_TRIGGERS = (
     "nursing home",
     "nursing facility",
     "care home",
-    "long-term care",
+    "long term care",
     "long term care",
     "elder care",
     "geriatric",
-    "aging",
-    "ageing",
     "aging parent",
+    "ageing parent",
 )
 
-WEAK_ELDERLY_TRIGGERS = (
+ELDERLY_PERSON_TRIGGERS = (
+    "elderly",
+    "elder",
+    "older adult",
+    "older person",
+    "older relative",
+    "older family member",
+    "grandparent",
+    "grandmother",
+    "grandfather",
+    "grandma",
+    "grandpa",
+)
+
+WEAK_ELDERLY_PERSON_TRIGGERS = (
     "mom",
     "dad",
     "mother",
@@ -60,7 +60,6 @@ ELDERLY_CONTEXT_CUES = (
     "reminder",
     "pharmacy",
     "appointment",
-    "doctor",
     "clinic",
     "home visit",
     "mobility",
@@ -70,34 +69,73 @@ ELDERLY_CONTEXT_CUES = (
     "falls",
     "hearing",
     "vision",
-    "nursing",
     "home health",
     "home care",
-    "in-home care",
     "in home care",
     "home aide",
     "care aide",
-    "live-in care",
     "live in care",
     "companionship",
     "lonely",
     "meal prep",
     "meal preparation",
+    "preparing meals",
+    "meal support",
+    "dietary meals",
     "transport",
     "ride",
     "rides",
     "errand",
     "errands",
+    "smartphone",
+    "tablet",
+    "video call",
+    "messages",
+    "tech support",
+    "medical device",
+    "blood pressure monitor",
+    "glucometer",
+    "schedule appointments",
+)
+
+ELDERLY_FALSE_POSITIVE_PHRASES = (
+    "senior software engineer",
+    "senior engineer",
+    "senior developer",
+    "senior manager",
+    "senior role",
+    "grandfather clock",
+    "nursing entrance exam",
+    "nursing school",
+    "nursing exam",
 )
 
 
-def is_elderly_context(description: str) -> bool:
-    text = description.lower()
+def _normalize_text(text: str) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", text.lower()).strip()
 
-    if any(trigger in text for trigger in STRONG_ELDERLY_TRIGGERS):
+
+def _contains_phrase(text: str, phrase: str) -> bool:
+    normalized_phrase = _normalize_text(phrase)
+    if not normalized_phrase:
+        return False
+    return f" {normalized_phrase} " in f" {text} "
+
+
+def is_elderly_context(description: str) -> bool:
+    text = _normalize_text(description)
+
+    if any(_contains_phrase(text, phrase) for phrase in DIRECT_ELDERLY_TRIGGERS):
         return True
 
-    if not any(trigger in text for trigger in WEAK_ELDERLY_TRIGGERS):
+    if any(_contains_phrase(text, phrase) for phrase in ELDERLY_FALSE_POSITIVE_PHRASES):
         return False
 
-    return any(cue in text for cue in ELDERLY_CONTEXT_CUES)
+    has_person_trigger = any(
+        _contains_phrase(text, trigger)
+        for trigger in ELDERLY_PERSON_TRIGGERS + WEAK_ELDERLY_PERSON_TRIGGERS
+    )
+    if not has_person_trigger:
+        return False
+
+    return any(_contains_phrase(text, cue) for cue in ELDERLY_CONTEXT_CUES)
