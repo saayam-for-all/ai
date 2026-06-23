@@ -1,217 +1,189 @@
+# Saayam For All AI Services (AWS Lambda)
 
-#  🔍 Saayam AI Assistant 🤖 
+A suite of serverless backend services built on AWS Lambda that provides context-aware AI capabilities, classification, search, and emergency contact resolution for the Saayam platform.
 
-Saayam AI Assistant is a web-based application built with Flask that allows users to query various AI models (Meta AI, Gemini, ChatGPT, and Grok) for answers across multiple categories (e.g., Jobs, Education, Finance). The application uses zero-shot classification to predict relevant categories for user queries and provides detailed, formatted responses. Additionally, it collects performance metrics (latency, speed, temperature, token counts) to compare the efficiency of each AI model.
+These services run independently as separate Lambda functions or under a single unified routing Lambda function.
 
-## 🧠 Features
-- **Multi-Model Support**: Query Meta AI, Gemini, ChatGPT, or Grok via a command-line argument.
-- **Category Prediction**: Uses zero-shot classification (`facebook/bart-large-mnli`) to predict relevant categories for user queries.
-- **Formatted Responses**: Responses are structured with bullet points, bold headings, and clear sections for readability.
-- **Performance Metrics**: Measures latency (TTFT/TTLT), speed (tokens/second), temperature, and token counts for each model.
-- **Web Interface**: A user-friendly interface built with Flask, HTML, and JavaScript, with Markdown rendering for responses.
+---
 
-## 🔧 Setup Instructions
+## Architecture & Deployment Model
 
-### 1. Create & Activate Conda Environment
-Create a Conda environment with Python 3.10 and activate it:
+This codebase supports two hosting paradigms:
+1. **Unified Endpoint Routing**: Routing all service requests through a single entry point (`lambda_function.lambda_handler`) using a `"service"` selector parameter.
+2. **Independent Microservices (Recommended)**: Deploying five separate AWS Lambda functions sharing the same deployment package, each pointing to its own dedicated handler entry point.
 
+### Handlers & Configurations
+
+| Lambda Service | Entry Point Handler | Recommended Memory | Recommended Timeout |
+| :--- | :--- | :--- | :--- |
+| **Predict Category** | `lambda_function.predict_category_handler` | 256 MB | 15 seconds |
+| **Generate Subject** | `lambda_function.generate_subject_handler` | 256 MB | 15 seconds |
+| **Generate Answer** | `lambda_function.generate_answer_handler` | 1024 MB | 60 seconds |
+| **Emergency Contacts** | `lambda_function.emergency_contacts_handler` | 256 MB | 15 seconds |
+| **More Organizations** | `lambda_function.search_orgs_handler` | 512 MB | 45 seconds |
+
+---
+
+## Project Structure
+
+```text
+ai/
+├── .github/workflows/
+│   └── deploy_aws_lambda.yml      # CI/CD pipeline deploying all 5 functions in parallel
+├── services/
+│   ├── emergency.py               # Emergency contact geolocation and lookup logic
+│   ├── emergency_numbers.json     # Global emergency numbers database by country/state/city
+│   └── classification_service.py  # Category prediction algorithms
+├── utils/
+│   ├── categories.py              # Category mappings
+│   ├── categories_with_description.py # Category description mappings
+│   ├── client.py                  # SSM Parameter Store LLM client bootstrap (Groq/Gemini)
+│   ├── generate_answer_service.py # Core answer generation service
+│   ├── request_db.py              # Database request details fetcher
+│   ├── search_orgs.py             # More Organizations (search nonprofits/for-profits)
+│   └── subject_generator.py       # Subject line generation service
+├── lambda_function.py             # Entry points for all AWS Lambda functions
+├── requirements.txt               # Pipeline dependencies
+└── README.md                      # This file
+```
+
+---
+
+## Environment & Secrets Configuration
+
+All services leverage **AWS SSM Parameter Store** (and IAM Roles) to access keys rather than exposing them as raw environment variables.
+* **SSM Parameter Names**:
+  - `/dev/saayam/GenAI/groq/key` (Groq API Key)
+  - `/dev/saayam/GenAI/gemini/key` (Gemini API Key)
+
+---
+
+## Service Details & curl Test Cases
+
+### 1. Predict Category
+Classifies description text into a ranked list of help categories.
+
+#### request Payload
+```json
+{
+  "description": "Need help with tutoring in math"
+}
+```
+
+#### curl Command
 ```bash
-conda create -n saayam-env python=3.10
-conda activate saayam-env
+curl -X POST https://<api-gateway-url>/predict-category \
+  -H "Content-Type: application/json" \
+  -d '{
+    "description": "Need help with tutoring in math"
+  }'
 ```
 
-### 2. Clone the Repository
-Clone the project repository to your local machine:
+---
 
+### 2. Generate Subject
+Generates a short, descriptive subject line from a user's request details.
+
+#### request Payload
+```json
+{
+  "description": "Need help finding and leasing the best apartment  in San Jose under 1500$ budget"
+}
+```
+
+#### curl Command
 ```bash
-git clone https://github.com/RobuRishabh/Saayam_ai.git
-cd Saayam_ai
+curl -X POST https://<api-gateway-url>/generate-subject \
+  -H "Content-Type: application/json" \
+  -d '{
+    "description": "Need help finding and leasing the best apartment  in San Jose under 1500$ budget"
+  }'
 ```
 
-### 3. Install Requirements
-Install the required Python packages listed in requirements.txt:
+---
 
+### 3. Generate Answer
+Generates structured context-aware responses to user help requests based on database records.
+
+#### request Payload
+```json
+{
+  "user_id": "SID-00-000-02-356",
+  "req_id": "REQ-00-000-000-0377",
+  "conversation_history": []
+}
+```
+
+#### curl Command
 ```bash
-pip install -r requirements.txt
+curl -X POST https://<api-gateway-url>/generate-answer \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "SID-00-000-02-356",
+    "req_id": "REQ-00-000-000-0377",
+    "conversation_history": []
+  }'
 ```
 
-Note: Ensure you have the following packages in your requirements.txt:
+---
 
-```
-flask
-transformers
-meta-ai-api
-google-generativeai
-openai
-groq
-python-dotenv
-tiktoken
-```
+### 4. Emergency Contacts
+Resolves matching emergency numbers based on query parameters (latitude/longitude, zipcode, or IP geolocation).
 
-### 4. Set Up Environment Variables
-Create a .env file in the project root directory and add your API keys for Gemini, ChatGPT, and Grok:
-
-```
-GEMINI_API_KEY=your_gemini_api_key
-OPENAI_API_KEY=your_openai_api_key
-GROQ_API_KEY=your_groq_api_key
+#### request Payload (Body or Query string)
+```json
+{
+  "zip": "95112",
+  "country": "US",
+  "language": "en"
+}
 ```
 
-Note: Meta AI doesn’t require an API key in this setup (uses meta-ai-api library).
-
-### 5. Run the Application
-Run the application with a specific AI model using the --model argument. The available models are meta_ai, gemini, openai, and grok.
-
-Meta AI:
+#### curl Command (POST)
 ```bash
-python app.py --model meta_ai
+curl -X POST https://<api-gateway-url>/emergency-contacts \
+  -H "Content-Type: application/json" \
+  -d '{
+    "zip": "95112",
+    "country": "US",
+    "language": "en"
+  }'
 ```
 
-Gemini:
+#### curl Command (GET query fallback)
 ```bash
-python app.py --model gemini
+curl -X GET "https://<api-gateway-url>/emergency-contacts?zip=95112&country=US&language=en"
 ```
 
-ChatGPT (OpenAI):
+---
+
+### 5. More Organizations
+Returns 6 verified organizations (3 nonprofit, 3 for-profit) close to the user's location related to their request.
+
+#### request Payload
+```json
+{
+  "subject": "shelter",
+  "description": "i am on the streets now i dont have a place to stay please help",
+  "location": "San Jose, CA"
+}
+```
+
+#### curl Command
 ```bash
-python app.py --model openai
+curl -X POST https://<api-gateway-url>/more-organizations \
+  -H "Content-Type: application/json" \
+  -d '{
+    "subject": "shelter",
+    "description": "i am on the streets now i dont have a place to stay please help",
+    "location": "San Jose, CA"
+  }'
 ```
 
-Grok:
-```bash
-python app.py --model grok
-```
+---
 
-After running the application, open your browser and navigate to http://127.0.0.1:5000 to access the Saayam AI Assistant interface.
+## CI/CD GitHub Actions Deployment
 
-## 📁 Project Structure
+Any push to the `dev` branch triggers the multi-job parallel deploy workflow defined in `.github/workflows/deploy_aws_lambda.yml`. 
 
-```
-Saayam_ai/
-├── app.py                 # Main application with multi-model support and metrics
-├── MetaAIAPI_app.py       # Meta AI-only version (simpler implementation)
-├── templates/
-│   └── index.html         # Frontend HTML template
-├── static/
-│   ├── apple-touch-icon.png
-│   ├── favicon-16x16.png
-│   ├── favicon-32x32.png
-│   ├── favicon.ico
-│   └── site.webmanifest    # Web manifest for favicon and icons
-├── requirements.txt        # Python dependencies
-├── .env                    # Environment variables (API keys)
-├── model_metrics.log       # Log file for performance metrics
-└── .gitignore              # Git ignore file
-```
-
-## 📊 API Performance Evaluation
-The application collects performance metrics for each AI model, including latency, speed, temperature, and token counts. The metrics were evaluated using the query "Suggest me good job searching websites for international students" in the "Jobs" category.
-
-### Performance Metrics
-
-**Meta AI**:
-- Model: meta_ai
-- Temperature: 0.7 (default)
-- Time to First Token (TTFT): 15.185 seconds
-- Total Response Time (TTLT): 15.185 seconds
-- Speed: 20.81 tokens/second
-- Input Tokens: 127
-- Output Tokens: 316
-
-**Gemini**:
-- Model: gemini
-- Temperature: 0.7
-- Time to First Token (TTFT): 4.515 seconds
-- Total Response Time (TTLT): 4.515 seconds
-- Speed: 100.32 tokens/second
-- Input Tokens: 127
-- Output Tokens: 453
-
-**ChatGPT (OpenAI)**:
-- Model: openai
-- Temperature: 0.7
-- Time to First Token (TTFT): 4.619 seconds
-- Total Response Time (TTLT): 4.619 seconds
-- Speed: 81.83 tokens/second
-- Input Tokens: 176
-- Output Tokens: 378
-
-**Grok**:
-- Model: grok
-- Temperature: 0.7
-- Time to First Token (TTFT): 0.856 seconds
-- Total Response Time (TTLT): 0.856 seconds
-- Speed: 630.66 tokens/second
-- Input Tokens: 127
-- Output Tokens: 540
-
-### Cost Analysis
-
-- **Meta AI**: Free (unofficial API), but may have rate limits or reliability issues.
-- **Gemini**: Free tier available, with paid plans for higher usage.
-- **ChatGPT**: Pay-per-use ($0.002 per 1K tokens for gpt-3.5-turbo).
-- **Grok**: Free tier available, with paid plans for higher usage.
-
-### Limitations
-
-- **Meta AI**: Slow, low speed, lacks temperature control.
-- **Gemini**: Moderate performance, potential tokenization differences.
-- **ChatGPT**: Reliable, slightly slower than Grok.
-- **Grok**: Fastest, high output token count (verbosity).
-
-## ⚖️ Comparison with Alternative Solutions
-
-| Model     | Speed (tokens/s) | TTLT (s) | Cost         | Quality               |
-|-----------|------------------|----------|--------------|------------------------|
-| Meta AI   | 20.81            | 15.185   | Free         | Least consistent       |
-| Gemini    | 100.32           | 4.515    | Free tier    | Moderate consistency   |
-| ChatGPT   | 81.83            | 4.619    | Pay-per-use  | Highly consistent      |
-| Grok      | 630.66           | 0.856    | Free tier    | Practical, fast        |
-
-## 🛠️ Proof-of-Concept Implementation
-
-### Overview
-Flask-based web app to query 4 models, classify categories, format answers, and log metrics.
-
-### Backend (`app.py`)
-- Flask app, handles routes `/predict_categories` and `/generate_answer`
-- Model passed using `--model` CLI argument
-- Collects and logs metrics (TTFT, TTLT, token counts, temperature)
-
-### Frontend (`index.html`)
-- HTML + JavaScript interface
-- Markdown rendering using marked.js
-- Submits subject, description, category
-- Displays response + metrics
-
-### Example
-```bash
-python app.py --model grok
-```
-Visit [http://127.0.0.1:5000](http://127.0.0.1:5000)
-
-## 📈 Analysis and Recommendations
-
-- **Fastest**: Grok (0.856s TTLT, 630.66 tokens/s)
-- **Most Consistent**: ChatGPT
-- **Cost-Effective**: Gemini & Grok
-- **Slowest**: Meta AI
-
-### Recommendations
-
-- Use **Grok** for real-time speed
-- Use **ChatGPT** for reliability & consistency
-- Use **Gemini** for cost-conscious performance
-- Avoid **Meta AI** for production
-
-## 🚀 Future Improvements
-
-- Enable streaming for better TTFT
-- Add cosine similarity for response sensitivity
-- Load testing (e.g., locust)
-- Caching frequent queries to save cost
-
-## 🙌 Acknowledgments
-
-Built with ❤️ using Flask, Transformers, and AI APIs.
-Special thanks to the open-source contributors of meta-ai-api.
+To ensure successful deployments, define the respective AWS credentials (`*_ACCESS_KEY`, `*_SECRET_KEY`, and `*_LAMBDA_ARN`) as repository action secrets in GitHub.
