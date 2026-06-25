@@ -99,11 +99,11 @@ jobs:
       #     bandit app.py MetaAIAPI_app.py -ll -f screen
 
       # --- CODE COVERAGE: Run tests with coverage ---
-      - name: Verify app import (quick check before tests)
-        run: |
-          source .venv/bin/activate
-          echo "Testing if app module can be imported..."
-          python -u -c "from app import app, categories; print('Import OK')"
+      # - name: Verify app import (quick check before tests)
+      #   run: |
+      #     source .venv/bin/activate
+      #     echo "Testing if app module can be imported..."
+      #     python -u -c "from app import app, categories; print('Import OK')"
 
       - name: Run tests with coverage
         run: |
