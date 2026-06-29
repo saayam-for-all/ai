@@ -105,11 +105,16 @@ jobs:
       #     echo "Testing if app module can be imported..."
       #     python -u -c "from app import app, categories; print('Import OK')"
 
+      # - name: Run tests with coverage
+      #   run: |
+      #     echo "=== Pytest with coverage (output below) ==="
+      #     source .venv/bin/activate
+      #     python -u -m pytest test_app.py --cov=app --cov-report=xml --cov-report=term-missing -v -s --tb=short
       - name: Run tests with coverage
         run: |
           echo "=== Pytest with coverage (output below) ==="
           source .venv/bin/activate
-          python -u -m pytest test_app.py --cov=app --cov-report=xml --cov-report=term-missing -v -s --tb=short
+          python -u -m pytest tests/ --cov=app --cov-report=xml --cov-report=term-missing -v -s --tb=short
 
       # FIX: upload coverage.xml as an artifact instead of generating and discarding it
       - name: Upload coverage report
