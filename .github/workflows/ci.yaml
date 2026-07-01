@@ -117,11 +117,11 @@ jobs:
       #     python -u -m pytest tests/ --cov=app --cov-report=xml --cov-report=term-missing -v -s --tb=short
 
       # FIX: upload coverage.xml as an artifact instead of generating and discarding it
-      - name: Upload coverage report
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-report
-          path: coverage.xml
+      # - name: Upload coverage report
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: coverage-report
+      #     path: coverage.xml
 
       # --- Lint (code quality) ---
       # FIX: changed `*.py` to `.` so sub-packages are also linted
