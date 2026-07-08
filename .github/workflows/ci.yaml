@@ -11,7 +11,7 @@ on:
   pull_request:
     branches: ["test", "dev", "main", "feature/ci-build-divyatanwar"]
 
-jobs:
+jobs: # testing this pipeline
   build-and-test:
     runs-on: ubuntu-latest
     env:
