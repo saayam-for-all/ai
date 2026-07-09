@@ -7,9 +7,9 @@ concurrency:
 on:
   workflow_dispatch:  # Allows manual "Run workflow" from GitHub Actions tab
   push:
-    branches: ["test", "dev", "main", "feature/ci-build-divyatanwar"]
+    branches: ["test", "dev", "main"]
   pull_request:
-    branches: ["test", "dev", "main", "feature/ci-build-divyatanwar"]
+    branches: ["test", "dev", "main"]
 
 jobs: # testing this pipeline
   build-and-test:
