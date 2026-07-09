@@ -125,11 +125,17 @@ jobs:
 
       # --- Lint (code quality) ---
       # FIX: changed `*.py` to `.` so sub-packages are also linted
+      # - name: Lint with flake8
+      #   run: |
+      #     echo "=== Flake8 lint (output below) ==="
+      #     source .venv/bin/activate
+      #     flake8 . --max-line-length=150
+
       - name: Lint with flake8
         run: |
           echo "=== Flake8 lint (output below) ==="
           source .venv/bin/activate
-          flake8 . --max-line-length=150
+          flake8 . --max-line-length=150 --exclude=.venv,__pycache__,.git,build,dist
 
   # --- BUILD DOCKER IMAGE AND PUSH: Docker build job ---
   build-docker:
