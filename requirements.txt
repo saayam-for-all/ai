@@ -9,3 +9,13 @@ tiktoken
 torch
 numpy
 pytest
+groq==0.37.1
+google-genai
+python-dotenv==1.0.1
+langchain
+langchain-core
+langchain-groq
+langchain-google-genai
+psycopg2-binary>=2.9.9
+aws-lambda-powertools
+boto3
