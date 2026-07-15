@@ -5,11 +5,23 @@ concurrency:
   cancel-in-progress: true
 
 on:
-  workflow_dispatch:  # Allows manual "Run workflow" from GitHub Actions tab
+  workflow_dispatch:
+
   push:
-    branches: ["test", "dev", "main", "feature/ci-build-divyatanwar"]
+    branches:
+      - test
+      - dev
+      - main
+
   pull_request:
-    branches: ["test", "dev", "main", "feature/ci-build-divyatanwar"]
+    branches:
+      - test
+      - dev
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
 
 jobs:
   build-and-test:
