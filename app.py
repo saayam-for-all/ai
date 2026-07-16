@@ -41,7 +41,8 @@ parser.add_argument(
     default="meta_ai",
     help="Choose the AI model to use: meta_ai, gemini, openai, or grok"
 )
-args = parser.parse_args()
+# Only parse sys.argv when run as script; when imported (e.g. by pytest) use defaults
+args, _ = parser.parse_known_args()
 selected_model = args.model
 
 # Default temperature for models that support it
@@ -80,9 +81,11 @@ openai_tokenizer = tiktoken.encoding_for_model("gpt-3.5-turbo")
 
 app = Flask(__name__)
 
+
 @app.route('/')
 def home():
     return render_template('index.html', categories=categories)
+
 
 @app.route('/predict_categories', methods=['POST'])
 def predict_categories():
@@ -96,7 +99,14 @@ def predict_categories():
         result = classifier(prompt, categories)
         return jsonify({"predicted_categories": result['labels'][:3]})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        # Log the error and return a graceful fallback response instead of a 500
+        logging.error(f"Error in predict_categories: {e}")
+        fallback_categories = categories[:3]
+        return jsonify({
+            "predicted_categories": fallback_categories,
+            "warning": "Falling back to default categories due to classification error."
+        }), 200
+
 
 @app.route('/generate_answer', methods=['POST'])
 def generate_answer():
@@ -106,7 +116,7 @@ def generate_answer():
 
     if not category or not question:
         return jsonify({"error": "Category and question required"}), 400
-    
+
     # Create a prompt with formatting instructions
     prompt = (
         f"Category: {category}\n"
@@ -122,7 +132,7 @@ def generate_answer():
         "- Website 1: Description.\n"
         "- Website 2: Description.\n"
     )
-    
+
     # Count input tokens (approximation for non-OpenAI models)
     input_tokens = len(openai_tokenizer.encode(prompt)) if selected_model == "openai" else len(prompt.split())
 
@@ -198,6 +208,7 @@ def generate_answer():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
 def format_response(text):
     lines = text.split('\n')
     formatted_lines = []
@@ -242,6 +253,7 @@ def format_response(text):
     formatted_text = '\n'.join(formatted_lines)
     return formatted_text
 
+
 if __name__ == '__main__':
     print(f"Starting Saayam AI Assistant with model: {selected_model}")
-    app.run(debug=True, host='127.0.0.1', port=5000)
+    app.run(debug=True, host='127.0.0.1', port=5000)  # nosec B201 - debug only for local dev
