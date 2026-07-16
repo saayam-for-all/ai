@@ -54,7 +54,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: "pip"
+          #cache: "pip"
 
       - name: Print Python and pip versions  # FIX: environment debugging
         run: |
@@ -130,6 +130,7 @@ jobs:
 
       # FIX: upload coverage.xml as an artifact instead of generating and discarding it
       - name: Upload coverage report
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
