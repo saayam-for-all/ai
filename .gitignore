@@ -1,4 +1,7 @@
 .env
 venv
+.venv
 __pycache__
 *.pyc
+local_test.py
+aws_test.py
