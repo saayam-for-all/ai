@@ -1,3 +1,4 @@
+
 """
 app/routes/search.py
 """
@@ -11,9 +12,32 @@ from app.services.universal_search_service import UniversalSearchService
 search_bp = Blueprint("search", __name__)
 
 
+def _parse_integer(value, default):
+    """Return an integer value, falling back for invalid JSON numbers."""
+    try:
+        return int(value)
+    except (TypeError, ValueError, OverflowError):
+        return default
+
+
+def _invalid_query_response():
+    return jsonify({
+        "success": False,
+        "message": "Search query must be a string",
+        "query": "",
+        "page": 1,
+        "limit": 10,
+        "total": 0,
+        "auto_navigate": False,
+        "target": None,
+        "results": [],
+    }), 400
+
+
 @search_bp.route("/search", methods=["GET", "POST"])
 def universal_search():
     """
+    GET /<api-prefix>/search?q=<query>&page=<int>&limit=<int>
     POST /<api-prefix>/search
 
     JSON payload:
@@ -51,7 +75,11 @@ def universal_search():
                 "results": [],
             }), 400
 
-        query = str(data.get("q", "")).strip()
+        query = data.get("q", "")
+        if not isinstance(query, str):
+            return _invalid_query_response()
+
+        query = query.strip()
         page = data.get("page", 1)
         limit = data.get("limit", 10)
     else:
@@ -59,15 +87,8 @@ def universal_search():
         page = request.args.get("page", 1, type=int)
         limit = request.args.get("limit", 10, type=int)
 
-    try:
-        page = int(page)
-    except (TypeError, ValueError):
-        page = 1
-
-    try:
-        limit = int(limit)
-    except (TypeError, ValueError):
-        limit = 10
+    page = _parse_integer(page, 1)
+    limit = _parse_integer(limit, 10)
 
     current_user = get_current_user()
 

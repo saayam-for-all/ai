@@ -1,4 +1,5 @@
 import unittest
+from math import inf
 from unittest.mock import patch
 
 from flask import Flask
@@ -64,6 +65,27 @@ class SearchRouteTestCase(unittest.TestCase):
             response.get_json()["message"],
             "Invalid or missing JSON body",
         )
+
+    def test_post_search_rejects_non_string_query(self):
+        invalid_queries = [None, 42, True, ["hello"], {"term": "hello"}]
+
+        with patch(
+            "app.routes.search.UniversalSearchService.search",
+        ) as mock_search:
+            for query in invalid_queries:
+                with self.subTest(query=query):
+                    response = self.client.post(
+                        "/api/search",
+                        json={"q": query},
+                    )
+
+                    self.assertEqual(response.status_code, 400)
+                    self.assertEqual(
+                        response.get_json()["message"],
+                        "Search query must be a string",
+                    )
+
+        mock_search.assert_not_called()
 
     def test_get_search_accepts_query_parameters(self):
         expected_response = {
@@ -174,6 +196,41 @@ class SearchRouteTestCase(unittest.TestCase):
             query="hello",
             page=3,
             limit=7,
+            current_user=None,
+        )
+
+    def test_post_search_non_finite_pagination_uses_defaults(self):
+        expected_response = {
+            "success": True,
+            "message": "Search completed",
+            "query": "hello",
+            "page": 1,
+            "limit": 10,
+            "total": 0,
+            "auto_navigate": False,
+            "target": None,
+            "results": [],
+        }
+
+        with patch(
+            "app.routes.search.get_current_user",
+            return_value=None,
+        ), patch(
+            "app.routes.search.UniversalSearchService.search",
+            return_value=expected_response,
+        ) as mock_search:
+            response = self.client.post(
+                "/api/search",
+                json={"q": "hello", "page": inf, "limit": -inf},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json(), expected_response)
+
+        mock_search.assert_called_once_with(
+            query="hello",
+            page=1,
+            limit=10,
             current_user=None,
         )
 
