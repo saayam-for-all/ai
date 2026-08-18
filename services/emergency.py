@@ -18,6 +18,29 @@ def _load_emergency_numbers():
     return _emergency_numbers_cache
 
 
+# Best-effort aliases for callers that send a country NAME instead of an ISO-3166
+# alpha-2 code (the dataset is keyed by alpha-2). Extend as needed. Anything not
+# matched here stays as-is and, if it isn't a real code, resolves to "unavailable"
+# - it never falls back to another country's numbers.
+_COUNTRY_ALIASES = {
+    "usa": "US", "united states": "US", "united states of america": "US",
+    "america": "US", "u.s.": "US", "u.s.a.": "US",
+    "india": "IN", "bharat": "IN",
+    "uk": "GB", "united kingdom": "GB", "great britain": "GB", "england": "GB",
+    "uae": "AE", "united arab emirates": "AE",
+}
+
+
+def _normalize_country(country):
+    """Normalize a country value to an ISO-3166 alpha-2 code, best-effort."""
+    if not country:
+        return None
+    c = str(country).strip()
+    if len(c) == 2:                       # already an alpha-2 code (e.g. "IN", "us")
+        return c.upper()
+    return _COUNTRY_ALIASES.get(c.lower(), c.upper())
+
+
 NUMERAL_MAP = {
     "hi": "०१२३४५६७८९",
     "mr": "०१२३४५६७८९",
@@ -72,10 +95,12 @@ class LocationResolver:
                     "zip": data.get("postal"),
                     "city": data.get("city"),
                     "state": data.get("region"),
-                    "country": data.get("country", "US")
+                    # Do NOT assume US when the country is unknown - an unresolved
+                    # country must not silently inherit US emergency numbers.
+                    "country": data.get("country")
                 }
         except Exception:
-            return {"country": "US"}
+            return {}
 
     def _reverse_geocode(self, lat, lng):
         try:
@@ -184,58 +209,46 @@ class EmergencyServiceResolver:
         zip_code = location.get("zip")
         city = (location.get("city", "").title() if location.get("city") else None)
         state = (location.get("state", "").title() if location.get("state") else None)
-        country = location.get("country")
+        country = _normalize_country(location.get("country"))
 
         if not country:
             return None, None
 
-        country_data = data.get(country.upper(), {})
+        country_data = data.get(country, {})
+        if not country_data:
+            # Unknown / unmatched country (e.g. locale sent as a name instead of an
+            # ISO code): do NOT cross jurisdictions. Report unavailable rather than
+            # returning another country's emergency numbers.
+            return None, None
 
-        def filter_service(services):
-            if not services:
-                return None
-            if requested_service:
-                val = services.get(requested_service)
-                return {requested_service: val} if val else None
-            return services
+        state_data = (
+            country_data.get("states", {}).get(state, {}) if state else {}
+        )
 
-        if zip_code:
-            zip_services = (
-                country_data
-                .get("states", {})
-                .get(state, {})
-                .get("zips", {})
-                .get(zip_code)
-            )
-            if zip_services:
-                return filter_service(zip_services), "zip"
+        # Candidate service sets, most specific first - ALL within the resolved
+        # country. We never fall back to another country (e.g. US).
+        candidates = [
+            (state_data.get("zips", {}).get(zip_code) if zip_code else None, "zip"),
+            (state_data.get("cities", {}).get(city) if city else None, "city"),
+            (state_data.get("default") if state else None, "state"),
+            (country_data.get("default"), "country"),
+        ]
 
-        if city:
-            city_services = (
-                country_data
-                .get("states", {})
-                .get(state, {})
-                .get("cities", {})
-                .get(city)
-            )
-            if city_services:
-                return filter_service(city_services), "city"
+        if requested_service:
+            # Return the first level that actually has this service (within-country
+            # descent: zip -> city -> state -> country default). If no level in this
+            # country provides it, return None ("unavailable") - never a foreign number.
+            for services, level in candidates:
+                if services and services.get(requested_service):
+                    return {requested_service: services[requested_service]}, level
+            return None, None
 
-        if state:
-            state_services = (
-                country_data
-                .get("states", {})
-                .get(state, {})
-                .get("default")
-            )
-            if state_services:
-                return filter_service(state_services), "state"
-
-        if country_data.get("default"):
-            return filter_service(country_data["default"]), "country"
-
-        us_default = data.get("US", {}).get("default")
-        return filter_service(us_default), "country"
+        # No specific service requested: return the most specific full set available
+        # within this country.
+        for services, level in candidates:
+            if services:
+                return services, level
+        return None, None
 
     def load_data(self):
         return self._load_data()
