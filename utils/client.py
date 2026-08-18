@@ -1,3 +1,5 @@
+from groq import Groq
+from google import genai
 from langchain_groq import ChatGroq
 from langchain_google_genai import ChatGoogleGenerativeAI
 import boto3
@@ -8,6 +10,13 @@ logger = logging.getLogger(__name__)
 
 GROQ_PARAM = "/dev/saayam/GenAI/groq/key"
 GEMINI_PARAM = "/dev/saayam/GenAI/gemini/key"
+
+# Model / temperature configuration.
+# Imported by utils/__init__.py (answer generation) and used to build the models below.
+GROQ_MODEL = "llama-3.1-8b-instant"
+GROQ_TEMPERATURE = 0.3
+GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_TEMPERATURE = 0.3
 
 GROQ_API_KEY = None
 GEMINI_API_KEY = None
@@ -39,7 +48,13 @@ except Exception as e:
 print(f"INIT LOG: Groq Key Found: {bool(GROQ_API_KEY)}")
 print(f"INIT LOG: Gemini Key Found: {bool(GEMINI_API_KEY)}")
 
-# --- LangChain Chat Model Initialization ---
+# Raw SDK clients (used by services/classification_service.py):
+#   client.chat.completions.create(...)  and  _gemini_client.models.generate_content(...)
+client = None
+_gemini_client = None
+
+# LangChain chat models (used by utils/__init__.py answer generation and
+# utils/subject_generator.py):  groq_llm.invoke(...) / gemini_llm.invoke(...)
 groq_llm = None
 gemini_llm = None
 
@@ -48,30 +63,37 @@ _use_gemini = False
 
 if GROQ_API_KEY:
     try:
+        client = Groq(api_key=GROQ_API_KEY)
         groq_llm = ChatGroq(
             api_key=GROQ_API_KEY,
-            model="llama-3.1-8b-instant",
-            temperature=0.3,
+            model=GROQ_MODEL,
+            temperature=GROQ_TEMPERATURE,
         )
         _use_groq = True
-        print("INIT LOG: LangChain Groq ChatGroq successfully initialized.")
+        print("INIT LOG: Groq clients (raw + LangChain) successfully initialized.")
     except Exception as e:
-        print(f"INIT ERROR: Groq LangChain initialization failed: {str(e)}")
+        print(f"INIT ERROR: Groq initialization failed: {str(e)}")
+        client = None
+        groq_llm = None
+        _use_groq = False
 else:
     print("INIT LOG: Groq API Key is missing. Groq will be disabled.")
 
 if GEMINI_API_KEY:
     try:
+        _gemini_client = genai.Client(api_key=GEMINI_API_KEY)
         gemini_llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash",
-            temperature=0.3,
+            model=GEMINI_MODEL,
+            temperature=GEMINI_TEMPERATURE,
             google_api_key=GEMINI_API_KEY,
         )
         _use_gemini = True
-        print("INIT LOG: LangChain Gemini ChatGoogleGenerativeAI successfully initialized.")
+        print("INIT LOG: Gemini clients (raw + LangChain) successfully initialized.")
     except Exception as e:
-        print(f"INIT ERROR: Gemini LangChain initialization failed: {str(e)}")
+        print(f"INIT ERROR: Gemini initialization failed: {str(e)}")
+        _gemini_client = None
         gemini_llm = None
+        _use_gemini = False
 else:
     print("INIT LOG: Gemini API Key is missing.")
 
