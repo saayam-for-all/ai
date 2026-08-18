@@ -42,7 +42,7 @@ def load_llm():
         raise ValueError("Missing GROQ_API_KEY in environment variables.")
     print("Using Groq model")
     return ChatGroq(
-        model="meta-llama/llama-4-scout-17b-16e-instruct",
+        model="llama-3.3-70b-versatile",
         temperature=0.1,
         groq_api_key=groq_key,
     )
