@@ -149,36 +149,68 @@ jobs:
       #     echo "=== Flake8 lint (output below) ==="
       #     source .venv/bin/activate
       #     flake8 . --max-line-length=150 --exclude=.venv,__pycache__,.git,build,dist
+      
+      #dhara0611-start
+      ## --- PACKAGING: Zip the Python app + dependencies ---
+              # --- PACKAGING: Zip the Python app + dependencies ---
+      - name: Package Application for AWS Lambda
+        run: |
+          echo "=== Creating deployment package ==="
+          mkdir -p dist
+          
+          # Copy dependencies from your verified virtual environment
+          cp -r .venv/lib/python3.11/site-packages/* dist/
+          
+          # Copy your core application files
+          cp app.py MetaAIAPI_app.py dist/
+          
+          # Bundle everything into a root-level deployment zip
+          cd dist
+          zip -r ../lambda-deployment.zip .
+          cd ..
+          echo "=== Packaging complete ==="
+
+      # Save the package to GitHub storage so the upcoming deploy job can access it
+      - name: Upload Build Artifact to GitHub
+        uses: actions/upload-artifact@v4
+        with:
+          name: compiled-build-archive
+          path: lambda-deployment.zip
+      #dhara0611-end
+
 
   # --- BUILD DOCKER IMAGE AND PUSH: Docker build job ---
-  build-docker:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20  # FIX: added timeout
-    needs: build-and-test
-    # FIX: run on both push AND pull_request 
-    # This ensures a broken Dockerfile is caught before merge.
-    permissions:
-      contents: read
-      id-token: write  # for OIDC with AWS (if using ECR)
-    defaults:
-      run:
-        working-directory: .
+  # commenting the build-docker step
+  #dhara0611-start
+  # build-docker:
+  #   runs-on: ubuntu-latest
+  #   timeout-minutes: 20  # FIX: added timeout
+  #   needs: build-and-test
+  #   # FIX: run on both push AND pull_request 
+  #   # This ensures a broken Dockerfile is caught before merge.
+  #   permissions:
+  #     contents: read
+  #     id-token: write  # for OIDC with AWS (if using ECR)
+  #   defaults:
+  #     run:
+  #       working-directory: .
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  
+  #   steps:
+  #     - name: Checkout repository
+  #       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+  #     - name: Set up Docker Buildx
+  #       uses: docker/setup-buildx-action@v3
 
-      - name: Build Docker image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: false  # Never push from this job unless ECR steps below are enabled
-          tags: saayam-ai-assistant:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+  #     - name: Build Docker image
+  #       uses: docker/build-push-action@v6
+  #       with:
+  #         context: .
+  #         push: false  # Never push from this job unless ECR steps below are enabled
+  #         tags: saayam-ai-assistant:${{ github.sha }}
+  #         cache-from: type=gha
+  #         cache-to: type=gha,mode=max
+  #dhara0611-end
 
       # Uncomment and configure for ECR push when ready:
       # - name: Configure AWS credentials
