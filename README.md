@@ -13,8 +13,9 @@ Phase 1 — Confident Search (this repo)
   Exact ID match found → auto_navigate: true → frontend redirects
   No match → fall through
         ↓
-Phase 2 — Fuzzy Search (DB team: pg_trgm)
-  Returns ranked similarity results
+Phase 2 — Fuzzy Search (PostgreSQL FTS + pg_trgm)
+  Fan out across requests, users, and organizations
+  Apply DB-enforced RBAC, merge, rank, and paginate results
 ```
 
 ## Supported ID Formats
@@ -27,6 +28,9 @@ Phase 2 — Fuzzy Search (DB team: pg_trgm)
 | Email        | `user@example.com`      | `/users/<id>`         |
 
 ## API
+
+The complete scope, RBAC matrix, database contract, and deployment checklist are
+documented in [`docs/search-functionality.md`](docs/search-functionality.md).
 
 ### `POST /api/search`
 
@@ -126,6 +130,7 @@ pip install -r requirements.txt
 $env:DATABASE_URL = "postgresql+psycopg2://<user>:<password>@<host>:5432/virginia_dev_saayam_rdbms?sslmode=require"
 $env:FLASK_ENV = "development"
 $env:FLASK_APP = "app"
+$env:SEARCH_DB_SCHEMA = "virginia_dev_saayam_rdbms"
 ```
 
 ### 4. Run locally
@@ -140,9 +145,13 @@ http://127.0.0.1:5000/api/search?q=SID-00-000-000-058
 
 ## Running Tests
 ```bash
-python test_confident_search.py
+python -m unittest discover -v
+python -m compileall -q app test_*.py
 ```
-Expected: 13/13 passed.
+
+These checks do not require `DATABASE_URL`. The standalone
+`test_confident_search.py` script is an integration test and requires an
+approved PostgreSQL test environment.
 
 ## Project Structure
 
@@ -160,10 +169,11 @@ ai/
 │   │   └── company.py                       # companies table (no data yet)
 │   ├── repositories/
 │   │   ├── confident_search_repo.py         # Exact ID matching (GenAI team)
-│   │   ├── user_search_repo.py              # Fuzzy stub (DB team)
-│   │   ├── help_request_search_repo.py      # Fuzzy stub (DB team)
-│   │   ├── organization_search_repo.py      # Fuzzy stub (DB team)
-│   │   └── category_search_repo.py          # Fuzzy stub (DB team)
+│   │   ├── db_search.py                     # Safe DB function execution
+│   │   ├── user_search_repo.py              # search_users adapter
+│   │   ├── help_request_search_repo.py      # search_requests adapter
+│   │   ├── organization_search_repo.py      # search_organizations adapter
+│   │   └── category_search_repo.py          # Reserved outside DB Phase 1
 │   ├── routes/search.py                     # GET /api/search
 │   ├── services/universal_search_service.py # Orchestrates Phase 1 + Phase 2
 │   └── utils/search_utils.py                # Helpers
@@ -187,7 +197,7 @@ DATABASE_URL = postgresql+psycopg2://<user>:<password>@<host>:5432/virginia_dev_
 | Team    | Responsibility                                      |
 |---------|-----------------------------------------------------|
 | GenAI   | Confident search (this repo) — done                 |
-| DB      | Fuzzy search repos (pg_trgm) — stubs ready for them |
+| DB      | PostgreSQL FTS/pg_trgm functions and DB-side authorization |
 | DevOps  | Lambda deployment + API Gateway URL                 |
 | Frontend| Calls `/api/search?q=<query>`, reads `auto_navigate`|
 
