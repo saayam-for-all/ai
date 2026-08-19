@@ -16,22 +16,22 @@ from app.repositories.confident_search_repo import confident_search
 from app.repositories.help_request_search_repo import search_help_requests
 from app.repositories.user_search_repo import search_users
 from app.repositories.organization_search_repo import search_organizations
-from app.repositories.category_search_repo import search_categories
-from app.repositories.company_search_repo import search_companies
-from app.utils.search_utils import should_auto_navigate
+from app.repositories.db_search import SearchBackendUnavailable
+from app.extensions import db
+from sqlalchemy.exc import SQLAlchemyError
 
 # Input validation constants (per MOM: 2–200 characters)
 _MIN_QUERY_LENGTH = 2
 _MAX_QUERY_LENGTH = 200
 _MAX_LIMIT = 20
+_MAX_PER_ENTITY_CANDIDATES = 100
 
 
 class UniversalSearchService:
-
     def search(self, query: str, page: int, limit: int, current_user) -> dict:
         # --- Sanitize & validate ---
         query = (query or "").strip()
-        page  = max(1, page)
+        page = max(1, page)
         limit = max(1, min(limit or 10, _MAX_LIMIT))
 
         if not query:
@@ -40,13 +40,17 @@ class UniversalSearchService:
         if len(query) < _MIN_QUERY_LENGTH:
             return self._error(
                 f"Search query must be at least {_MIN_QUERY_LENGTH} characters",
-                query, page, limit,
+                query,
+                page,
+                limit,
             )
 
         if len(query) > _MAX_QUERY_LENGTH:
             return self._error(
                 f"Search query must be at most {_MAX_QUERY_LENGTH} characters",
-                query, page, limit,
+                query,
+                page,
+                limit,
             )
 
         # -----------------------------------------------------------------------
@@ -54,7 +58,13 @@ class UniversalSearchService:
         # If the query looks like a known ID format and a record exists,
         # short-circuit immediately. No fuzzy search needed.
         # -----------------------------------------------------------------------
-        confident_result = confident_search(query, current_user)
+        try:
+            confident_result = confident_search(query, current_user)
+        except SQLAlchemyError as exc:
+            db.session.rollback()
+            raise SearchBackendUnavailable(
+                "Database search is unavailable"
+            ) from exc
 
         if confident_result is not None:
             return {
@@ -64,7 +74,7 @@ class UniversalSearchService:
                 "page": 1,
                 "limit": limit,
                 "total": 1,
-                "auto_navigate": True,       # UI should redirect directly
+                "auto_navigate": True,  # UI should redirect directly
                 "target": confident_result,
                 "results": [confident_result],
             }
@@ -73,23 +83,33 @@ class UniversalSearchService:
         # PHASE 2 — Fuzzy / Universal Search (DB team handles pg_trgm layer)
         # Each repo applies role-based authorization before filtering.
         # -----------------------------------------------------------------------
+        per_entity_limit = min(page * limit, _MAX_PER_ENTITY_CANDIDATES)
         results = []
-        results.extend(search_help_requests(query, current_user))
-        results.extend(search_users(query, current_user))
-        results.extend(search_organizations(query, current_user))
-        results.extend(search_categories(query, current_user))
-        results.extend(search_companies(query, current_user))
+        results.extend(search_help_requests(query, current_user, per_entity_limit))
+        results.extend(search_users(query, current_user, per_entity_limit))
+        results.extend(search_organizations(query, current_user, per_entity_limit))
+
+        # A result can appear through multiple aliases. Keep the highest-scored
+        # occurrence while preserving cross-entity results.
+        deduplicated = {}
+        for item in results:
+            key = (item.get("entity_type"), item.get("entity_id"))
+            current = deduplicated.get(key)
+            if current is None or item.get("score", 0) > current.get("score", 0):
+                deduplicated[key] = item
+        results = list(deduplicated.values())
 
         # Sort: score descending, then entity_type for stable ordering
-        results.sort(key=lambda item: (-item.get("score", 0), item.get("entity_type", "")))
+        results.sort(
+            key=lambda item: (
+                -item.get("score", 0),
+                item.get("entity_type", ""),
+            )
+        )
 
         total = len(results)
         start = (page - 1) * limit
         paginated = results[start : start + limit]
-
-        # should_auto_navigate: True only when exactly 1 result with score >= 95
-        auto_navigate = should_auto_navigate(paginated)
-        target = paginated[0] if auto_navigate else None
 
         return {
             "success": True,
@@ -98,8 +118,10 @@ class UniversalSearchService:
             "page": page,
             "limit": limit,
             "total": total,
-            "auto_navigate": auto_navigate,
-            "target": target,
+            # Navigation is reserved for Phase 1 exact matches. A fuzzy score,
+            # even a strong one, must still be confirmed by the user.
+            "auto_navigate": False,
+            "target": None,
             "results": paginated,
         }
 

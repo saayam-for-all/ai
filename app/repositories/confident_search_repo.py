@@ -22,6 +22,7 @@ from app.models.user import User
 from app.models.help_request import HelpRequest
 from app.models.organization import Organization
 from app.models.category import Category
+from app.auth.search_scope import build_search_scope
 
 
 # ---------------------------------------------------------------------------
@@ -33,14 +34,15 @@ _UUID_RE = re.compile(
     re.IGNORECASE,
 )
 _EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
-_REQ_RE   = re.compile(r"^REQ-\d{2}-\d{3}-\d{3}-\d{4}$")
-_USR_RE   = re.compile(r"^SID-\d{2}-\d{3}-\d{3}-\d{3}$")
-_ORG_RE   = re.compile(r"^ORG-\d+$")           # org table empty; pattern TBD
-_CAT_RE   = re.compile(r"^\d+(\.\d+)*$")       # matches 1, 1.1, 0.0.0.0.0
+_REQ_RE = re.compile(r"^REQ-\d{2}-\d{3}-\d{3}-\d{4}$")
+_USR_RE = re.compile(r"^SID-\d{2}-\d{3}-\d{3}-\d{3}$")
+_ORG_RE = re.compile(r"^ORG-\d+$")  # org table empty; pattern TBD
+_CAT_RE = re.compile(r"^\d+(\.\d+)*$")  # matches 1, 1.1, 0.0.0.0.0
 
 
 def _is_uuid(q: str) -> bool:
     return bool(_UUID_RE.match(q))
+
 
 def _is_email(q: str) -> bool:
     return bool(_EMAIL_RE.match(q))
@@ -63,22 +65,27 @@ def _is_cat_id(q: str) -> bool:
 # ---------------------------------------------------------------------------
 
 def _user_is_authorized(user_row: User, current_user) -> bool:
-    role = current_user.role
-    if role in {"admin", "super_admin"}:
-        return True
-    # beneficiary/volunteer can only see their own profile
-    return user_row.user_id == current_user.id
+    scope = build_search_scope(current_user)
+    return scope.is_admin or user_row.user_id in scope.allowed_user_ids
 
 
 def _help_request_is_authorized(req_row: HelpRequest, current_user) -> bool:
-    role = current_user.role
-    if role == "super_admin":
+    scope = build_search_scope(current_user)
+    if scope.is_admin or req_row.req_user_id in scope.allowed_request_owner_ids:
         return True
-    if role in {"admin", "organization", "volunteer"}:
-        return req_row.to_public or True  # no org/scope columns on request table
-    if role == "beneficiary":
-        return req_row.req_user_id == current_user.id
-    return False
+    return bool(getattr(req_row, "to_public", False)) and scope.role in {
+        "guest",
+        "member",
+        "volunteer",
+        "organization",
+        "organization_admin",
+        "org_admin",
+    }
+
+
+def _organization_is_authorized(org_row: Organization, current_user) -> bool:
+    scope = build_search_scope(current_user)
+    return scope.is_admin or org_row.org_id in scope.allowed_org_ids
 
 
 # ---------------------------------------------------------------------------
@@ -160,7 +167,7 @@ def confident_search(query: str, current_user) -> Optional[dict]:
             .filter(func.lower(Organization.org_id) == q_lower)
             .first()
         )
-        if row:
+        if row and _organization_is_authorized(row, current_user):
             return _org_result(row)
 
     # --- Category: CAT-xxx

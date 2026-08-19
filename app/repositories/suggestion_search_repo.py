@@ -4,14 +4,18 @@ app/repositories/suggestion_search_repo.py
 
 from typing import List
 from sqlalchemy import or_, func
-from sqlalchemy.exc import ProgrammingError
+from sqlalchemy.exc import SQLAlchemyError
 from app.extensions import db
 from app.models.user import User
 from app.models.help_request import HelpRequest
 from app.models.organization import Organization
 from app.models.category import Category
-from app.models.company import Company
-from app.repositories.confident_search_repo import _user_is_authorized, _help_request_is_authorized
+from app.repositories.confident_search_repo import (
+    _help_request_is_authorized,
+    _organization_is_authorized,
+    _user_is_authorized,
+)
+from app.repositories.db_search import SearchBackendUnavailable
 from app.utils.search_utils import normalize_query
 
 
@@ -23,7 +27,15 @@ def _build_contains(value: str) -> str:
     return f"%{value}%"
 
 
-def _suggestion_result(entity_type: str, entity_id: str, title: str, subtitle: str, url: str, score: int, match_type: str) -> dict:
+def _suggestion_result(
+    entity_type: str,
+    entity_id: str,
+    title: str,
+    subtitle: str,
+    url: str,
+    score: int,
+    match_type: str,
+) -> dict:
     return {
         "entity_type": entity_type,
         "entity_id": entity_id,
@@ -143,6 +155,9 @@ def _search_organizations(query: str, current_user, per_entity_limit: int) -> Li
 
     results = []
     for row in matched_rows:
+        if not _organization_is_authorized(row, current_user):
+            continue
+
         if row.org_id.lower().startswith(query):
             match_type = "id_prefix"
             score = 90
@@ -205,64 +220,29 @@ def _search_categories(query: str, current_user, per_entity_limit: int) -> List[
     return results
 
 
-def _search_companies(query: str, current_user, per_entity_limit: int) -> List[dict]:
-    q_prefix = _build_prefix(query)
-    q_contains = _build_contains(query)
-
-    try:
-        matched_rows = (
-            db.session.query(Company)
-            .filter(
-                or_(
-                    func.lower(Company.company_id).like(q_prefix),
-                    func.lower(Company.name).like(q_contains),
-                )
-            )
-            .limit(per_entity_limit)
-            .all()
-        )
-    except ProgrammingError:
-        return []
-
-    results = []
-    for row in matched_rows:
-        if row.company_id.lower().startswith(query):
-            match_type = "id_prefix"
-            score = 88
-        else:
-            match_type = "name"
-            score = 58
-
-        results.append(
-            _suggestion_result(
-                "company",
-                row.company_id,
-                row.name,
-                "Company",
-                f"/companies/{row.company_id}",
-                score,
-                match_type,
-            )
-        )
-
-    return results
-
-
 def search_suggestions(query: str, current_user, limit: int) -> List[dict]:
     query = normalize_query(query)
     per_entity_limit = max(1, limit)
 
     suggestions = []
-    suggestions.extend(_search_users(query, current_user, per_entity_limit))
-    suggestions.extend(_search_help_requests(query, current_user, per_entity_limit))
-    suggestions.extend(_search_organizations(query, current_user, per_entity_limit))
-    suggestions.extend(_search_categories(query, current_user, per_entity_limit))
-    suggestions.extend(_search_companies(query, current_user, per_entity_limit))
+    try:
+        suggestions.extend(_search_users(query, current_user, per_entity_limit))
+        suggestions.extend(_search_help_requests(query, current_user, per_entity_limit))
+        suggestions.extend(_search_organizations(query, current_user, per_entity_limit))
+        suggestions.extend(_search_categories(query, current_user, per_entity_limit))
+    except SQLAlchemyError as exc:
+        db.session.rollback()
+        raise SearchBackendUnavailable(
+            "Suggestion search tables are unavailable"
+        ) from exc
 
     # Deduplicate by type+id and sort by score.
     seen = set()
     unique_results = []
-    for item in sorted(suggestions, key=lambda item: (-item["score"], item["entity_type"], item["title"])):
+    for item in sorted(
+        suggestions,
+        key=lambda item: (-item["score"], item["entity_type"], item["title"]),
+    ):
         key = (item["entity_type"], item["entity_id"])
         if key in seen:
             continue

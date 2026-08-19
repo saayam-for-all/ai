@@ -1,9 +1,10 @@
 from app.extensions import db
+from app.models.schema import DATABASE_SCHEMA
 
 
 class HelpRequest(db.Model):
     __tablename__ = "request"
-    __table_args__ = {"schema": "virginia_dev_saayam_rdbms"}
+    __table_args__ = {"schema": DATABASE_SCHEMA}
 
     req_id = db.Column(db.String(50), primary_key=True, index=True)
     req_user_id = db.Column(db.String(50), nullable=False, index=True)

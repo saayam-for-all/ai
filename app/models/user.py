@@ -1,9 +1,10 @@
 from app.extensions import db
+from app.models.schema import DATABASE_SCHEMA
 
 
 class User(db.Model):
     __tablename__ = "users"
-    __table_args__ = {"schema": "virginia_dev_saayam_rdbms"}
+    __table_args__ = {"schema": DATABASE_SCHEMA}
 
     user_id = db.Column(db.String(50), primary_key=True, index=True)
     full_name = db.Column(db.String(255), nullable=False, index=True)
