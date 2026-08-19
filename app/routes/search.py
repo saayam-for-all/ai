@@ -4,7 +4,8 @@ app/routes/search.py
 """
 
 from flask import Blueprint, request, jsonify
-from app.auth.current_user import get_current_user
+from app.auth.current_user import AuthenticationRequired, get_current_user
+from app.repositories.db_search import SearchBackendUnavailable
 from app.services.universal_search_service import UniversalSearchService
 
 # The API prefix is configured at app startup so the route can be mounted
@@ -32,6 +33,21 @@ def _invalid_query_response():
         "target": None,
         "results": [],
     }), 400
+
+
+def _error_response(message, status_code, error_code):
+    return jsonify({
+        "success": False,
+        "message": message,
+        "error_code": error_code,
+        "query": "",
+        "page": 1,
+        "limit": 10,
+        "total": 0,
+        "auto_navigate": False,
+        "target": None,
+        "results": [],
+    }), status_code
 
 
 @search_bp.route("/search", methods=["GET", "POST"])
@@ -90,15 +106,29 @@ def universal_search():
     page = _parse_integer(page, 1)
     limit = _parse_integer(limit, 10)
 
-    current_user = get_current_user()
+    try:
+        current_user = get_current_user()
+    except AuthenticationRequired:
+        return _error_response(
+            "Authentication is required",
+            401,
+            "authentication_required",
+        )
 
     service = UniversalSearchService()
-    response = service.search(
-        query=query,
-        page=page,
-        limit=limit,
-        current_user=current_user,
-    )
+    try:
+        response = service.search(
+            query=query,
+            page=page,
+            limit=limit,
+            current_user=current_user,
+        )
+    except SearchBackendUnavailable:
+        return _error_response(
+            "Search is temporarily unavailable",
+            503,
+            "search_backend_unavailable",
+        )
 
     status_code = 200 if response["success"] else 400
     return jsonify(response), status_code

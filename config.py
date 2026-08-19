@@ -41,3 +41,12 @@ class Config:
     API_URL_PREFIX = os.getenv("API_URL_PREFIX", "/api")
     AUTH_USER_ID_HEADER = os.getenv("AUTH_USER_ID_HEADER", "X-Api-User-Id")
     AUTH_USER_ROLE_HEADER = os.getenv("AUTH_USER_ROLE_HEADER", "X-Api-User-Role")
+    DATABASE_SCHEMA = os.getenv(
+        "DATABASE_SCHEMA",
+        os.getenv("SEARCH_DB_SCHEMA", "virginia_dev_saayam_rdbms"),
+    )
+    SEARCH_DB_SCHEMA = os.getenv("SEARCH_DB_SCHEMA", DATABASE_SCHEMA)
+    if DATABASE_SCHEMA != SEARCH_DB_SCHEMA:
+        raise RuntimeError(
+            "DATABASE_SCHEMA and SEARCH_DB_SCHEMA must identify the same schema"
+        )

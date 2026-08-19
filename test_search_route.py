@@ -4,6 +4,8 @@ from unittest.mock import patch
 
 from flask import Flask
 
+from app.auth.current_user import AuthenticationRequired
+from app.repositories.db_search import SearchBackendUnavailable
 from app.routes.search import search_bp
 
 
@@ -232,6 +234,35 @@ class SearchRouteTestCase(unittest.TestCase):
             page=1,
             limit=10,
             current_user=None,
+        )
+
+    def test_search_requires_authentication(self):
+        with patch(
+            "app.routes.search.get_current_user",
+            side_effect=AuthenticationRequired,
+        ):
+            response = self.client.get("/api/search?q=hello")
+
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(
+            response.get_json()["error_code"],
+            "authentication_required",
+        )
+
+    def test_search_backend_failure_returns_service_unavailable(self):
+        with patch(
+            "app.routes.search.get_current_user",
+            return_value={"user_id": "SID-1", "role": "admin"},
+        ), patch(
+            "app.routes.search.UniversalSearchService.search",
+            side_effect=SearchBackendUnavailable,
+        ):
+            response = self.client.get("/api/search?q=hello")
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(
+            response.get_json()["error_code"],
+            "search_backend_unavailable",
         )
 
 
