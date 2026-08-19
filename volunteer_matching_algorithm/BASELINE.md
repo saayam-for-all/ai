@@ -1,9 +1,10 @@
 # Volunteer Matching: Current State Baseline
 
 What the matcher does today, before any clustering, fuzzy matching, or match-%
-work. Every number here came from running the code on the checked-in sample data.
+work.
 
 Base branch: `feature/volunteer_matching_algorithm` (commit `658fe8e`)
+Main issue: #144
 Related: issues #37, #42, #43
 
 ## Running it
