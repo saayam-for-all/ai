@@ -12,6 +12,10 @@ on:
       - test
       - dev
       - main
+    #dhara-start
+    #This tells GitHub to run on ANY branch update, remove this later!
+      - '**' 
+    #dhara-end
 
   pull_request:
     branches:
