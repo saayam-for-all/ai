@@ -185,7 +185,7 @@ a request with zero eligible volunteers look identical to the caller.
    volunteers. `/match/{request_id}` can only ever address 4 requests. This blocks
    any evaluation work.
 
-2. **`match_volunteer_group` silently returns fewer members than asked.** The dedup
+2. **`match_volunteer_group` returns fewer members than asked.** The dedup
    line is `remaining = remaining[remaining["VOL_ID"] != best_addition["VOL_ID"]]`,
    which drops every row sharing that `VOL_ID`. 501 of 507 volunteers have a blank
    `VOL_ID`, so selecting one blank-ID member wipes the rest of the pool. Asking for
@@ -202,8 +202,7 @@ a request with zero eligible volunteers look identical to the caller.
 5. **TF-IDF contributes nothing for most candidates.** 90 of 169 active volunteers
    score exactly 0.0 on `TFIDF_Sim` for REQ_1, because volunteer text is a short skill
    list that shares no literal tokens with the request prose. The 30%-of-50% TF-IDF
-   weight is effectively inactive for most of the pool. Worth knowing before anyone
-   tunes the weights.
+   weight is effectively inactive for most of the pool.
 
 6. **Language matching is substring containment, not set membership.**
    `1 if req_lang in x else 0` over the raw `LanguagesSpoken` string. It works on this
@@ -224,11 +223,10 @@ a request with zero eligible volunteers look identical to the caller.
    `matcher.calculate_diversity_score` both encode weighting logic, with different
    weights, in different files. Any change to relevance has to be made twice.
 
-10. **Embeddings are recomputed per request, one at a time.**
+10. **Embeddings are recomputed per request**
     `[get_embedding(v) for v in volunteer_texts]` plus a second pass for `SkillMatch`
-    is about 338 individual `model.encode()` calls per request at 169 volunteers. No
-    batching, no caching, no persistence. ~2.7s per request at this size, scaling
-    linearly.
+    is about 338 individual `model.encode()` calls per request at 169 volunteers. 
+    There is no batching, caching or persistence so this will scale linearly as the numbers go up which could prove to be slow. ~2.7s per request as of now.
 
 11. **No tests.** No `tests/` directory, no `test_*.py` under
     `volunteer_matching_algorithm/`.
@@ -239,8 +237,6 @@ a request with zero eligible volunteers look identical to the caller.
 
 13. **`.idea/` is committed.** Should be gitignored.
 
-14. **No fuzzy, synonym, or clustering logic exists yet.** Expected, since that is the
-    follow-up work. The BERT layer is the only thing bridging vocabulary gaps today.
 
 ## Schema: current vs. Issue #42
 
