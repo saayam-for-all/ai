@@ -156,13 +156,11 @@ jobs:
       
       #dhara0611-start
       ## --- PACKAGING: Zip the Python app + dependencies ---
-              # --- PACKAGING: Zip the Python app + dependencies ---
       - name: Package Application for AWS Lambda
         run: |
           echo "=== Creating deployment package ==="
           mkdir -p dist
-          
-          # Copy dependencies from your verified virtual environment
+          #Copy dependencies from your verified virtual environment
           cp -r .venv/lib/python3.11/site-packages/* dist/
           
           # Copy your core application files
@@ -237,3 +235,38 @@ jobs:
       #       ${{ steps.login-ecr.outputs.registry }}/${{ secrets.ECR_REPOSITORY }}:latest
       #     cache-from: type=gha
       #     cache-to: type=gha,mode=max
+  
+  #dhara0611-start
+  deploy:
+    needs: build-and-test
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    
+    env:
+      AWS_REGION: "us-east-1"      # <-- Update to your AWS Region
+      S3_BUCKET: "saayam-virginia-private" # <-- Update to your S3 Bucket Name
+      APP_NAME: "ai-app"
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      # Download the deployment zip package from GitHub's storage
+      - name: Download Build Artifact from GitHub
+        uses: actions/download-artifact@v4
+        with:
+          name: compiled-build-archive
+          path: ./
+      
+      - name: Generate Version Tag
+        id: ver
+        shell: bash
+        run: |
+          DATE_UTC=$(date -u +%Y%m%d-%H%M)
+          VERSION_TAG="v1.0.0-${DATE_UTC}"
+
+          echo "version=${VERSION_TAG}" >> $GITHUB_OUTPUT
+          echo "zip_name=lambda-deployment.zip" >> $GITHUB_OUTPUT
+          echo "archive_name=${{ env.APP_NAME }}-${VERSION_TAG}.zip" >> $GITHUB_OUTPUT
+  #dhara-end
+      
