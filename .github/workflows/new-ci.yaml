@@ -55,6 +55,7 @@ jobs:
 
       # --- Set up Python (with pip cache) ---
       - name: Set up Python
+        id : setup-python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -71,9 +72,11 @@ jobs:
         id: cache-venv
         with:
           path: .venv
-          key: ${{ runner.os }}-venv-${{ hashFiles('requirements.txt', 'pyproject.toml') }}
+          key: ${{ runner.os }}-venv-${{ steps.setup-python.outputs.pythonLocation }}-${{ hashFiles('requirements.txt', 'pyproject.toml') }}
           restore-keys: |
+            ${{ runner.os }}-venv-${{ steps.setup-python.outputs.pythonLocation }}
             ${{ runner.os }}-venv-
+
 
       - name: Cache status
         run: |
