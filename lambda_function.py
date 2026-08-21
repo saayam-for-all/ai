@@ -198,7 +198,11 @@ def generate_answer_handler(event, context):
 # 5. Generate Subject
 def generate_subject_handler(event, context):
     """AWS Lambda entry point for generate_subject service"""
-    print("DEBUG EVENT:", json.dumps(event))
+    # The event carries the user's free text description and the request headers.
+    # Help request descriptions routinely contain health, housing and financial
+    # details, and the headers carry the caller's authorization token, so the
+    # event is never logged. Log only the shape of the payload.
+    print("LOG: generate_subject invoked, event keys:", sorted(event.keys()))
 
     try:
         raw_body = event.get("body")
