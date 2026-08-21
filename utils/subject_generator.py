@@ -1,4 +1,19 @@
+import re
+
 from utils.client import groq_llm, gemini_llm, _use_groq, _use_gemini
+
+# Strips a leading "Subject:" / "Title:" label that some models prepend despite
+# being told not to.
+_LABEL_RE = re.compile(r"^\s*(subject|title)\s*[:\-]\s*", re.IGNORECASE)
+
+
+def _clean_subject(text) -> str:
+    """Normalize a raw LLM subject: drop a leading label and surrounding quotes."""
+    s = str(text).strip()
+    s = _LABEL_RE.sub("", s)
+    s = s.strip().strip('"').strip("'").strip()
+    return s or "General Inquiry"
+
 
 def _truncate_with_word_boundary(text: str, max_length: int) -> str:
     """
@@ -36,12 +51,24 @@ def generate_subject_from_description(description: str, max_length: int = 70) ->
     description = description.strip()
 
     # declaring prompt
-    prompt = f"""Generate a concise subject/title (maximum {max_length} characters) that summarizes the following description. 
-Return ONLY the subject, no additional text or explanation. Keep it brief and descriptive.
+    prompt = f"""You are writing the subject line for a help request. Produce ONE concise, specific subject (max {max_length} characters) for the description below. Write it as the person's own request or concern, never as a diagnosis or clinical assessment.
 
-Description: {description}
+Rules:
+- Write a concise noun phrase, like a news headline.
+- Include the specific details actually stated (symptoms, who it's for, type, timeframe), and keep meaning-critical words exactly (e.g. "roommate" is not "room").
+- If the person raises a possible cause, body part, or specialty they are worried about (e.g. "not sure if it's my heart"), keep that cue but frame it as THEIR concern (e.g. "Heart Concern"), NOT as a diagnosis. Do not add words like "Possible", "Issue", "Condition", or "Disorder" that they did not say.
+- Do not introduce assessment, severity, or certainty words the person did not use (e.g. "severe", "chronic", "acute", "unexplained").
+- Do NOT over-generalize away specifics: keep "ringing / congestion" (not "ear problem"); keep BOTH symptoms if two are stated; keep a stated timeframe like "short/mid term".
+- Name the thing itself; do NOT append status words like "Needed", "Required", "Wanted", "Seeking", "Request", "Assistance", or "Appointment". E.g. "Knee Injury Physiotherapy Needed" -> "Knee Injury Physiotherapy".
+- Do not invent details.
+- Output ONLY the subject text: no quotes, no "Subject:"/"Title:" label, no explanation.
 
-Subject (max {max_length} chars)"""
+Examples (description -> subject):
+"My ears feel clogged and are ringing lately." -> Ear Congestion and Ringing
+"I feel tired and short of breath on stairs, not sure if it's my heart." -> Fatigue and Breathlessness, Heart Concern
+"Single male looking for a roommate to share a room for rent, short/mid term." -> Single Male Roommate for Rent (Short/Mid Term)
+
+Description: {description}"""
 
     # ---------- CASE 1: Short description ----------
 
@@ -55,7 +82,7 @@ Subject (max {max_length} chars)"""
             try:
                 ai_message = groq_llm.invoke(prompt)
                 content = getattr(ai_message, "content", None) or ""
-                generated_subject = str(content).strip().strip('"').strip("'") or "General Inquiry"
+                generated_subject = _clean_subject(content)
 
                 # Strictly enforce max_length - truncate if necessary
                 if len(generated_subject) <= max_length:
@@ -69,7 +96,7 @@ Subject (max {max_length} chars)"""
             try:
                 ai_message = gemini_llm.invoke(prompt)
                 content = getattr(ai_message, "content", None) or ""
-                generated_subject = str(content).strip().strip('"').strip("'") or "General Inquiry"
+                generated_subject = _clean_subject(content)
 
                 # Strictly enforce max_length - truncate if necessary
                 if len(generated_subject) <= max_length:
