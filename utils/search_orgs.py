@@ -33,15 +33,15 @@ parser = JsonOutputParser(pydantic_object=OrganizationList)
 # 2. Model Loader
 # -----------------------------
 def load_llm():
-    from utils.client import GROQ_API_KEY
+    from utils.client import GROQ_API_KEY, GROQ_MODEL
     if not GROQ_API_KEY:
         raise ValueError("Missing GROQ_API_KEY in AWS SSM Parameter Store.")
     print("Using Groq model")
-    return ChatGroq(
-        model="meta-llama/llama-4-scout-17b-16e-instruct",
-        temperature=0.1,
-        groq_api_key=GROQ_API_KEY,
-    )
+    kwargs = dict(model=GROQ_MODEL, temperature=0.1, groq_api_key=GROQ_API_KEY)
+    # gpt-oss reasoning models: keep effort low so the JSON output is fast and reliable.
+    if "gpt-oss" in GROQ_MODEL:
+        kwargs["reasoning_effort"] = "low"
+    return ChatGroq(**kwargs)
 
 # -----------------------------
 # 3. Prompt Builder Function

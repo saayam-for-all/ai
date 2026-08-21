@@ -13,7 +13,9 @@ GEMINI_PARAM = "/dev/saayam/GenAI/gemini/key"
 
 # Model / temperature configuration.
 # Imported by utils/__init__.py (answer generation) and used to build the models below.
-GROQ_MODEL = "llama-3.1-8b-instant"
+# Groq retired the Llama 3.x/4 models; openai/gpt-oss-20b is the current lightweight
+# instruction model. Classification adds reasoning_effort="low" on its JSON calls.
+GROQ_MODEL = "openai/gpt-oss-20b"
 GROQ_TEMPERATURE = 0.3
 GEMINI_MODEL = "gemini-2.5-flash"
 GEMINI_TEMPERATURE = 0.3

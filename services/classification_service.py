@@ -1,6 +1,7 @@
 import json
+from groq import GroqError
 from utils.categories_with_description import TAXONOMY
-from utils.client import client, _use_groq, _gemini_client
+from utils.client import client, _use_groq, _gemini_client, GROQ_MODEL
 from utils.predict_category_list import (
     help_categories,
     category_name_to_number,
@@ -12,11 +13,22 @@ from utils.routing_for_categories import is_elderly_context
 
 
 class GroqClassificationService:
-    def __init__(self, model="llama-3.1-8b-instant", temperature=0.8, top_p=0.3):
-        self.model = model
+    def __init__(self, model=None, temperature=0.8, top_p=0.3):
+        # Default to the single source of truth in utils.client so a model change
+        # only has to happen in one place.
+        self.model = model or GROQ_MODEL
         self.temperature = temperature
         self.top_p = top_p
         self.gemini_model = "gemini-2.0-flash"
+
+    def _groq_extra_kwargs(self) -> dict:
+        # gpt-oss reasoning models default to high reasoning effort, which can starve
+        # the grammar-constrained JSON output and return empty content
+        # (Groq: json_validate_failed). Low effort keeps the JSON reliable. No-op for
+        # non gpt-oss models.
+        if "gpt-oss" in self.model:
+            return {"reasoning_effort": "low"}
+        return {}
 
     def _build_prompt_for_candidates(
         self, description: str, candidates: list[str]
@@ -278,6 +290,7 @@ class GroqClassificationService:
                     temperature=self.temperature,
                     top_p=self.top_p,
                     response_format={"type": "json_object"},
+                    **self._groq_extra_kwargs(),
                 )
                 usage = self._extract_groq_usage(response)
                 accumulator["total_calls"] += 1
@@ -305,7 +318,10 @@ class GroqClassificationService:
                 print(
                     f"LOG ERROR: Groq returned invalid category: {category_id}. Raw={res_content}"
                 )
-            except (json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
+            except (json.JSONDecodeError, KeyError, TypeError, ValueError, GroqError) as e:
+                # GroqError covers API failures (model 404, rate limit, json_validate_failed)
+                # so a Groq outage degrades to the Gemini fallback instead of crashing the
+                # whole request (which would leave the frontend stuck on General).
                 print(f"LOG ERROR: Groq attempt failed: {str(e)}")
 
         print("LOG: Falling back to Gemini...")
@@ -330,6 +346,7 @@ class GroqClassificationService:
                     temperature=self.temperature,
                     top_p=self.top_p,
                     response_format={"type": "json_object"},
+                    **self._groq_extra_kwargs(),
                 )
                 usage = self._extract_groq_usage(response)
                 accumulator["total_calls"] += 1
@@ -355,7 +372,10 @@ class GroqClassificationService:
                     "LOG ERROR: Groq ranked response yielded no valid categories. "
                     f"Candidates={len(candidate_set)}"
                 )
-            except (json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
+            except (json.JSONDecodeError, KeyError, TypeError, ValueError, GroqError) as e:
+                # GroqError covers API failures (model 404, rate limit, json_validate_failed)
+                # so a Groq outage degrades to the Gemini fallback instead of crashing the
+                # whole request (which would leave the frontend stuck on General).
                 print(f"LOG ERROR: Groq attempt failed: {str(e)}")
 
         print("LOG: Falling back to Gemini...")
