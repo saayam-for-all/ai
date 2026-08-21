@@ -39,6 +39,12 @@ except Exception as e:
 print(f"INIT LOG: Groq Key Found: {bool(GROQ_API_KEY)}")
 print(f"INIT LOG: Gemini Key Found: {bool(GEMINI_API_KEY)}")
 
+# --- Model configuration ---
+# Groq retired the Llama 3.x models, so calls to llama-3.1-8b-instant now fail with
+# 404 model_not_found. openai/gpt-oss-20b is the current lightweight instruction model.
+GROQ_MODEL = "openai/gpt-oss-20b"
+GROQ_TEMPERATURE = 0.3
+
 # --- LangChain Chat Model Initialization ---
 groq_llm = None
 gemini_llm = None
@@ -50,8 +56,8 @@ if GROQ_API_KEY:
     try:
         groq_llm = ChatGroq(
             api_key=GROQ_API_KEY,
-            model="llama-3.1-8b-instant",
-            temperature=0.3,
+            model=GROQ_MODEL,
+            temperature=GROQ_TEMPERATURE,
         )
         _use_groq = True
         print("INIT LOG: LangChain Groq ChatGroq successfully initialized.")
