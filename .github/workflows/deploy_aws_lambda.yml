@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - dev
+  workflow_dispatch:
 
 jobs:
   build:
@@ -33,10 +34,31 @@ jobs:
           cp -r utils package/utils
           cp -r services package/services
 
+      - name: Trim files the Lambda runtime already provides
+        run: |
+          # boto3, botocore and s3transfer ship with the Python 3.11 Lambda runtime,
+          # so shipping them again wastes about 24 MB. Packaging tools are never used
+          # at runtime. Distribution metadata is deliberately kept: libraries such as
+          # langchain read their own versions through importlib.metadata at import time.
+          sudo rm -rf package/boto3 package/botocore package/s3transfer \
+                      package/pip package/setuptools package/wheel \
+                      package/pkg_resources
+          sudo find package -type d -name "__pycache__" -prune -exec rm -rf {} + || true
+          sudo find package -type f -name "*.pyc" -delete || true
+
       - name: Zip deployment package
         run: |
           cd package
-          zip -r ../deployment.zip .
+          zip -qr ../deployment.zip .
+
+      - name: Report package size
+        run: |
+          bytes=$(wc -c < deployment.zip)
+          echo "Zipped package: $((bytes / 1024 / 1024)) MB (${bytes} bytes)"
+          echo "Direct upload limit is 70167211 bytes; S3 deploy supports 250 MB unzipped."
+          if [ "$bytes" -ge 70167211 ]; then
+            echo "::warning::Package exceeds the direct upload limit. DEPLOY_S3_BUCKET must be set."
+          fi
 
       - name: Upload zip artifact
         uses: actions/upload-artifact@v4
@@ -44,11 +66,44 @@ jobs:
           name: deployment-package
           path: deployment.zip
 
-  deploy-predict-category:
-    name: Deploy Predict Category
+  deploy:
+    name: Deploy ${{ matrix.name }}
     needs: build
     runs-on: ubuntu-latest
+    strategy:
+      # One function failing must not cancel the deploy of the others.
+      fail-fast: false
+      matrix:
+        include:
+          - name: Predict Category
+            access_key_secret: PRED_CAT_AWS_ACCESS_KEY
+            secret_key_secret: PRED_CAT_AWS_SECRET_KEY
+            arn_secret: PRED_CAT_AWS_LAMBDA_ARN
+          - name: Generate Subject
+            access_key_secret: GEN_SUB_AWS_ACCESS_KEY
+            secret_key_secret: GEN_SUB_AWS_SECRET_KEY
+            arn_secret: GEN_SUB_AWS_LAMBDA_ARN
+          - name: Generate Answer
+            access_key_secret: GEN_ANS_AWS_ACCESS_KEY
+            secret_key_secret: GEN_ANS_AWS_SECRET_KEY
+            arn_secret: GEN_ANS_AWS_LAMBDA_ARN
+            timeout: 120
+          - name: Emergency Contacts
+            access_key_secret: EMR_CON_AWS_ACCESS_KEY
+            secret_key_secret: EMR_CON_AWS_SECRET_KEY
+            arn_secret: EMR_CON_AWS_LAMBDA_ARN
+          - name: More Organizations
+            access_key_secret: MORE_ORG_AWS_ACCESS_KEY_ID
+            secret_key_secret: MORE_ORG_AWS_SECRET_ACCESS_KEY
+            arn_secret: MORE_ORG_LAMBDA_ARN
+
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+          sparse-checkout-cone-mode: false
+
       - name: Download zip artifact
         uses: actions/download-artifact@v4
         with:
@@ -57,120 +112,15 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.PRED_CAT_AWS_ACCESS_KEY }}
-          aws-secret-access-key: ${{ secrets.PRED_CAT_AWS_SECRET_KEY }}
+          aws-access-key-id: ${{ secrets[matrix.access_key_secret] }}
+          aws-secret-access-key: ${{ secrets[matrix.secret_key_secret] }}
           aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Deploy to AWS Lambda
+        env:
+          FUNCTION_NAME: ${{ secrets[matrix.arn_secret] }}
+          DEPLOY_S3_BUCKET: ${{ secrets.DEPLOY_S3_BUCKET }}
+          LAMBDA_TIMEOUT: ${{ matrix.timeout }}
         run: |
-          aws lambda update-function-code \
-            --function-name ${{ secrets.PRED_CAT_AWS_LAMBDA_ARN }} \
-            --zip-file fileb://deployment.zip
-          aws lambda wait function-updated \
-            --function-name ${{ secrets.PRED_CAT_AWS_LAMBDA_ARN }}
-
-  deploy-generate-subject:
-    name: Deploy Generate Subject
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download zip artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: deployment-package
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.GEN_SUB_AWS_ACCESS_KEY }}
-          aws-secret-access-key: ${{ secrets.GEN_SUB_AWS_SECRET_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
-
-      - name: Deploy to AWS Lambda
-        run: |
-          aws lambda update-function-code \
-            --function-name ${{ secrets.GEN_SUB_AWS_LAMBDA_ARN }} \
-            --zip-file fileb://deployment.zip
-          aws lambda wait function-updated \
-            --function-name ${{ secrets.GEN_SUB_AWS_LAMBDA_ARN }}
-
-  deploy-generate-answer:
-    name: Deploy Generate Answer
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download zip artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: deployment-package
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.GEN_ANS_AWS_ACCESS_KEY }}
-          aws-secret-access-key: ${{ secrets.GEN_ANS_AWS_SECRET_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
-
-      - name: Deploy to AWS Lambda
-        run: |
-          aws lambda update-function-code \
-            --function-name ${{ secrets.GEN_ANS_AWS_LAMBDA_ARN }} \
-            --zip-file fileb://deployment.zip
-          aws lambda wait function-updated \
-            --function-name ${{ secrets.GEN_ANS_AWS_LAMBDA_ARN }}
-
-      - name: Set Lambda timeout
-        run: |
-          aws lambda update-function-configuration \
-            --function-name ${{ secrets.GEN_ANS_AWS_LAMBDA_ARN }} \
-            --timeout 120
-
-  deploy-emergency-contacts:
-    name: Deploy Emergency Contacts
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download zip artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: deployment-package
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.EMR_CON_AWS_ACCESS_KEY }}
-          aws-secret-access-key: ${{ secrets.EMR_CON_AWS_SECRET_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
-
-      - name: Deploy to AWS Lambda
-        run: |
-          aws lambda update-function-code \
-            --function-name ${{ secrets.EMR_CON_AWS_LAMBDA_ARN }} \
-            --zip-file fileb://deployment.zip
-          aws lambda wait function-updated \
-            --function-name ${{ secrets.EMR_CON_AWS_LAMBDA_ARN }}
-
-  deploy-more-organizations:
-    name: Deploy More Organizations
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download zip artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: deployment-package
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.MORE_ORG_AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.MORE_ORG_AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
-
-      - name: Deploy to AWS Lambda
-        run: |
-          aws lambda update-function-code \
-            --function-name ${{ secrets.MORE_ORG_LAMBDA_ARN }} \
-            --zip-file fileb://deployment.zip
-          aws lambda wait function-updated \
-            --function-name ${{ secrets.MORE_ORG_LAMBDA_ARN }}
+          chmod +x .github/scripts/deploy_lambda.sh
+          .github/scripts/deploy_lambda.sh
