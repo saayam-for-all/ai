@@ -1,277 +1,295 @@
-name: Python Flask CI Pipeline
+  name: Python Flask CI Pipeline
 
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  concurrency:
+    group: ci-${{ github.ref }}
+    cancel-in-progress: true
 
-on:
-  workflow_dispatch:
+  on:
+    workflow_dispatch:
 
-  push:
-    branches:
-      - test
-      - dev
-      - main
-    #dhara-start
-    #This tells GitHub to run on ANY branch update, remove this later!
-      - '**' 
-    #dhara-end
+    push:
+      branches:
+        - test
+        - dev
+        - main
+      #dhara-start
+      #This tells GitHub to run on ANY branch update, remove this later!
+        - '**' 
+      #dhara-end
 
-  pull_request:
-    branches:
-      - test
-      - dev
-      - main
-    types:
-      - opened
-      - synchronize
-      - reopened
+    pull_request:
+      branches:
+        - test
+        - dev
+        - main
+      types:
+        - opened
+        - synchronize
+        - reopened
 
-jobs:
-  build-and-test:
-    runs-on: ubuntu-latest
-    timeout-minutes: 40  # FIX: prevent hung jobs (torch installs can be slow)
-    env:
-      PYTHONUNBUFFERED: 1
-      PYTHONFAULTHANDLER: 1
-    defaults:
-      run:
-        working-directory: .
-        shell: bash
+  jobs:
+    build-and-test:
+      runs-on: ubuntu-latest
+      timeout-minutes: 40  # FIX: prevent hung jobs (torch installs can be slow)
+      env:
+        PYTHONUNBUFFERED: 1
+        PYTHONFAULTHANDLER: 1
+      defaults:
+        run:
+          working-directory: .
+          shell: bash
 
-    steps:
-      # --- CODE: Checkout source ---
-      - name: Checkout repository
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 
-        with:
-          fetch-depth: 0  
+      steps:
+        # --- CODE: Checkout source ---
+        - name: Checkout repository
+          uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 
+          with:
+            fetch-depth: 0  
 
-      - name: Show pipeline info
-        run: |
-          echo "=== Pipeline context ==="
-          echo "Branch: ${{ github.ref_name }}"
-          echo "Commit: ${{ github.sha }}"
-          echo "Event: ${{ github.event_name }}"
+        - name: Show pipeline info
+          run: |
+            echo "=== Pipeline context ==="
+            echo "Branch: ${{ github.ref_name }}"
+            echo "Commit: ${{ github.sha }}"
+            echo "Event: ${{ github.event_name }}"
 
-      # --- Set up Python (with pip cache) ---
-      - name: Set up Python
-        id : setup-python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          #cache: "pip"
+        # --- Set up Python (with pip cache) ---
+        - name: Set up Python
+          id : setup-python
+          uses: actions/setup-python@v5
+          with:
+            python-version: "3.11"
+            #cache: "pip"
 
-      - name: Print Python and pip versions  # FIX: environment debugging
-        run: |
-          python --version
-          pip --version
+        - name: Print Python and pip versions  # FIX: environment debugging
+          run: |
+            python --version
+            pip --version
 
-      # --- Cache virtualenv (skip install when deps unchanged) ---
-      - name: Cache virtualenv
-        uses: actions/cache@v4
-        id: cache-venv
-        with:
-          path: .venv
-          key: ${{ runner.os }}-venv-${{ steps.setup-python.outputs.pythonLocation }}-${{ hashFiles('requirements.txt', 'pyproject.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-venv-${{ steps.setup-python.outputs.pythonLocation }}
-            ${{ runner.os }}-venv-
+        # --- Cache virtualenv (skip install when deps unchanged) ---
+        - name: Cache virtualenv
+          uses: actions/cache@v4
+          id: cache-venv
+          with:
+            path: .venv
+            key: ${{ runner.os }}-venv-${{ steps.setup-python.outputs.pythonLocation }}-${{ hashFiles('requirements.txt', 'pyproject.toml') }}
+            restore-keys: |
+              ${{ runner.os }}-venv-${{ steps.setup-python.outputs.pythonLocation }}
+              ${{ runner.os }}-venv-
 
 
-      - name: Cache status
-        run: |
-          if [ "${{ steps.cache-venv.outputs.cache-hit }}" = "true" ]; then
-            echo "✅ Cache HIT - skipping dependency install"
-          else
-            echo "⬜ Cache MISS - will install dependencies"
-          fi
+        - name: Cache status
+          run: |
+            if [ "${{ steps.cache-venv.outputs.cache-hit }}" = "true" ]; then
+              echo "✅ Cache HIT - skipping dependency install"
+            else
+              echo "⬜ Cache MISS - will install dependencies"
+            fi
 
-      # --- BUILD/PACKAGE: Install dependencies ---
-      # FIX - added venv validity guard so a corrupted/stale cache doesn't silently break all downstream steps
-      - name: Build and install package
-        env:
-          PIP_PROGRESS_BAR: off
-          PIP_DISABLE_PIP_VERSION_CHECK: 1
-        run: |
-          echo "=== Build and install package (output below) ==="
-          if [ "${{ steps.cache-venv.outputs.cache-hit }}" != "true" ] || [ ! -f .venv/bin/activate ]; then
-            echo "Note: torch + transformers are large (~2GB). First install can take 15-20 min."
-            python -m venv .venv
+        # --- BUILD/PACKAGE: Install dependencies ---
+        # FIX - added venv validity guard so a corrupted/stale cache doesn't silently break all downstream steps
+        - name: Build and install package
+          env:
+            PIP_PROGRESS_BAR: off
+            PIP_DISABLE_PIP_VERSION_CHECK: 1
+          run: |
+            echo "=== Build and install package (output below) ==="
+            if [ "${{ steps.cache-venv.outputs.cache-hit }}" != "true" ] || [ ! -f .venv/bin/activate ]; then
+              echo "Note: torch + transformers are large (~2GB). First install can take 15-20 min."
+              python -m venv .venv
+              source .venv/bin/activate
+              echo "--- Upgrading pip ---"
+              pip install --upgrade pip setuptools wheel
+              echo "--- Installing requirements.txt ---"
+              pip install -r requirements.txt
+              echo "--- Installing project + pytest-cov, bandit, flake8 ---"
+              pip install pytest-cov bandit flake8
+              echo "=== Install complete ==="
+            else
+              echo "✅ Valid venv found in cache, skipping install."
+            fi
+
+        # --- TESTS [SAST]: Static Application Security Testing ---
+        # FIX - changed -lll to -ll for broader security coverage
+        - name: SAST with Bandit
+          #dhara0611-remove this line later "continue on error" 
+          continue-on-error: true 
+          run: |
+            echo "=== SAST with Bandit (output below) ==="
             source .venv/bin/activate
-            echo "--- Upgrading pip ---"
-            pip install --upgrade pip setuptools wheel
-            echo "--- Installing requirements.txt ---"
-            pip install -r requirements.txt
-            echo "--- Installing project + pytest-cov, bandit, flake8 ---"
-            pip install pytest-cov bandit flake8
-            echo "=== Install complete ==="
-          else
-            echo "✅ Valid venv found in cache, skipping install."
-          fi
+            bandit app.py MetaAIAPI_app.py -ll -f screen
 
-      # --- TESTS [SAST]: Static Application Security Testing ---
-      # FIX - changed -lll to -ll for broader security coverage
-      - name: SAST with Bandit
-        #dhara0611-remove this line later "continue on error" 
-        continue-on-error: true 
-        run: |
-          echo "=== SAST with Bandit (output below) ==="
-          source .venv/bin/activate
-          bandit app.py MetaAIAPI_app.py -ll -f screen
+        # --- CODE COVERAGE: Run tests with coverage ---
+        - name: Verify app import (quick check before tests)
+          run: |
+            source .venv/bin/activate
+            echo "Testing if app module can be imported..."
+            python -u -c "from app import app, categories; print('Import OK')"
 
-      # --- CODE COVERAGE: Run tests with coverage ---
-      - name: Verify app import (quick check before tests)
-        run: |
-          source .venv/bin/activate
-          echo "Testing if app module can be imported..."
-          python -u -c "from app import app, categories; print('Import OK')"
+        - name: Run tests with coverage
+          run: |
+            echo "=== Pytest with coverage (output below) ==="
+            source .venv/bin/activate
+            python -u -m pytest test_app.py --cov=app --cov-report=xml --cov-report=term-missing -v -s --tb=short
+        # - name: Run tests with coverage
+        #   run: |
+        #     echo "=== Pytest with coverage (output below) ==="
+        #     source .venv/bin/activate
+        #     python -u -m pytest tests/ --cov=app --cov-report=xml --cov-report=term-missing -v -s --tb=short
 
-      - name: Run tests with coverage
-        run: |
-          echo "=== Pytest with coverage (output below) ==="
-          source .venv/bin/activate
-          python -u -m pytest test_app.py --cov=app --cov-report=xml --cov-report=term-missing -v -s --tb=short
-      # - name: Run tests with coverage
-      #   run: |
-      #     echo "=== Pytest with coverage (output below) ==="
-      #     source .venv/bin/activate
-      #     python -u -m pytest tests/ --cov=app --cov-report=xml --cov-report=term-missing -v -s --tb=short
+        # FIX: upload coverage.xml as an artifact instead of generating and discarding it
+        - name: Upload coverage report
+          if: always()
+          uses: actions/upload-artifact@v4
+          with:
+            name: coverage-report
+            path: coverage.xml
 
-      # FIX: upload coverage.xml as an artifact instead of generating and discarding it
-      - name: Upload coverage report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-report
-          path: coverage.xml
+        # --- Lint (code quality) ---
+        # FIX: changed `*.py` to `.` so sub-packages are also linted
+        # - name: Lint with flake8
+        #   run: |
+        #     echo "=== Flake8 lint (output below) ==="
+        #     source .venv/bin/activate
+        #     flake8 . --max-line-length=150
 
-      # --- Lint (code quality) ---
-      # FIX: changed `*.py` to `.` so sub-packages are also linted
-      # - name: Lint with flake8
-      #   run: |
-      #     echo "=== Flake8 lint (output below) ==="
-      #     source .venv/bin/activate
-      #     flake8 . --max-line-length=150
+        # - name: Lint with flake8
+        #   run: |
+        #     echo "=== Flake8 lint (output below) ==="
+        #     source .venv/bin/activate
+        #     flake8 . --max-line-length=150 --exclude=.venv,__pycache__,.git,build,dist
+        
+        #dhara0611-start
+        ## --- PACKAGING: Zip the Python app + dependencies ---
+        - name: Package Application for AWS Lambda
+          run: |
+            echo "=== Creating deployment package ==="
+            mkdir -p dist
+            #Copy dependencies from your verified virtual environment
+            cp -r .venv/lib/python3.11/site-packages/* dist/
+            
+            # Copy your core application files
+            cp app.py MetaAIAPI_app.py dist/
+            
+            # Bundle everything into a root-level deployment zip
+            cd dist
+            zip -r ../lambda-deployment.zip .
+            cd ..
+            echo "=== Packaging complete ==="
 
-      # - name: Lint with flake8
-      #   run: |
-      #     echo "=== Flake8 lint (output below) ==="
-      #     source .venv/bin/activate
-      #     flake8 . --max-line-length=150 --exclude=.venv,__pycache__,.git,build,dist
-      
-      #dhara0611-start
-      ## --- PACKAGING: Zip the Python app + dependencies ---
-      - name: Package Application for AWS Lambda
-        run: |
-          echo "=== Creating deployment package ==="
-          mkdir -p dist
-          #Copy dependencies from your verified virtual environment
-          cp -r .venv/lib/python3.11/site-packages/* dist/
-          
-          # Copy your core application files
-          cp app.py MetaAIAPI_app.py dist/
-          
-          # Bundle everything into a root-level deployment zip
-          cd dist
-          zip -r ../lambda-deployment.zip .
-          cd ..
-          echo "=== Packaging complete ==="
-
-      # Save the package to GitHub storage so the upcoming deploy job can access it
-      - name: Upload Build Artifact to GitHub
-        uses: actions/upload-artifact@v4
-        with:
-          name: compiled-build-archive
-          path: lambda-deployment.zip
-      #dhara0611-end
+        # Save the package to GitHub storage so the upcoming deploy job can access it
+        - name: Upload Build Artifact to GitHub
+          uses: actions/upload-artifact@v4
+          with:
+            name: compiled-build-archive
+            path: lambda-deployment.zip
+        #dhara0611-end
 
 
-  # --- BUILD DOCKER IMAGE AND PUSH: Docker build job ---
-  # commenting the build-docker step
-  #dhara0611-start
-  # build-docker:
-  #   runs-on: ubuntu-latest
-  #   timeout-minutes: 20  # FIX: added timeout
-  #   needs: build-and-test
-  #   # FIX: run on both push AND pull_request 
-  #   # This ensures a broken Dockerfile is caught before merge.
-  #   permissions:
-  #     contents: read
-  #     id-token: write  # for OIDC with AWS (if using ECR)
-  #   defaults:
-  #     run:
-  #       working-directory: .
+    # --- BUILD DOCKER IMAGE AND PUSH: Docker build job ---
+    # commenting the build-docker step
+    #dhara0611-start
+    # build-docker:
+    #   runs-on: ubuntu-latest
+    #   timeout-minutes: 20  # FIX: added timeout
+    #   needs: build-and-test
+    #   # FIX: run on both push AND pull_request 
+    #   # This ensures a broken Dockerfile is caught before merge.
+    #   permissions:
+    #     contents: read
+    #     id-token: write  # for OIDC with AWS (if using ECR)
+    #   defaults:
+    #     run:
+    #       working-directory: .
 
-  #   steps:
-  #     - name: Checkout repository
-  #       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  
+    #   steps:
+    #     - name: Checkout repository
+    #       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  
 
-  #     - name: Set up Docker Buildx
-  #       uses: docker/setup-buildx-action@v3
+    #     - name: Set up Docker Buildx
+    #       uses: docker/setup-buildx-action@v3
 
-  #     - name: Build Docker image
-  #       uses: docker/build-push-action@v6
-  #       with:
-  #         context: .
-  #         push: false  # Never push from this job unless ECR steps below are enabled
-  #         tags: saayam-ai-assistant:${{ github.sha }}
-  #         cache-from: type=gha
-  #         cache-to: type=gha,mode=max
-  #dhara0611-end
+    #     - name: Build Docker image
+    #       uses: docker/build-push-action@v6
+    #       with:
+    #         context: .
+    #         push: false  # Never push from this job unless ECR steps below are enabled
+    #         tags: saayam-ai-assistant:${{ github.sha }}
+    #         cache-from: type=gha
+    #         cache-to: type=gha,mode=max
+    #dhara0611-end
 
-      # Uncomment and configure for ECR push when ready:
-      # - name: Configure AWS credentials
-      #   uses: aws-actions/configure-aws-credentials@v4
-      #   with:
-      #     role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-      #     aws-region: ${{ secrets.AWS_REGION }}
-      #
-      # - name: Login to Amazon ECR
-      #   id: login-ecr
-      #   uses: aws-actions/amazon-ecr-login@v2
-      #
-      # - name: Build and push to ECR
-      #   uses: docker/build-push-action@v6
-      #   with:
-      #     context: .
-      #     push: true
-      #     tags: |
-      #       ${{ steps.login-ecr.outputs.registry }}/${{ secrets.ECR_REPOSITORY }}:${{ github.sha }}
-      #       ${{ steps.login-ecr.outputs.registry }}/${{ secrets.ECR_REPOSITORY }}:latest
-      #     cache-from: type=gha
-      #     cache-to: type=gha,mode=max
-  
-  #dhara0611-start
-  deploy:
-    needs: build-and-test
-    if: github.event_name == 'push'
-    runs-on: ubuntu-latest
+        # Uncomment and configure for ECR push when ready:
+        # - name: Configure AWS credentials
+        #   uses: aws-actions/configure-aws-credentials@v4
+        #   with:
+        #     role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+        #     aws-region: ${{ secrets.AWS_REGION }}
+        #
+        # - name: Login to Amazon ECR
+        #   id: login-ecr
+        #   uses: aws-actions/amazon-ecr-login@v2
+        #
+        # - name: Build and push to ECR
+        #   uses: docker/build-push-action@v6
+        #   with:
+        #     context: .
+        #     push: true
+        #     tags: |
+        #       ${{ steps.login-ecr.outputs.registry }}/${{ secrets.ECR_REPOSITORY }}:${{ github.sha }}
+        #       ${{ steps.login-ecr.outputs.registry }}/${{ secrets.ECR_REPOSITORY }}:latest
+        #     cache-from: type=gha
+        #     cache-to: type=gha,mode=max
     
-    env:
-      AWS_REGION: "us-east-1"      # <-- Update to your AWS Region
-      S3_BUCKET: "saayam-virginia-private" # <-- Update to your S3 Bucket Name
-      APP_NAME: "ai-app"
-    
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+    #dhara0611-start
+    deploy:
+      needs: build-and-test
+      if: github.event_name == 'push'
+      runs-on: ubuntu-latest
       
-      # Download the deployment zip package from GitHub's storage
-      - name: Download Build Artifact from GitHub
-        uses: actions/download-artifact@v4
-        with:
-          name: compiled-build-archive
-          path: ./
+      env:
+        AWS_REGION: "us-east-1"      # <-- Update to your AWS Region
+        S3_BUCKET: "saayam-virginia-private" # <-- Update to your S3 Bucket Name
+        APP_NAME: "ai-app"
       
-      - name: Generate Version Tag
-        id: ver
-        shell: bash
-        run: |
-          DATE_UTC=$(date -u +%Y%m%d-%H%M)
-          VERSION_TAG="v1.0.0-${DATE_UTC}"
+      steps:
+        - name: Checkout repository
+          uses: actions/checkout@v4
+        
+        # Download the deployment zip package from GitHub's storage
+        - name: Download Build Artifact from GitHub
+          uses: actions/download-artifact@v4
+          with:
+            name: compiled-build-archive
+            path: ./
+        
+        - name: Generate Version Tag
+          id: ver
+          shell: bash
+          run: |
+            DATE_UTC=$(date -u +%Y%m%d-%H%M)
+            VERSION_TAG="v1.0.0-${DATE_UTC}"
 
-          echo "version=${VERSION_TAG}" >> $GITHUB_OUTPUT
-          echo "zip_name=lambda-deployment.zip" >> $GITHUB_OUTPUT
-          echo "archive_name=${{ env.APP_NAME }}-${VERSION_TAG}.zip" >> $GITHUB_OUTPUT
-  #dhara-end
-      
+            echo "version=${VERSION_TAG}" >> $GITHUB_OUTPUT
+            echo "zip_name=lambda-deployment.zip" >> $GITHUB_OUTPUT
+            echo "archive_name=${{ env.APP_NAME }}-${VERSION_TAG}.zip" >> $GITHUB_OUTPUT
+
+        - name: Configure AWS credentials
+          uses: aws-actions/configure-aws-credentials@v4
+          with:
+            aws-region: ${{ env.AWS_REGION }}
+            aws-access-key-id: ${{ secrets.AWS_AI_ACCESS_KEY }}
+            aws-secret-access-key: ${{ secrets.AWS_AI_SECRET_ACCESS_KEY }}
+        
+         # --- BRANCH STRATEGY 2: DEV BRANCH DEPLOYMENT ---
+        - name: Deploy to Dev Environment
+          if: github.ref_name == 'dev' || github.ref_name == 'dhara0611/feature-ci-cd'
+          run: |
+            echo "Uploading zip archive to S3 (dev)..."
+            S3_KEY="code/dev/ai/${{ steps.ver.outputs.archive_name }}"
+            
+            aws s3 cp "${{ steps.ver.outputs.zip_name }}" "s3://${{ env.S3_BUCKET }}/$S3_KEY"
+        
+        
+    #dhara-end
+        
