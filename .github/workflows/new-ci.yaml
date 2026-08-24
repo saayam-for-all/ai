@@ -13,8 +13,8 @@
         - dev
         - main
       #dhara-start
-      #This tells GitHub to run on ANY branch update, remove this later!
-        - '**' 
+      # This tells GitHub to run on ANY branch update, remove this later!
+      #   - '**' 
       #dhara-end
 
     pull_request:
@@ -163,19 +163,25 @@
         ## --- PACKAGING: Zip the Python app + dependencies ---
         - name: Package Application for AWS Lambda
           run: |
-            echo "=== Creating deployment package ==="
-            mkdir -p dist
-            #Copy dependencies from your verified virtual environment
-            cp -r .venv/lib/python3.11/site-packages/* dist/
-            
-            # Copy the Lambda handler and its application packages
-            cp lambda_function.py app.py MetaAIAPI_app.py dist/
-            cp -r utils services dist/
-            
-            # Bundle everything into a root-level deployment zip
-            cd dist
-            zip -r ../lambda-deployment.zip .
+            echo "===1. Creating code package ==="
+            mkdir -p dist_code
+            #Copy ONLY business logic files and directories
+            cp lambda_function.py dist_code/
+            cp -r utils services dist_code/
+
+            cd dist_code
+            zip -r ../lambda-code.zip .
             cd ..
+
+            echo "=== 2. Creating Dependencies Layer Package ==="
+            # CRITICAL: AWS Lambda requires Python layer files to be wrapped inside a folder named 'python'
+            mkdir -p dist_layer/python
+            cp -r .venv/lib/python3.11/site-packages/* dist_layer/python/
+            
+            cd dist_layer
+            zip -r ../lambda-layer.zip .
+            cd ..
+
             echo "=== Packaging complete ==="
 
         # Save the package to GitHub storage so the upcoming deploy job can access it
@@ -183,7 +189,9 @@
           uses: actions/upload-artifact@v4
           with:
             name: compiled-build-archive
-            path: lambda-deployment.zip
+            path: |
+              lambda-code.zip
+              lambda-layer.zip
         #dhara0611-end
 
 
@@ -245,7 +253,7 @@
     #dhara0611-start
     deploy:
       needs: build-and-test
-      if: github.event_name == 'push'
+      if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
       runs-on: ubuntu-latest
       
       env:
@@ -257,7 +265,7 @@
         - name: Checkout repository
           uses: actions/checkout@v4
         
-        # Download the deployment zip package from GitHub's storage
+        # Download the lambda-code.zip and lambda-layer.zip packages from GitHub's storage
         - name: Download Build Artifact from GitHub
           uses: actions/download-artifact@v4
           with:
@@ -272,8 +280,9 @@
             VERSION_TAG="v1.0.0-${DATE_UTC}"
 
             echo "version=${VERSION_TAG}" >> $GITHUB_OUTPUT
-            echo "zip_name=lambda-deployment.zip" >> $GITHUB_OUTPUT
-            echo "archive_name=${{ env.APP_NAME }}-${VERSION_TAG}.zip" >> $GITHUB_OUTPUT
+            # Explicit naming rules for both files
+            echo "code_archive_name=${{ env.APP_NAME }}-code-${VERSION_TAG}.zip" >> $GITHUB_OUTPUT
+            echo "layer_archive_name=${{ env.APP_NAME }}-layer-${VERSION_TAG}.zip" >> $GITHUB_OUTPUT
 
         - name: Configure AWS credentials
           uses: aws-actions/configure-aws-credentials@v4
@@ -285,39 +294,66 @@
          # --- BRANCH STRATEGY 2: DEV BRANCH DEPLOYMENT ---
         - name: Upload to S3 Bucket (Dev Branch)
           id: upload-to-s3
-          if: github.ref_name == 'dev' || github.ref_name == 'dhara0611/feature-ci-cd'
+          if: github.ref_name == 'dev' || github.event_name == 'workflow_dispatch'
           run: |
-            echo "Uploading zip archive to S3 (dev)..."
-            S3_KEY="code/dev/ai/${{ steps.ver.outputs.archive_name }}"
+            echo "Uploading split zip archives to S3 (dev)..."
+            CODE_S3_KEY="code/dev/ai/v1.0.0/${{ steps.ver.outputs.code_archive_name }}"
+            LAYER_S3_KEY="code/dev/ai/v1.0.0/${{ steps.ver.outputs.layer_archive_name }}"
             
-            aws s3 cp "${{ steps.ver.outputs.zip_name }}" "s3://${{ env.S3_BUCKET }}/$S3_KEY"
-            echo "s3_key=$S3_KEY" >> "$GITHUB_OUTPUT"
+            # Copy both packages up to AWS storage
+            aws s3 cp "lambda-code.zip" "s3://${{ env.S3_BUCKET }}/$CODE_S3_KEY"
+            aws s3 cp "lambda-layer.zip" "s3://${{ env.S3_BUCKET }}/$LAYER_S3_KEY"
+            
+            # Export both paths to downstream steps
+            echo "code_s3_key=$CODE_S3_KEY" >> "$GITHUB_OUTPUT"
+            echo "layer_s3_key=$LAYER_S3_KEY" >> "$GITHUB_OUTPUT"
 
-        - name: Create or update AWS Lambda from S3 (Dev Branch)
-          if: github.ref_name == 'dev' || github.ref_name == 'dhara0611/feature-ci-cd'
+
+        - name: Create or update AWS Lambda and Layers from S3 (Dev Branch)
+          if: github.ref_name == 'dev' || github.event_name == 'workflow_dispatch'
           run: |
             LAMBDA_FUNCTION_NAME="${{ env.APP_NAME }}-dev"
-            S3_KEY="${{ steps.upload-to-s3.outputs.s3_key }}"
+            CODE_KEY="${{ steps.upload-to-s3.outputs.code_s3_key }}"
+            LAYER_KEY="${{ steps.upload-to-s3.outputs.layer_s3_key }}"
+
+            echo "Publishing new Lambda Layer version..."
+            LAYER_VERSION_ARN=$(aws lambda publish-layer-version \
+              --layer-name "${{ env.APP_NAME }}-dev-dependencies" \
+              --description "Dependencies Layer for Dev Environment" \
+              --content S3Bucket="${{ env.S3_BUCKET }}",S3Key="$LAYER_KEY" \
+              --compatible-runtimes "python3.11" \
+              --query "LayerVersionArn" --output text)
+
+              echo "Targeting Layer ARN: $LAYER_VERSION_ARN"
 
             if aws lambda get-function \
               --function-name "$LAMBDA_FUNCTION_NAME" \
               >/dev/null 2>&1; then
               echo "Updating existing Lambda function: $LAMBDA_FUNCTION_NAME"
+
+              #1. Update the execution code
               aws lambda update-function-code \
                 --function-name "$LAMBDA_FUNCTION_NAME" \
                 --s3-bucket "${{ env.S3_BUCKET }}" \
-                --s3-key "$S3_KEY" \
+                --s3-key "$CODE_KEY" \
                 --no-publish
               aws lambda wait function-updated \
                 --function-name "$LAMBDA_FUNCTION_NAME"
+              
+              #2. Update configuration to attach freshly updated dependency layer
+              aws lambda update-function-configuration \
+                --function-name "$LAMBDA_FUNCTION_NAME" \
+                --layers "$LAYER_VERSION_ARN"
+
             else
               echo "Creating Lambda function: $LAMBDA_FUNCTION_NAME"
+
               aws lambda create-function \
                 --function-name "$LAMBDA_FUNCTION_NAME" \
                 --runtime python3.11 \
                 --handler lambda_function.lambda_handler \
                 --role "${{ secrets.AWS_AI_LAMBDA_ROLE_ARN }}" \
-                --code "S3Bucket=${{ env.S3_BUCKET }},S3Key=$S3_KEY" \
+                --code "S3Bucket=${{ env.S3_BUCKET }},S3Key=$S3Key=$CODE_KEY" \
                 --timeout 120 \
                 --memory-size 1024 \
                 --no-publish
