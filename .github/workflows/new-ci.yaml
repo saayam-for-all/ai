@@ -13,8 +13,8 @@
         - dev
         - main
       #dhara-start
-      # This tells GitHub to run on ANY branch update, remove this later!
-      #   - '**' 
+      # This tells GitHub to run my feature branch update, remove this later!
+        - 'dhara0611/feature-ci-cd' 
       #dhara-end
 
     pull_request:
@@ -294,7 +294,7 @@
          # --- BRANCH STRATEGY 2: DEV BRANCH DEPLOYMENT ---
         - name: Upload to S3 Bucket (Dev Branch)
           id: upload-to-s3
-          if: github.ref_name == 'dev' || github.event_name == 'workflow_dispatch'
+          if: github.ref_name == 'dev' || github.ref_name == 'dhara0611/feature-ci-cd'
           run: |
             echo "Uploading split zip archives to S3 (dev)..."
             CODE_S3_KEY="code/dev/ai/v1.0.0/${{ steps.ver.outputs.code_archive_name }}"
@@ -310,7 +310,7 @@
 
 
         - name: Create or update AWS Lambda and Layers from S3 (Dev Branch)
-          if: github.ref_name == 'dev' || github.event_name == 'workflow_dispatch'
+          if: github.ref_name == 'dev' || github.ref_name == 'dhara0611/feature-ci-cd'
           run: |
             LAMBDA_FUNCTION_NAME="${{ env.APP_NAME }}-dev"
             CODE_KEY="${{ steps.upload-to-s3.outputs.code_s3_key }}"
