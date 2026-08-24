@@ -177,6 +177,22 @@
             # CRITICAL: AWS Lambda requires Python layer files to be wrapped inside a folder named 'python'
             mkdir -p dist_layer/python
             cp -r .venv/lib/python3.11/site-packages/* dist_layer/python/
+
+            # --- AGGRESSIVE CLEANUP TO DRASTICALLY SHRINK SIZE ---
+            echo "--- Removing bloated metadata and caches ---"
+            find dist_layer/python/ -type d -name "__pycache__" -exec rm -rf {} +
+            find dist_layer/python/ -type d -name "tests" -exec rm -rf {} +
+            find dist_layer/python/ -type d -name "testing" -exec rm -rf {} +
+            find dist_layer/python/ -type d -name "*.dist-info" -exec rm -rf {} +
+            find dist_layer/python/ -type d -name "*.egg-info" -exec rm -rf {} +
+            
+            # Remove raw code files that aren't execution files (.pyc, .pyo)
+            find dist_layer/python/ -name "*.pyc" -delete
+            
+            # CRITICAL FOR TORCH/TRANSFORMERS: Strip debug symbols out of C-compiled (.so) binaries
+            echo "--- Stripping debug symbols from binary files ---"
+            find dist_layer/python/ -name "*.so" -exec strip --strip-unneeded {} + || true
+            # -----------------------------------------------------
             
             cd dist_layer
             zip -r ../lambda-layer.zip .
