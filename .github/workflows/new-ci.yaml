@@ -323,8 +323,8 @@
           run: |
             echo "Uploading split zip archives to S3 (dev)..."
             CODE_S3_KEY="code/dev/ai/v1.0.0/${{ steps.ver.outputs.code_archive_name }}"
-            TORCH_S3_KEY="layers/dev/ai/v1.0.0/${{ steps.ver.outputs.torch_archive_name }}"
-            DEPS_S3_KEY="layers/dev/ai/v1.0.0/${{ steps.ver.outputs.deps_archive_name }}"
+            TORCH_S3_KEY="code/dev/ai/v1.0.0/${{ steps.ver.outputs.torch_archive_name }}"
+            DEPS_S3_KEY="code/dev/ai/v1.0.0/${{ steps.ver.outputs.deps_archive_name }}"
             
             
             # Copy both packages up to AWS storage
@@ -347,15 +347,23 @@
             TORCH_KEY="${{ steps.upload-to-s3.outputs.torch_s3_key }}"
             DEPS_KEY="${{ steps.upload-to-s3.outputs.deps_s3_key }}"
 
-            echo "Publishing new Lambda Layer version..."
-            LAYER_VERSION_ARN=$(aws lambda publish-layer-version \
-              --layer-name "${{ env.APP_NAME }}-dev-dependencies" \
-              --description "Dependencies Layer for Dev Environment" \
-              --content S3Bucket="${{ env.S3_BUCKET }}",S3Key="$LAYER_KEY" \
+            echo "Publishing Layer 1 (Torch)..."
+            TORCH_LAYER_ARN=$(aws lambda publish-layer-version \
+              --layer-name "${{ env.APP_NAME }}-dev-torch" \
+              --content S3Bucket="${{ env.S3_BUCKET }}",S3Key="$TORCH_KEY" \
               --compatible-runtimes "python3.11" \
               --query "LayerVersionArn" --output text)
 
-              echo "Targeting Layer ARN: $LAYER_VERSION_ARN"
+            echo "Publishing Layer 2 (Dependencies)..."
+            DEPS_LAYER_ARN=$(aws lambda publish-layer-version \
+              --layer-name "${{ env.APP_NAME }}-dev-dependencies" \
+              --content S3Bucket="${{ env.S3_BUCKET }}",S3Key="$DEPS_KEY" \
+              --compatible-runtimes "python3.11" \
+              --query "LayerVersionArn" --output text)
+
+            # Combine both Layer ARNs into a clean string parameter
+            COMBINED_LAYERS="$TORCH_LAYER_ARN $DEPS_LAYER_ARN"
+            echo "Combined Layers to apply: $COMBINED_LAYERS"
 
             if aws lambda get-function \
               --function-name "$LAMBDA_FUNCTION_NAME" \
@@ -374,7 +382,7 @@
               #2. Update configuration to attach freshly updated dependency layer
               aws lambda update-function-configuration \
                 --function-name "$LAMBDA_FUNCTION_NAME" \
-                --layers "$LAYER_VERSION_ARN"
+                --layers $COMBINED_LAYERS
 
             else
               echo "Creating Lambda function: $LAMBDA_FUNCTION_NAME"
@@ -384,8 +392,8 @@
                 --runtime python3.11 \
                 --handler lambda_function.lambda_handler \
                 --role "${{ secrets.AWS_AI_LAMBDA_ROLE_ARN }}" \
-                --code "S3Bucket=${{ env.S3_BUCKET }},S3Key=$S3Key=$CODE_KEY" \
-                --layers "$LAYER_VERSION_ARN" \
+                --code "S3Bucket=${{ env.S3_BUCKET }},S3Key=$CODE_KEY" \
+                --layers $COMBINED_LAYERS \
                 --timeout 120 \
                 --memory-size 1024 \
                 --no-publish
