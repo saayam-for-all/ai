@@ -386,6 +386,7 @@
                 --handler lambda_function.lambda_handler \
                 --role "${{ secrets.AWS_AI_LAMBDA_ROLE_ARN }}" \
                 --code "S3Bucket=${{ env.S3_BUCKET }},S3Key=$S3Key=$CODE_KEY" \
+                --layers "$LAYER_VERSION_ARN" \
                 --timeout 120 \
                 --memory-size 1024 \
                 --no-publish
