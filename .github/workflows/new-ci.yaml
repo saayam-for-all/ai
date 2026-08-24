@@ -168,8 +168,9 @@
             #Copy dependencies from your verified virtual environment
             cp -r .venv/lib/python3.11/site-packages/* dist/
             
-            # Copy your core application files
-            cp app.py MetaAIAPI_app.py dist/
+            # Copy the Lambda handler and its application packages
+            cp lambda_function.py app.py MetaAIAPI_app.py dist/
+            cp -r utils services dist/
             
             # Bundle everything into a root-level deployment zip
             cd dist
@@ -282,14 +283,46 @@
             aws-secret-access-key: ${{ secrets.AWS_AI_SECRET_ACCESS_KEY }}
         
          # --- BRANCH STRATEGY 2: DEV BRANCH DEPLOYMENT ---
-        - name: Deploy to Dev Environment
+        - name: Upload to S3 Bucket (Dev Branch)
+          id: upload-to-s3
           if: github.ref_name == 'dev' || github.ref_name == 'dhara0611/feature-ci-cd'
           run: |
             echo "Uploading zip archive to S3 (dev)..."
             S3_KEY="code/dev/ai/${{ steps.ver.outputs.archive_name }}"
             
             aws s3 cp "${{ steps.ver.outputs.zip_name }}" "s3://${{ env.S3_BUCKET }}/$S3_KEY"
-        
-        
+            echo "s3_key=$S3_KEY" >> "$GITHUB_OUTPUT"
+
+        - name: Create or update AWS Lambda from S3 (Dev Branch)
+          if: github.ref_name == 'dev' || github.ref_name == 'dhara0611/feature-ci-cd'
+          run: |
+            LAMBDA_FUNCTION_NAME="${{ env.APP_NAME }}-dev"
+            S3_KEY="${{ steps.upload-to-s3.outputs.s3_key }}"
+
+            if aws lambda get-function \
+              --function-name "$LAMBDA_FUNCTION_NAME" \
+              >/dev/null 2>&1; then
+              echo "Updating existing Lambda function: $LAMBDA_FUNCTION_NAME"
+              aws lambda update-function-code \
+                --function-name "$LAMBDA_FUNCTION_NAME" \
+                --s3-bucket "${{ env.S3_BUCKET }}" \
+                --s3-key "$S3_KEY" \
+                --no-publish
+              aws lambda wait function-updated \
+                --function-name "$LAMBDA_FUNCTION_NAME"
+            else
+              echo "Creating Lambda function: $LAMBDA_FUNCTION_NAME"
+              aws lambda create-function \
+                --function-name "$LAMBDA_FUNCTION_NAME" \
+                --runtime python3.11 \
+                --handler lambda_function.lambda_handler \
+                --role "${{ secrets.AWS_AI_LAMBDA_ROLE_ARN }}" \
+                --code "S3Bucket=${{ env.S3_BUCKET }},S3Key=$S3_KEY" \
+                --timeout 120 \
+                --memory-size 1024 \
+                --no-publish
+              aws lambda wait function-active \
+                --function-name "$LAMBDA_FUNCTION_NAME"
+            fi
     #dhara-end
         
