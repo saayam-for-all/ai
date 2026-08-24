@@ -101,11 +101,8 @@
               echo "--- Upgrading pip ---"
               pip install --upgrade pip setuptools wheel
 
-              #dhara0611-start
-              # CRITICAL FIX: Force pip to download the ultra-lightweight CPU version of PyTorch
-              echo "--- Pre-installing CPU-Only PyTorch ---"
-              pip install torch --index-url https://download.pytorch.org/whl/cpu
-              #dhara0611-end
+              # PyTorch is not required by the Lambda deployment.
+              # pip install torch --index-url https://download.pytorch.org/whl/cpu
 
               echo "--- Installing requirements.txt ---"
               pip install -r requirements.txt
@@ -180,30 +177,14 @@
             zip -r ../lambda-code.zip .
             cd ..
 
-            echo "=== 2. Isolating PyTorch Layer ==="
-            mkdir -p dist_layer_torch/python
-            # Move ONLY the torch libraries to the first staging layer
-            cp -r .venv/lib/python3.11/site-packages/torch* dist_layer_torch/python/
-            
-            # Clean up unneeded bloat inside the torch layer folders
-            find dist_layer_torch/python/ -type d -name "__pycache__" -exec rm -rf {} +
-            find dist_layer_torch/python/ -type d -name "tests" -exec rm -rf {} +
-            find dist_layer_torch/python/ -type d -name "testing" -exec rm -rf {} +
-            find dist_layer_torch/python/ -type d -name "include" -exec rm -rf {} +
-            find dist_layer_torch/python/ -type d -name "bin" -exec rm -rf {} +
-            find dist_layer_torch/python/ -type d -name "*.dist-info" -exec rm -rf {} +
-            
-            # VIOLENTLY REDUCE BINARY SIZE: Strip debug symbols out of C++ compiled (.so) objects
-            echo "--- Stripping C++ symbol maps from PyTorch engine ---"
-            find dist_layer_torch/python/ -name "*.so" -exec strip --strip-unneeded {} + || true
-            
-            cd dist_layer_torch && zip -r ../lambda-layer-torch.zip . && cd ..
-
-            echo "=== 3. Isolating Remaining Dependencies Layer ==="
+            echo "=== 2. Isolating Remaining Dependencies Layer ==="
             mkdir -p dist_layer_deps/python
-            # Copy everything, then explicitly remove torch since it's handled above
+            # Copy existing dependencies, excluding PyTorch and its native runtime packages.
             cp -r .venv/lib/python3.11/site-packages/* dist_layer_deps/python/
-            rm -rf dist_layer_deps/python/torch*
+            rm -rf dist_layer_deps/python/torch* \
+              dist_layer_deps/python/functorch* \
+              dist_layer_deps/python/nvidia \
+              dist_layer_deps/python/triton*
             
             # Clean up unneeded bloat inside the remaining dependencies folder
             find dist_layer_deps/python/ -type d -name "__pycache__" -exec rm -rf {} +
@@ -211,6 +192,9 @@
             find dist_layer_deps/python/ -type d -name "*.dist-info" -exec rm -rf {} +
             
             cd dist_layer_deps && zip -r ../lambda-layer-deps.zip . && cd ..
+
+            echo "=== Lambda package sizes ==="
+            du -sh lambda-code.zip lambda-layer-deps.zip
 
             echo "=== Packaging complete ==="
 
@@ -221,7 +205,6 @@
             name: compiled-build-archive
             path: |
               lambda-code.zip
-              lambda-layer-torch.zip
               lambda-layer-deps.zip
         #dhara0611-end
 
@@ -313,7 +296,6 @@
             echo "version=${VERSION_TAG}" >> $GITHUB_OUTPUT
             # Explicit naming rules for both files
             echo "code_archive_name=${{ env.APP_NAME }}-code-${VERSION_TAG}.zip" >> $GITHUB_OUTPUT
-            echo "torch_archive_name=${{ env.APP_NAME }}-torch-layer-${VERSION_TAG}.zip" >> $GITHUB_OUTPUT
             echo "deps_archive_name=${{ env.APP_NAME }}-deps-layer-${VERSION_TAG}.zip" >> $GITHUB_OUTPUT
 
         - name: Configure AWS credentials
@@ -330,18 +312,15 @@
           run: |
             echo "Uploading split zip archives to S3 (dev)..."
             CODE_S3_KEY="code/dev/ai/v1.0.0/${{ steps.ver.outputs.code_archive_name }}"
-            TORCH_S3_KEY="code/dev/ai/v1.0.0/${{ steps.ver.outputs.torch_archive_name }}"
             DEPS_S3_KEY="code/dev/ai/v1.0.0/${{ steps.ver.outputs.deps_archive_name }}"
             
             
             # Copy both packages up to AWS storage
             aws s3 cp "lambda-code.zip" "s3://${{ env.S3_BUCKET }}/$CODE_S3_KEY"
-            aws s3 cp "lambda-layer-torch.zip" "s3://${{ env.S3_BUCKET }}/$TORCH_S3_KEY"
             aws s3 cp "lambda-layer-deps.zip" "s3://${{ env.S3_BUCKET }}/$DEPS_S3_KEY"
             
             # Export both paths to downstream steps
             echo "code_s3_key=$CODE_S3_KEY" >> "$GITHUB_OUTPUT"
-            echo "torch_s3_key=$TORCH_S3_KEY" >> "$GITHUB_OUTPUT"
             echo "deps_s3_key=$DEPS_S3_KEY" >> "$GITHUB_OUTPUT"
 
 
@@ -351,26 +330,16 @@
           run: |
             LAMBDA_FUNCTION_NAME="${{ env.APP_NAME }}-dev"
             CODE_KEY="${{ steps.upload-to-s3.outputs.code_s3_key }}"
-            TORCH_KEY="${{ steps.upload-to-s3.outputs.torch_s3_key }}"
             DEPS_KEY="${{ steps.upload-to-s3.outputs.deps_s3_key }}"
 
-            echo "Publishing Layer 1 (Torch)..."
-            TORCH_LAYER_ARN=$(aws lambda publish-layer-version \
-              --layer-name "${{ env.APP_NAME }}-dev-torch" \
-              --content S3Bucket="${{ env.S3_BUCKET }}",S3Key="$TORCH_KEY" \
-              --compatible-runtimes "python3.11" \
-              --query "LayerVersionArn" --output text)
-
-            echo "Publishing Layer 2 (Dependencies)..."
+            echo "Publishing dependency layer..."
             DEPS_LAYER_ARN=$(aws lambda publish-layer-version \
               --layer-name "${{ env.APP_NAME }}-dev-dependencies" \
-              --content S3Bucket="${{ env.S3_BUCKET }}",S3Key="$DEPS_KEY" \
+              --content "S3Bucket=${{ env.S3_BUCKET }},S3Key=$DEPS_KEY" \
               --compatible-runtimes "python3.11" \
               --query "LayerVersionArn" --output text)
 
-            # Combine both Layer ARNs into a clean string parameter
-            COMBINED_LAYERS="$TORCH_LAYER_ARN $DEPS_LAYER_ARN"
-            echo "Combined Layers to apply: $COMBINED_LAYERS"
+            echo "Dependency layer to apply: $DEPS_LAYER_ARN"
 
             if aws lambda get-function \
               --function-name "$LAMBDA_FUNCTION_NAME" \
@@ -389,7 +358,7 @@
               #2. Update configuration to attach freshly updated dependency layer
               aws lambda update-function-configuration \
                 --function-name "$LAMBDA_FUNCTION_NAME" \
-                --layers $COMBINED_LAYERS
+                --layers "$DEPS_LAYER_ARN"
 
             else
               echo "Creating Lambda function: $LAMBDA_FUNCTION_NAME"
@@ -400,7 +369,7 @@
                 --handler lambda_function.lambda_handler \
                 --role "${{ secrets.AWS_AI_LAMBDA_ROLE_ARN }}" \
                 --code "S3Bucket=${{ env.S3_BUCKET }},S3Key=$CODE_KEY" \
-                --layers $COMBINED_LAYERS \
+                --layers "$DEPS_LAYER_ARN" \
                 --timeout 120 \
                 --memory-size 1024 \
                 --no-publish
