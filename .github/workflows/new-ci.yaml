@@ -100,6 +100,13 @@
               source .venv/bin/activate
               echo "--- Upgrading pip ---"
               pip install --upgrade pip setuptools wheel
+
+              #dhara0611-start
+              # CRITICAL FIX: Force pip to download the ultra-lightweight CPU version of PyTorch
+              echo "--- Pre-installing CPU-Only PyTorch ---"
+              pip install torch --index-url https://download.pytorch.org/whl/cpu
+              #dhara0611-end
+
               echo "--- Installing requirements.txt ---"
               pip install -r requirements.txt
               echo "--- Installing project + pytest-cov, bandit, flake8 ---"
