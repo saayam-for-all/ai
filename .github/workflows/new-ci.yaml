@@ -188,7 +188,14 @@
             # Clean up unneeded bloat inside the torch layer folders
             find dist_layer_torch/python/ -type d -name "__pycache__" -exec rm -rf {} +
             find dist_layer_torch/python/ -type d -name "tests" -exec rm -rf {} +
+            find dist_layer_torch/python/ -type d -name "testing" -exec rm -rf {} +
+            find dist_layer_torch/python/ -type d -name "include" -exec rm -rf {} +
+            find dist_layer_torch/python/ -type d -name "bin" -exec rm -rf {} +
             find dist_layer_torch/python/ -type d -name "*.dist-info" -exec rm -rf {} +
+            
+            # VIOLENTLY REDUCE BINARY SIZE: Strip debug symbols out of C++ compiled (.so) objects
+            echo "--- Stripping C++ symbol maps from PyTorch engine ---"
+            find dist_layer_torch/python/ -name "*.so" -exec strip --strip-unneeded {} + || true
             
             cd dist_layer_torch && zip -r ../lambda-layer-torch.zip . && cd ..
 
