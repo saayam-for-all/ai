@@ -183,7 +183,16 @@
             echo "=== 2. Creating Dependencies Layer Package ==="
             # CRITICAL: AWS Lambda requires Python layer files to be wrapped inside a folder named 'python'
             mkdir -p dist_layer/python
-            cp -r .venv/lib/python3.11/site-packages/* dist_layer/python/
+            # Instead of loose files, we pack your dependencies as a nested zip archive
+
+            cd .venv/lib/python3.11/site-packages/
+            zip -r ../../../../dist_layer/python/vendor.zip .
+            cd ../../../../
+            
+            cd dist_layer
+            zip -r ../lambda-layer.zip .
+            cd ..
+
 
             # --- AGGRESSIVE CLEANUP TO DRASTICALLY SHRINK SIZE ---
             echo "--- Removing bloated metadata and caches ---"
