@@ -1,0 +1,391 @@
+  name: Python Flask CI Pipeline
+
+  concurrency:
+    group: ci-${{ github.ref }}
+    cancel-in-progress: true
+
+  on:
+    workflow_dispatch:
+
+    push:
+      branches:
+        - test
+        - dev
+        - main
+      #dhara-start
+      # This tells GitHub to run my feature branch update, remove this later!
+        - 'dhara0611/feature-ai-cicd' 
+      #dhara-end
+
+    pull_request:
+      branches:
+        - test
+        - dev
+        - main
+      types:
+        - opened
+        - synchronize
+        - reopened
+
+  jobs:
+    build-and-test:
+      runs-on: ubuntu-latest
+      timeout-minutes: 40  # FIX: prevent hung jobs (torch installs can be slow)
+      env:
+        PYTHONUNBUFFERED: 1
+        PYTHONFAULTHANDLER: 1
+      defaults:
+        run:
+          working-directory: .
+          shell: bash
+
+      steps:
+        # --- CODE: Checkout source ---
+        - name: Checkout repository
+          uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 
+          with:
+            fetch-depth: 0  
+
+        - name: Show pipeline info
+          run: |
+            echo "=== Pipeline context ==="
+            echo "Branch: ${{ github.ref_name }}"
+            echo "Commit: ${{ github.sha }}"
+            echo "Event: ${{ github.event_name }}"
+
+        # --- Set up Python (with pip cache) ---
+        - name: Set up Python
+          id : setup-python
+          uses: actions/setup-python@v5
+          with:
+            python-version: "3.11"
+            #cache: "pip"
+
+        - name: Print Python and pip versions  # FIX: environment debugging
+          run: |
+            python --version
+            pip --version
+
+        # --- Cache virtualenv (skip install when deps unchanged) ---
+        - name: Cache virtualenv
+          uses: actions/cache@v4
+          id: cache-venv
+          with:
+            path: .venv
+            key: ${{ runner.os }}-venv-${{ steps.setup-python.outputs.pythonLocation }}-${{ hashFiles('requirements.txt', 'pyproject.toml') }}
+            restore-keys: |
+              ${{ runner.os }}-venv-${{ steps.setup-python.outputs.pythonLocation }}
+              ${{ runner.os }}-venv-
+
+
+        - name: Cache status
+          run: |
+            if [ "${{ steps.cache-venv.outputs.cache-hit }}" = "true" ]; then
+              echo "✅ Cache HIT - skipping dependency install"
+            else
+              echo "⬜ Cache MISS - will install dependencies"
+            fi
+
+        # --- BUILD/PACKAGE: Install dependencies ---
+        # FIX - added venv validity guard so a corrupted/stale cache doesn't silently break all downstream steps
+        - name: Build and install package
+          env:
+            PIP_PROGRESS_BAR: off
+            PIP_DISABLE_PIP_VERSION_CHECK: 1
+          run: |
+            echo "=== Build and install package (output below) ==="
+            if [ "${{ steps.cache-venv.outputs.cache-hit }}" != "true" ] || [ ! -f .venv/bin/activate ]; then
+              echo "Note: torch + transformers are large (~2GB). First install can take 15-20 min."
+              python -m venv .venv
+              source .venv/bin/activate
+              echo "--- Upgrading pip ---"
+              pip install --upgrade pip setuptools wheel
+
+              # PyTorch is not required by the Lambda deployment.
+              # pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+              echo "--- Installing requirements.txt ---"
+              pip install -r requirements.txt
+              echo "--- Installing project + pytest-cov, bandit, flake8 ---"
+              pip install pytest-cov bandit flake8
+              echo "=== Install complete ==="
+            else
+              echo "✅ Valid venv found in cache, skipping install."
+            fi
+
+        # --- TESTS [SAST]: Static Application Security Testing ---
+        # FIX - changed -lll to -ll for broader security coverage
+        - name: SAST with Bandit
+          #dhara0611-remove this line later "continue on error" 
+          continue-on-error: true 
+          run: |
+            echo "=== SAST with Bandit (output below) ==="
+            source .venv/bin/activate
+            bandit app.py MetaAIAPI_app.py -ll -f screen
+
+        # --- CODE COVERAGE: Run tests with coverage ---
+        - name: Verify app import (quick check before tests)
+          run: |
+            source .venv/bin/activate
+            echo "Testing if app module can be imported..."
+            python -u -c "from app import app, categories; print('Import OK')"
+
+        - name: Run tests with coverage
+          run: |
+            echo "=== Pytest with coverage (output below) ==="
+            source .venv/bin/activate
+            python -u -m pytest test_app.py --cov=app --cov-report=xml --cov-report=term-missing -v -s --tb=short
+        # - name: Run tests with coverage
+        #   run: |
+        #     echo "=== Pytest with coverage (output below) ==="
+        #     source .venv/bin/activate
+        #     python -u -m pytest tests/ --cov=app --cov-report=xml --cov-report=term-missing -v -s --tb=short
+
+        # FIX: upload coverage.xml as an artifact instead of generating and discarding it
+        - name: Upload coverage report
+          if: always()
+          uses: actions/upload-artifact@v4
+          with:
+            name: coverage-report
+            path: coverage.xml
+
+        # --- Lint (code quality) ---
+        # FIX: changed `*.py` to `.` so sub-packages are also linted
+        # - name: Lint with flake8
+        #   run: |
+        #     echo "=== Flake8 lint (output below) ==="
+        #     source .venv/bin/activate
+        #     flake8 . --max-line-length=150
+
+        # - name: Lint with flake8
+        #   run: |
+        #     echo "=== Flake8 lint (output below) ==="
+        #     source .venv/bin/activate
+        #     flake8 . --max-line-length=150 --exclude=.venv,__pycache__,.git,build,dist
+        
+        #dhara0611-start
+        ## --- PACKAGING: Zip the Python app + dependencies ---
+        - name: Package Application for AWS Lambda
+          run: |
+            echo "===1. Creating code package ==="
+            rm -rf dist_code dist_layer_useful dist_layer_unused \
+              lambda-code.zip lambda-layer-useful.zip lambda-layer-unused.zip
+            mkdir -p dist_code
+            #Copy ONLY business logic files and directories
+            cp lambda_function.py dist_code/
+            cp -r utils services dist_code/
+
+            cd dist_code
+            zip -r ../lambda-code.zip .
+            cd ..
+
+            echo "=== 2. Creating useful Lambda dependencies layer ==="
+            mkdir -p dist_layer_useful/python
+            python -m pip install --no-cache-dir \
+              --target dist_layer_useful/python \
+              langchain-core langchain-groq langchain-google-genai \
+              psycopg2-binary aws-lambda-powertools boto3
+            
+            find dist_layer_useful/python/ -type d -name "__pycache__" -exec rm -rf {} +
+            find dist_layer_useful/python/ -type d -name "tests" -exec rm -rf {} +
+            
+            cd dist_layer_useful && zip -r ../lambda-layer-useful.zip . && cd ..
+
+            echo "=== 3. Creating unused dependency archive ==="
+            mkdir -p dist_layer_unused/python
+            # Preserve the full existing environment for storage or future use only.
+            cp -r .venv/lib/python3.11/site-packages/* dist_layer_unused/python/
+            find dist_layer_unused/python/ -type d -name "__pycache__" -exec rm -rf {} +
+            find dist_layer_unused/python/ -type d -name "tests" -exec rm -rf {} +
+            cd dist_layer_unused && zip -r ../lambda-layer-unused.zip . && cd ..
+
+            echo "=== Lambda package sizes ==="
+            du -sh lambda-code.zip lambda-layer-useful.zip lambda-layer-unused.zip
+
+            echo "=== Packaging complete ==="
+
+        # Save the package to GitHub storage so the upcoming deploy job can access it
+        - name: Upload Build Artifact to GitHub
+          uses: actions/upload-artifact@v4
+          with:
+            name: compiled-build-archive
+            path: |
+              lambda-code.zip
+              lambda-layer-useful.zip
+              lambda-layer-unused.zip
+        #dhara0611-end
+
+
+    # --- BUILD DOCKER IMAGE AND PUSH: Docker build job ---
+    # commenting the build-docker step
+    #dhara0611-start
+    # build-docker:
+    #   runs-on: ubuntu-latest
+    #   timeout-minutes: 20  # FIX: added timeout
+    #   needs: build-and-test
+    #   # FIX: run on both push AND pull_request 
+    #   # This ensures a broken Dockerfile is caught before merge.
+    #   permissions:
+    #     contents: read
+    #     id-token: write  # for OIDC with AWS (if using ECR)
+    #   defaults:
+    #     run:
+    #       working-directory: .
+
+    #   steps:
+    #     - name: Checkout repository
+    #       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  
+
+    #     - name: Set up Docker Buildx
+    #       uses: docker/setup-buildx-action@v3
+
+    #     - name: Build Docker image
+    #       uses: docker/build-push-action@v6
+    #       with:
+    #         context: .
+    #         push: false  # Never push from this job unless ECR steps below are enabled
+    #         tags: saayam-ai-assistant:${{ github.sha }}
+    #         cache-from: type=gha
+    #         cache-to: type=gha,mode=max
+    #dhara0611-end
+
+        # Uncomment and configure for ECR push when ready:
+        # - name: Configure AWS credentials
+        #   uses: aws-actions/configure-aws-credentials@v4
+        #   with:
+        #     role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+        #     aws-region: ${{ secrets.AWS_REGION }}
+        #
+        # - name: Login to Amazon ECR
+        #   id: login-ecr
+        #   uses: aws-actions/amazon-ecr-login@v2
+        #
+        # - name: Build and push to ECR
+        #   uses: docker/build-push-action@v6
+        #   with:
+        #     context: .
+        #     push: true
+        #     tags: |
+        #       ${{ steps.login-ecr.outputs.registry }}/${{ secrets.ECR_REPOSITORY }}:${{ github.sha }}
+        #       ${{ steps.login-ecr.outputs.registry }}/${{ secrets.ECR_REPOSITORY }}:latest
+        #     cache-from: type=gha
+        #     cache-to: type=gha,mode=max
+    
+    #dhara0611-start
+    deploy:
+      needs: build-and-test
+      if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+      runs-on: ubuntu-latest
+      
+      env:
+        AWS_REGION: "us-east-1"      # <-- Update to your AWS Region
+        S3_BUCKET: "saayam-virginia-private" # <-- Update to your S3 Bucket Name
+        APP_NAME: "ai-app"
+      
+      steps:
+        - name: Checkout repository
+          uses: actions/checkout@v4
+        
+        # Download the lambda-code.zip and lambda-layer.zip packages from GitHub's storage
+        - name: Download Build Artifact from GitHub
+          uses: actions/download-artifact@v4
+          with:
+            name: compiled-build-archive
+            path: ./
+        
+        - name: Generate Version Tag
+          id: ver
+          shell: bash
+          run: |
+            DATE_UTC=$(date -u +%Y%m%d-%H%M)
+            VERSION_TAG="v1.0.0-${DATE_UTC}"
+
+            echo "version=${VERSION_TAG}" >> $GITHUB_OUTPUT
+            # Explicit naming rules for both files
+            echo "code_archive_name=${{ env.APP_NAME }}-code-${VERSION_TAG}.zip" >> $GITHUB_OUTPUT
+            echo "useful_archive_name=${{ env.APP_NAME }}-useful-layer-${VERSION_TAG}.zip" >> $GITHUB_OUTPUT
+            echo "unused_archive_name=${{ env.APP_NAME }}-unused-layer-${VERSION_TAG}.zip" >> $GITHUB_OUTPUT
+
+        - name: Configure AWS credentials
+          uses: aws-actions/configure-aws-credentials@v4
+          with:
+            aws-region: ${{ env.AWS_REGION }}
+            aws-access-key-id: ${{ secrets.AWS_AI_ACCESS_KEY }}
+            aws-secret-access-key: ${{ secrets.AWS_AI_SECRET_ACCESS_KEY }}
+        
+         # --- BRANCH STRATEGY 2: DEV BRANCH DEPLOYMENT ---
+        - name: Upload to S3 Bucket (Dev Branch)
+          id: upload-to-s3
+          if: github.ref_name == 'dev' || github.ref_name == 'dhara0611/feature-ai-cicd'
+          run: |
+            echo "Uploading split zip archives to S3 (dev)..."
+            CODE_S3_KEY="code/dev/ai/v1.0.0/${{ steps.ver.outputs.code_archive_name }}"
+            USEFUL_S3_KEY="code/dev/ai/v1.0.0/${{ steps.ver.outputs.useful_archive_name }}"
+            UNUSED_S3_KEY="code/dev/ai/v1.0.0/${{ steps.ver.outputs.unused_archive_name }}"
+            
+            
+            # Copy both packages up to AWS storage
+            aws s3 cp "lambda-code.zip" "s3://${{ env.S3_BUCKET }}/$CODE_S3_KEY"
+            aws s3 cp "lambda-layer-useful.zip" "s3://${{ env.S3_BUCKET }}/$USEFUL_S3_KEY"
+            aws s3 cp "lambda-layer-unused.zip" "s3://${{ env.S3_BUCKET }}/$UNUSED_S3_KEY"
+            
+            # Export both paths to downstream steps
+            echo "code_s3_key=$CODE_S3_KEY" >> "$GITHUB_OUTPUT"
+            echo "useful_s3_key=$USEFUL_S3_KEY" >> "$GITHUB_OUTPUT"
+            echo "unused_s3_key=$UNUSED_S3_KEY" >> "$GITHUB_OUTPUT"
+
+
+
+        - name: Create or update AWS Lambda and Layers from S3 (Dev Branch)
+          if: github.ref_name == 'dev' || github.ref_name == 'dhara0611/feature-ai-cicd'
+          run: |
+            LAMBDA_FUNCTION_NAME="${{ env.APP_NAME }}-dev"
+            CODE_KEY="${{ steps.upload-to-s3.outputs.code_s3_key }}"
+            USEFUL_KEY="${{ steps.upload-to-s3.outputs.useful_s3_key }}"
+
+            echo "Publishing useful dependency layer..."
+            USEFUL_LAYER_ARN=$(aws lambda publish-layer-version \
+              --layer-name "${{ env.APP_NAME }}-dev-useful-dependencies" \
+              --content "S3Bucket=${{ env.S3_BUCKET }},S3Key=$USEFUL_KEY" \
+              --compatible-runtimes "python3.11" \
+              --query "LayerVersionArn" --output text)
+
+            echo "Useful dependency layer to apply: $USEFUL_LAYER_ARN"
+
+            if aws lambda get-function \
+              --function-name "$LAMBDA_FUNCTION_NAME" \
+              >/dev/null 2>&1; then
+              echo "Updating existing Lambda function: $LAMBDA_FUNCTION_NAME"
+
+              #1. Update the execution code
+              aws lambda update-function-code \
+                --function-name "$LAMBDA_FUNCTION_NAME" \
+                --s3-bucket "${{ env.S3_BUCKET }}" \
+                --s3-key "$CODE_KEY" \
+                --no-publish
+              aws lambda wait function-updated \
+                --function-name "$LAMBDA_FUNCTION_NAME"
+              
+              #2. Update configuration to attach freshly updated dependency layer
+              aws lambda update-function-configuration \
+                --function-name "$LAMBDA_FUNCTION_NAME" \
+                --layers "$USEFUL_LAYER_ARN"
+
+            else
+              echo "Creating Lambda function: $LAMBDA_FUNCTION_NAME"
+
+              aws lambda create-function \
+                --function-name "$LAMBDA_FUNCTION_NAME" \
+                --runtime python3.11 \
+                --handler lambda_function.lambda_handler \
+                --role "${{ secrets.AWS_AI_LAMBDA_ROLE_ARN }}" \
+                --code "S3Bucket=${{ env.S3_BUCKET }},S3Key=$CODE_KEY" \
+                --layers "$USEFUL_LAYER_ARN" \
+                --timeout 120 \
+                --memory-size 1024 \
+                --no-publish
+              aws lambda wait function-active \
+                --function-name "$LAMBDA_FUNCTION_NAME"
+            fi
+    #dhara-end
+        
