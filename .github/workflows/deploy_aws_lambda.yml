@@ -74,27 +74,19 @@ jobs:
       # One function failing must not cancel the deploy of the others.
       fail-fast: false
       matrix:
+        # All five functions deploy with the shared AWS_AI_* credentials.
+        # Only the Lambda ARN differs per function.
         include:
           - name: Predict Category
-            access_key_secret: PRED_CAT_AWS_ACCESS_KEY
-            secret_key_secret: PRED_CAT_AWS_SECRET_KEY
             arn_secret: PRED_CAT_AWS_LAMBDA_ARN
           - name: Generate Subject
-            access_key_secret: GEN_SUB_AWS_ACCESS_KEY
-            secret_key_secret: GEN_SUB_AWS_SECRET_KEY
             arn_secret: GEN_SUB_AWS_LAMBDA_ARN
           - name: Generate Answer
-            access_key_secret: GEN_ANS_AWS_ACCESS_KEY
-            secret_key_secret: GEN_ANS_AWS_SECRET_KEY
             arn_secret: GEN_ANS_AWS_LAMBDA_ARN
             timeout: 120
           - name: Emergency Contacts
-            access_key_secret: EMR_CON_AWS_ACCESS_KEY
-            secret_key_secret: EMR_CON_AWS_SECRET_KEY
             arn_secret: EMR_CON_AWS_LAMBDA_ARN
           - name: More Organizations
-            access_key_secret: MORE_ORG_AWS_ACCESS_KEY_ID
-            secret_key_secret: MORE_ORG_AWS_SECRET_ACCESS_KEY
             arn_secret: MORE_ORG_LAMBDA_ARN
 
     steps:
@@ -112,8 +104,8 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets[matrix.access_key_secret] }}
-          aws-secret-access-key: ${{ secrets[matrix.secret_key_secret] }}
+          aws-access-key-id: ${{ secrets.AWS_AI_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_AI_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Deploy to AWS Lambda
