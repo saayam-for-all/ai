@@ -58,7 +58,7 @@ def _response(status_code, body):
             "Content-Type": "application/json",
             "Access-Control-Allow-Origin": "*",
         },
-        "body": json.dumps(body, ensure_ascii=False) if isinstance(body, dict) else body,
+        "body": json.dumps(body, ensure_ascii=False) if isinstance(body, (dict, list)) else body,
     }
 
 
@@ -67,6 +67,47 @@ def _response(status_code, body):
 # -------------------------------------------------------------
 
 # 1. Predict Category
+# The web form's category dropdown is a fixed list of top level categories with
+# its own display names, and it consumes this endpoint as a plain JSON array of
+# those names. The classifier works in taxonomy IDs and returns ranked leaf
+# categories, so translate here rather than changing the classifier.
+_TOP_LEVEL_DISPLAY_NAMES = {
+    "GENERAL_CATEGORY": "General",
+    "FOOD_AND_ESSENTIALS": "Food & Essentials",
+    "CLOTHING_ASSISTANCE": "Clothing Support",
+    "HOUSING_ASSISTANCE": "Housing Assistance",
+    "EDUCATION_CAREER_SUPPORT": "Education & Career Support",
+    "HEALTHCARE_AND_WELLNESS": "Healthcare & Well-being",
+    "ELDERLY_COMMUNITY_ASSISTANCE": "Elderly & Community Support",
+}
+
+
+def _to_display_names(ranked_categories):
+    """Ranked leaf categories -> the display names the form can select.
+
+    A leaf's top level ancestor is the first segment of its category number,
+    so 4.3.1 (MATH) maps to 4 (EDUCATION_CAREER_SUPPORT). Confidence order is
+    preserved and duplicates are dropped, since several leaves can share one
+    top level category.
+    """
+    from utils.predict_category_list import help_categories
+
+    names = []
+    for item in ranked_categories or []:
+        number = str(item.get("category_number") or "")
+        if not number:
+            continue
+        top_id = "0.0.0.0.0" if number.startswith("0") else number.split(".")[0]
+        display = _TOP_LEVEL_DISPLAY_NAMES.get(help_categories.get(top_id, ""))
+        # The form prepends its own "General" option to whatever this returns,
+        # so including it here would list General twice. Returning an empty list
+        # when General is the only prediction leaves the form showing General
+        # alone, which is the intended behaviour.
+        if display and display != "General" and display not in names:
+            names.append(display)
+    return names
+
+
 def predict_category_handler(event, context):
     """AWS Lambda entry point for predict_category service"""
     try:
@@ -92,8 +133,8 @@ def predict_category_handler(event, context):
 
         ranked_categories, token_usage = predict_categories(description)
 
-        # Return ranked categories with numbers
-        return _response(200, {"categories": ranked_categories, "token_usage": token_usage})
+        # The form expects a plain array of selectable category names.
+        return _response(200, _to_display_names(ranked_categories))
 
     except Exception as e:
         return _response(500, {"error": str(e)})
