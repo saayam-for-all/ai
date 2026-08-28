@@ -4,7 +4,7 @@ from services.classification_service import predict_categories
 from utils.categories import help_categories
 from utils.generate_answer_service import generate_ai_answer
 from utils.request_db import get_request_full_details
-from services.emergency import get_emergency_services, get_emergency_directory
+from services.emergency import get_emergency_services
 from utils.search_orgs import find_organizations
 
 # -------------------------------------------------------------
@@ -64,6 +64,25 @@ def _response(status_code, body):
         # is. Serialising body here turns it into a string and every one of
         # those reads becomes undefined.
         "body": body,
+    }
+
+
+def _proxy_response(status_code, body):
+    """Response for methods that use Lambda PROXY integration.
+
+    Proxy integration requires body to be a string; API Gateway returns that
+    string to the client as the whole response. Emergency Contacts uses proxy
+    because its page sends lat/lng from browser geolocation, and proxy is the
+    only integration that passes query parameters and the caller IP through to
+    the function. The other GenAI methods are non proxy and use _response.
+    """
+    return {
+        "statusCode": status_code,
+        "headers": {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+        },
+        "body": json.dumps(body, ensure_ascii=False) if isinstance(body, (dict, list)) else body,
     }
 
 
@@ -143,16 +162,12 @@ def search_orgs_handler(event, context):
 def emergency_contacts_handler(event, context):
     """AWS Lambda entry point for emergency_contacts service"""
     try:
+        # Proxy integration gives us the query string and the caller IP, so a
+        # call with no parameters is resolved from the IP rather than guessed.
+        client_ip = get_client_ip(event)
         params = _parse_params(event)
-        if not params:
-            # Called with no parameters. The web client does this and then looks
-            # the answer up by its own country name, so return the whole
-            # directory rather than trying to guess a single location.
-            result = get_emergency_directory()
-        else:
-            client_ip = get_client_ip(event)
-            result = get_emergency_services(params, client_ip)
-        return _response(result["status"], result["body"])
+        result = get_emergency_services(params, client_ip)
+        return _proxy_response(result["status"], result["body"])
     except Exception as e:
         return _response(500, {"error": str(e)})
 
