@@ -4,7 +4,7 @@ from services.classification_service import predict_categories
 from utils.categories import help_categories
 from utils.generate_answer_service import generate_ai_answer
 from utils.request_db import get_request_full_details
-from services.emergency import get_emergency_services
+from services.emergency import get_emergency_services, get_emergency_directory
 from utils.search_orgs import find_organizations
 
 # -------------------------------------------------------------
@@ -143,9 +143,15 @@ def search_orgs_handler(event, context):
 def emergency_contacts_handler(event, context):
     """AWS Lambda entry point for emergency_contacts service"""
     try:
-        client_ip = get_client_ip(event)
         params = _parse_params(event)
-        result = get_emergency_services(params, client_ip)
+        if not params:
+            # Called with no parameters. The web client does this and then looks
+            # the answer up by its own country name, so return the whole
+            # directory rather than trying to guess a single location.
+            result = get_emergency_directory()
+        else:
+            client_ip = get_client_ip(event)
+            result = get_emergency_services(params, client_ip)
         return _response(result["status"], result["body"])
     except Exception as e:
         return _response(500, {"error": str(e)})
