@@ -361,16 +361,22 @@ class EmergencyServiceResolver:
             match_level = level          # ends on the most specific level present
             for name, number in services.items():
                 if is_dialable(number):
+                    # `level` is kept per service so a single-service request can
+                    # report where that number actually came from: asking for fire
+                    # from a city that does not list one is a country-level answer
+                    # even though the location matched at city level.
                     merged[name] = {
                         "number": number.strip(),
                         "source": SOURCE_DIRECTORY,
+                        "level": level,
                     }
 
         general = self._general_emergency_number(country_data)
 
         if requested_service:
             if requested_service in merged:
-                return {requested_service: merged[requested_service]}, match_level
+                entry = merged[requested_service]
+                return {requested_service: entry}, entry["level"]
             # Not in the directory for this country. Fall back to this country's
             # own general line - but only for services we actually model, so an
             # unrecognised service name cannot be answered with 112.
@@ -379,6 +385,7 @@ class EmergencyServiceResolver:
                     {requested_service: {
                         "number": general,
                         "source": SOURCE_GENERAL_FALLBACK,
+                        "level": "country",
                     }},
                     "country",
                 )
@@ -394,6 +401,7 @@ class EmergencyServiceResolver:
                 merged.setdefault(name, {
                     "number": general,
                     "source": SOURCE_GENERAL_FALLBACK,
+                    "level": "country",
                 })
 
         return merged, match_level

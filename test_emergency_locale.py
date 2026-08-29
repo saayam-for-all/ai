@@ -191,6 +191,21 @@ def test_city_entry_inherits_the_services_it_does_not_list():
     assert svc["police"]["number"] == "112"
 
 
+def test_single_service_reports_the_level_it_actually_came_from():
+    """Bengaluru matches at city level but does not list a fire number.
+
+    The fire number comes from Karnataka, so that is what the match level says.
+    Reporting "city" here would suggest a precision the answer does not have.
+    """
+    location = {"country": "IN", "state": "Karnataka", "city": "Bengaluru"}
+    _svc, level = find(location, "police")
+    assert level == "city"               # Bengaluru lists police itself
+    _svc, level = find(location, "fire")
+    assert level == "state"              # inherited from Karnataka
+    _svc, level = find(location, "women_helpline")
+    assert level == "country"            # only India's default has it
+
+
 def test_more_specific_levels_override_broader_ones():
     fake = {
         "XX": {
