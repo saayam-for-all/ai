@@ -236,6 +236,52 @@ longer takes the Organizations tab down. `organizations` is present as `[]`
 even on the error responses, so a caller that reads it before checking the
 status gets an empty list rather than a `KeyError`.
 
+#### This endpoint is the GenAI half of `orgAggregatorList`
+
+The data team's `saayam-org-aggregator` Lambda invokes this function directly
+behind `v1/ml/orgAggregatorList` and reads `payload["body"]["organizations"]`.
+That makes the envelope and the field names a **contract**, not an
+implementation detail. Two consequences:
+
+- The body stays a JSON **object**. This method is on **non-proxy**
+  integration, so API Gateway returns the structure as-is and the caller reads
+  `body.organizations` directly. Serialising the body to a string here would
+  turn every one of those reads into `undefined`.
+- The 13 names in `utils.search_orgs.ORGANIZATION_FIELDS` are fixed. Renaming
+  or dropping one silently breaks a consumer in a different repository, so
+  `test_org_search_contract.py` pins them.
+
+This answers open question **D15** in the BRD for
+[issue #170](https://github.com/saayam-for-all/ai/issues/170): the Lambda GenAI
+owes for `orgAggregatorList` is this one, `search_orgs`.
+
+The service is reachable under `search_orgs`, `search_org` and
+`find_nonprofits`.
+
+#### Normalisation rules and their edges
+
+Model output is prose, so every row is coerced before it leaves:
+
+| Field | Rule |
+| --- | --- |
+| `rating` | Float clamped to `0.0`–`5.0`, one decimal. A value above `5` is read as a 0–100 score and divided by 20. Anything unparseable becomes `0.0`. |
+| `size` | `small` / `medium` / `large`, else empty. |
+| `org_type` | `nonprofit` / `for-profit`, else empty. |
+| `location` | Falls back to the request's `location` when the model omits it. |
+| `causes` | Seeded from the request's `category` when the model omits it. |
+| all others | Present as `""` rather than absent. |
+
+**Known edge:** because any rating above `5` is treated as a 0–100 score, a
+model that answers on a 0–10 scale has `7.5` rewritten to `0.4`. Ratings are
+only as trustworthy as the source the model cites, and no caller should rank
+organizations on this field alone.
+
+#### Regression tests covering this service
+
+| File | Proves |
+| --- | --- |
+| `test_org_search_contract.py` | The body is an object; all 13 field names are present on every row even when the model returns a ragged one; the Groq to Gemini fallback; and that a total outage returns `502` with `ORG_SEARCH_UNAVAILABLE` and `organizations: []` rather than a silent empty `200`. |
+
 #### curl Command
 ```bash
 curl -X POST https://<api-gateway-url>/more-organizations \
