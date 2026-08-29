@@ -3,7 +3,6 @@ from utils.subject_generator import generate_subject_from_description
 from services.classification_service import predict_categories
 from utils.categories import help_categories
 from utils.generate_answer_service import generate_ai_answer
-from utils.request_db import get_request_full_details
 from services.emergency import get_emergency_services
 from utils.search_orgs import find_organizations
 
@@ -35,6 +34,47 @@ def get_client_ip(event):
     xff = headers.get("X-Forwarded-For") or headers.get("x-forwarded-for")
     if xff:
         return xff.split(",")[0].strip()
+    return None
+
+
+def _lookup_request(user_id, req_id):
+    """Read a request row from Postgres, importing the driver lazily.
+
+    utils.request_db imports psycopg2, a compiled C extension. Importing it at
+    module scope meant that any psycopg2 problem - most obviously a wheel built
+    for a different Python minor version than the function's configured runtime
+    - failed the whole module and took predict_category, generate_subject,
+    emergency_contacts and search_orgs down with it, before a single line of
+    handler code ran. generate_answer is the only service that needs the
+    database, so it is the only one that should pay for it.
+    """
+    from utils.request_db import get_request_full_details
+
+    return get_request_full_details(user_id, req_id)
+
+
+# The web client posts the request object it already holds, and that object
+# names its fields differently from our database columns: the Request Details
+# page carries `id` for the request and the logged in user's `userDBid`, while
+# the ml-api aggregator speaks `beneficiary_id`. Accepting the aliases costs
+# nothing and stops a working payload being rejected over a naming difference.
+_USER_ID_KEYS = (
+    "user_id",
+    "userId",
+    "req_user_id",
+    "beneficiary_id",
+    "beneficiaryId",
+    "userDBid",
+)
+_REQ_ID_KEYS = ("req_id", "request_id", "requestId", "id")
+
+
+def _first_present(body, keys):
+    """Return the first non empty value among keys, or None."""
+    for key in keys:
+        value = body.get(key)
+        if value not in (None, ""):
+            return value
     return None
 
 
@@ -174,35 +214,88 @@ def emergency_contacts_handler(event, context):
 
 # 4. Generate Answer
 def generate_answer_handler(event, context):
-    """AWS Lambda entry point for generate_answer service"""
+    """AWS Lambda entry point for generate_answer service.
+
+    The database is a source of the request text, not a precondition. A caller
+    that already holds the subject and description - the Request Details page
+    does - is answered without touching Postgres. The req_id lookup fills in
+    only what the caller did not send.
+    """
+    # The description carries health, housing and financial detail and the
+    # headers carry the caller's token, so log the shape of the payload and
+    # never its content.
     try:
         body = _parse_event_body(event)
-        user_id = body.get("user_id")
-        req_id = body.get("req_id") or body.get("request_id")
+    except (json.JSONDecodeError, TypeError, ValueError) as e:
+        print(f"ERROR: generate_answer could not parse the body: {type(e).__name__}")
+        return _response(400, {"error": "Request body is not valid JSON"})
+
+    if not isinstance(body, dict):
+        return _response(400, {"error": "Request body must be a JSON object"})
+
+    print("LOG: generate_answer invoked, body keys:", sorted(body.keys()))
+
+    try:
+        subject = str(body.get("subject") or "").strip()
+        description = str(body.get("description") or "").strip()
+        location = body.get("location")
+        category = body.get("category")
+
+        # Anything that is not a list of messages is dropped rather than passed
+        # through to the model.
         conversation_history = body.get("conversation_history")
+        if not isinstance(conversation_history, list):
+            conversation_history = None
 
-        if not user_id or not req_id:
-            return _response(
-                400,
-                {"error": "user_id and req_id (or request_id) are required"},
-            )
+        user_id = _first_present(body, _USER_ID_KEYS)
+        req_id = _first_present(body, _REQ_ID_KEYS)
 
-        data = get_request_full_details(str(user_id), str(req_id))
-        if err := data.get("error"):
-            status = 404 if "No data found" in str(err) else 502
-            return _response(status, {"error": err})
+        source = "request"
+        if not subject or not description:
+            if not user_id or not req_id:
+                return _response(
+                    400,
+                    {
+                        "error": (
+                            "Provide either subject and description, or "
+                            "user_id and req_id to look them up"
+                        )
+                    },
+                )
 
-        category_id = data.get("req_cat_id")
-        subject = (data.get("req_subj") or "").strip()
-        description = (data.get("req_desc") or "").strip()
-        location = data.get("req_loc")
+            data = _lookup_request(str(user_id), str(req_id))
+            if err := data.get("error"):
+                if data.get("error_kind") == "not_found":
+                    return _response(
+                        404,
+                        {"error": "No request found for the given user_id and req_id"},
+                    )
+                # The driver's message names the host, database, user and
+                # sslmode. It belongs in CloudWatch, not in the browser. A
+                # store that is down is retryable, which 502 does not say.
+                print(f"ERROR: generate_answer request lookup failed: {err}")
+                return _response(
+                    503,
+                    {
+                        "error": "Request store is unavailable, please retry",
+                        "code": "REQUEST_STORE_UNAVAILABLE",
+                        "retryable": True,
+                    },
+                )
+
+            source = "database"
+            subject = subject or str(data.get("req_subj") or "").strip()
+            description = description or str(data.get("req_desc") or "").strip()
+            location = location or data.get("req_loc")
+            if not category:
+                category = help_categories.get(str(data.get("req_cat_id")))
 
         if not description:
-            return _response(400, {"error": "description missing (req_desc empty)"})
+            return _response(400, {"error": "description is required and was empty"})
         if not subject:
-            return _response(400, {"error": "subject missing (req_subj empty)"})
+            return _response(400, {"error": "subject is required and was empty"})
 
-        category = help_categories.get(str(category_id)) or "General"
+        category = str(category).strip() if category else "General"
 
         try:
             answer = generate_ai_answer(
@@ -212,15 +305,31 @@ def generate_answer_handler(event, context):
                 location=location,
                 conversation_history=conversation_history,
             )
-            if not answer:
-                raise ValueError("Error: Empty response")
-        except Exception:
-            answer = "Error: Failed to generate answer"
+        except Exception as e:
+            # Reporting a model failure as a 200 whose answer is the string
+            # "Error: Failed to generate answer" hid Groq outages and retired
+            # model ids from every metric and rendered the error to the
+            # beneficiary as if it were advice.
+            print(f"ERROR: generate_answer generation failed: {type(e).__name__}: {e}")
+            return _response(
+                502,
+                {"error": "Answer generation failed", "code": "ANSWER_GENERATION_FAILED"},
+            )
 
-        return _response(200, {"answer": answer})
+        if not answer or not str(answer).strip():
+            print("ERROR: generate_answer generation returned an empty answer")
+            return _response(
+                502,
+                {"error": "Answer generation returned no content", "code": "ANSWER_EMPTY"},
+            )
+
+        # source tells the caller whether the text came from the request row or
+        # from the payload, which is what makes a degraded run legible.
+        return _response(200, {"answer": answer, "source": source})
 
     except Exception as e:
-        return _response(500, {"error": str(e)})
+        print(f"ERROR: generate_answer failed: {type(e).__name__}: {e}")
+        return _response(500, {"error": "Answer generation failed"})
 
 
 # 5. Generate Subject

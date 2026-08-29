@@ -103,9 +103,25 @@ curl -X POST https://<api-gateway-url>/generate-subject \
 ---
 
 ### 3. Generate Answer
-Generates structured context-aware responses to user help requests based on database records.
+Generates a structured, context-aware response to a help request. Backs the
+**More Information** button on the Request Details page.
 
-#### request Payload
+The database is a *source* of the request text, not a precondition. Send the
+text you already have and the request row is never read; send identifiers and
+the row is read to fill in what is missing. See issue #169.
+
+#### request Payload — text supplied by the caller (no database read)
+```json
+{
+  "subject": "Need winter coats",
+  "description": "Two children, no warm clothing, snow forecast next week.",
+  "location": "Chicago",
+  "category": "Clothing",
+  "conversation_history": []
+}
+```
+
+#### request Payload — looked up from the request row
 ```json
 {
   "user_id": "SID-00-000-02-356",
@@ -113,6 +129,32 @@ Generates structured context-aware responses to user help requests based on data
   "conversation_history": []
 }
 ```
+
+`user_id` also accepts `userId`, `req_user_id`, `beneficiary_id`,
+`beneficiaryId` and `userDBid`. `req_id` also accepts `request_id`,
+`requestId` and `id`, which is what the Request Details page holds. At least
+one of the two payload styles must be satisfied: either `subject` **and**
+`description`, or `user_id` **and** `req_id`.
+
+#### Response
+```json
+{ "answer": "<markdown>", "source": "request" }
+```
+
+This method uses **non-proxy** integration, so the client reads
+`response.body.answer`. `source` is `"request"` when the text came from the
+payload and `"database"` when it came from the request row.
+
+| Status | Meaning |
+|---|---|
+| 200 | Answer generated |
+| 400 | Neither text nor identifiers supplied, or the body is not a JSON object |
+| 404 | No request row for that `user_id` / `req_id` |
+| 503 | `REQUEST_STORE_UNAVAILABLE` — Postgres is down; retryable |
+| 502 | `ANSWER_GENERATION_FAILED` / `ANSWER_EMPTY` — the model failed |
+
+A model failure is never reported as a 200. Driver-level database errors are
+logged to CloudWatch and never returned to the caller.
 
 #### curl Command
 ```bash
