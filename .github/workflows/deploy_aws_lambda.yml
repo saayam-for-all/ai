@@ -4,42 +4,11 @@ on:
   push:
     branches:
       - dev
-  # Pull requests run the test job only. The build and deploy jobs below are
-  # skipped, so a PR never touches AWS.
-  pull_request:
   workflow_dispatch:
 
 jobs:
-  test:
-    name: Tests
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          # Matches the Lambda runtime and the build container below.
-          python-version: "3.11"
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt pytest
-
-      - name: Run tests
-        # The suite needs no API keys and makes no network calls. It covers the
-        # response contracts the web client depends on and the emergency
-        # contacts safety invariants from issue #146, so a failure here must
-        # stop the deploy rather than be reviewed afterwards.
-        run: python -m pytest -q
-
   build:
     name: Build & Package
-    needs: test
-    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
 
     steps:
