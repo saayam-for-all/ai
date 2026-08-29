@@ -3,6 +3,11 @@ Tests for #146 - Emergency Contacts must never fall back to US numbers (911/988)
 for non-US or unknown locales. Runs against the real emergency_numbers.json.
 No network: exercises EmergencyServiceResolver._find_services directly.
 """
+
+import pytest
+
+# Emergency Contacts resolution behaviour and numeral localisation.
+pytestmark = pytest.mark.unit
 import services.emergency as em
 
 DATA = em._load_emergency_numbers()
