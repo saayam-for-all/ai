@@ -1,0 +1,4 @@
+id,type,requirements_skills,requirements_languages,location,time_commitment_days,time_commitment_frequency,priority
+T001,logistics,"logistics:2",Spanish,"New York",Saturday,weekly,high
+T002,tech_support,"tech_support:2",English,Remote,Monday,biweekly,medium
+T003,communication,"communication:3",French,"Los Angeles",Saturday,weekly,low

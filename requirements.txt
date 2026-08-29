@@ -1,3 +1,14 @@
+flask
+transformers
+meta-ai-api
+google-generativeai
+openai
+groq
+python-dotenv
+tiktoken
+torch
+numpy
+pytest
 groq==0.37.1
 google-genai
 python-dotenv==1.0.1
