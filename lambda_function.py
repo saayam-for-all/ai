@@ -5,7 +5,7 @@ from utils.categories import help_categories
 from utils.generate_answer_service import generate_ai_answer
 from utils.request_db import get_request_full_details
 from services.emergency import get_emergency_services
-from utils.search_orgs import find_organizations
+from utils.search_orgs import OrganizationSearchError, find_organizations
 
 # -------------------------------------------------------------
 # Common Utility Helpers
@@ -127,7 +127,14 @@ def predict_category_handler(event, context):
 
 # 2. More Organizations (Search Orgs)
 def search_orgs_handler(event, context):
-    """AWS Lambda entry point for search_orgs service"""
+    """AWS Lambda entry point for search_orgs service.
+
+    Also the AI half of the Request Details Organizations tab: the data team's
+    saayam-org-aggregator invokes this function directly behind
+    v1/ml/orgAggregatorList and reads payload["body"]["organizations"], which
+    is why the body stays an object and the field names are a contract. See
+    issue #170.
+    """
     try:
         raw_body = event.get("body")
         if isinstance(raw_body, str):
@@ -140,22 +147,40 @@ def search_orgs_handler(event, context):
         subject = body.get("subject")
         description = body.get("description")
         location = body.get("location")
+        # The aggregator already resolves a category for its database half.
+        # When it passes one through we use it to seed the causes column.
+        category = body.get("category")
 
-        if not description or not description.strip():
+        if not description or not str(description).strip():
             return _response(400, {"error": "Description is required"})
-        if not subject or not subject.strip():
+        if not subject or not str(subject).strip():
             subject = ""
-        if not location or not location.strip():
+        if not location or not str(location).strip():
             location = "United States"
             print("No location provided, defaulting to United States")
 
         orgs = find_organizations(
-            subject=subject, description=description, location=location
+            subject=subject,
+            description=description,
+            location=location,
+            category=category,
         )
 
         return _response(200, orgs)
+
+    except OrganizationSearchError as e:
+        # Every provider failed. The caller needs to know this is a provider
+        # outage rather than a bad request, and the detail belongs in
+        # CloudWatch rather than in a response the aggregator forwards.
+        print(f"ERROR: organization search failed on every provider: {e}")
+        return _response(
+            502,
+            {"error": "Organization search failed", "code": "ORG_SEARCH_UNAVAILABLE",
+             "organizations": []},
+        )
     except Exception as e:
-        return _response(500, {"error": str(e)})
+        print(f"ERROR: search_orgs failed: {type(e).__name__}: {e}")
+        return _response(500, {"error": "Organization search failed", "organizations": []})
 
 
 # 3. Emergency Contacts

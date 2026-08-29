@@ -160,14 +160,81 @@ curl -X GET "https://<api-gateway-url>/emergency-contacts?zip=95112&country=US&l
 ### 5. More Organizations
 Returns 6 verified organizations (3 nonprofit, 3 for-profit) close to the user's location related to their request.
 
+**This endpoint has a second consumer outside this repository.** The data
+team's `saayam-org-aggregator` serves `v1/ml/orgAggregatorList` for the Request
+Details **Organizations** tab, and reaches this function by direct
+`lambda.invoke` rather than through API Gateway:
+
+```python
+# saayam-for-all/data : data-engineering/src/saayam-org-aggregator/helpers.py
+response = lambda_client.invoke(
+    FunctionName="More_Org_GenAI_Py_v3126",
+    Payload=json.dumps({"subject": ..., "description": ..., "location": ...}),
+)
+orgs = pd.DataFrame(json.loads(response["Payload"].read())["body"]["organizations"])
+```
+
+Two things follow, and both are pinned by `test_org_search_contract.py`:
+
+* `body` **must stay a JSON object**, not a string. Serialising it breaks the
+  Organizations tab from a different repository (this is what PR #165 would
+  have done before PR #166 reverted it).
+* The field names below are a **contract**, not an implementation detail.
+  Renaming or dropping one is a cross-team change. See issue #170.
+
 #### request Payload
 ```json
 {
   "subject": "shelter",
   "description": "i am on the streets now i dont have a place to stay please help",
-  "location": "San Jose, CA"
+  "location": "San Jose, CA",
+  "category": "Housing"
 }
 ```
+
+`subject` and `location` are optional — `location` defaults to
+`"United States"`. `category` is optional and, when the aggregator passes the
+one it already resolved for its database half, seeds the `causes` field.
+
+#### Response
+```json
+{
+  "organizations": [
+    {
+      "organization_name": "Second Harvest Food Bank",
+      "org_type": "nonprofit",
+      "size": "large",
+      "rating": 4.8,
+      "location": "San Jose, CA",
+      "contact": "+1-408-555-0100",
+      "email": "info@example.org",
+      "source": "https://www.charitynavigator.org/example",
+      "web_url": "https://example.org",
+      "mission": "...",
+      "description": "...",
+      "relevance": "...",
+      "causes": "Food Security"
+    }
+  ]
+}
+```
+
+Every field in `utils.search_orgs.ORGANIZATION_FIELDS` is present on every row,
+even when the model omits it, so a caller building a DataFrame never gets a
+ragged frame. `rating` is always a float clamped to 0.0–5.0 with one decimal
+(a 0–100 source score is divided by 20); `size` is `small`/`medium`/`large` or
+empty; `org_type` is `nonprofit`/`for-profit` or empty.
+
+| Status | Meaning |
+|---|---|
+| 200 | Organizations found |
+| 400 | `description` missing |
+| 502 | `ORG_SEARCH_UNAVAILABLE` — every model provider failed |
+
+The search tries **Groq first, then Gemini**. A single-provider outage no
+longer takes the Organizations tab down. `organizations` is present as `[]`
+even on the error responses, so a caller that reads it before checking the
+status gets an empty list rather than a `KeyError`.
 
 #### curl Command
 ```bash
