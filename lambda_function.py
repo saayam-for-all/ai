@@ -39,14 +39,22 @@ def get_client_ip(event):
 
 
 def _parse_params(event):
-    """Combine queryStringParameters and body parameter values"""
+    """Combine queryStringParameters and body parameter values.
+
+    A body that is absent, malformed, or valid JSON that is not an object (a
+    bare string or list) is ignored rather than raised: the query string alone
+    is enough to answer, and an emergency lookup must not 500 because of a
+    stray body.
+    """
     params = dict(event.get("queryStringParameters") or {})
     body = event.get("body")
     if body and str(body).strip():
         try:
-            params.update(json.loads(body))
-        except (json.JSONDecodeError, TypeError):
-            pass
+            parsed = json.loads(body) if isinstance(body, str) else body
+        except (json.JSONDecodeError, TypeError, ValueError):
+            parsed = None
+        if isinstance(parsed, dict):
+            params.update(parsed)
     return params
 
 
@@ -169,7 +177,13 @@ def emergency_contacts_handler(event, context):
         result = get_emergency_services(params, client_ip)
         return _proxy_response(result["status"], result["body"])
     except Exception as e:
-        return _response(500, {"error": str(e)})
+        # This method is on PROXY integration, so the error path has to use the
+        # proxy shape too. Returning an object body here made API Gateway reject
+        # the response and the page saw a 502 with no diagnosis - the failure
+        # mode reported in issue #146. The detail goes to CloudWatch rather than
+        # to the caller.
+        print(f"ERROR: emergency_contacts failed: {type(e).__name__}: {e}")
+        return _proxy_response(500, {"error": "Emergency services lookup failed"})
 
 
 # 4. Generate Answer
@@ -275,6 +289,7 @@ def lambda_handler(event, context):
     Unified Lambda handler that routes requests to appropriate service.
     Supports: predict_category, generate_subject, generate_answer, emergency_contacts, search_orgs
     """
+    service = "predict_category"
     try:
         # Check if service is specified in query parameters or body
         q_params = event.get("queryStringParameters") or {}
@@ -301,4 +316,10 @@ def lambda_handler(event, context):
             return _response(400, {"error": f"Unknown service: {service}. Supported: predict_category, generate_subject, generate_answer, emergency_contacts, search_orgs"})
 
     except Exception as e:
+        # emergency_contacts is the one service behind PROXY integration, and a
+        # proxy method rejects an object body with a 502. Match the shape the
+        # routed service would have used.
+        if service == "emergency_contacts":
+            print(f"ERROR: emergency_contacts routing failed: {type(e).__name__}: {e}")
+            return _proxy_response(500, {"error": "Emergency services lookup failed"})
         return _response(500, {"error": str(e)})

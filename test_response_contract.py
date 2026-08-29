@@ -73,6 +73,39 @@ def test_emergency_returns_indian_numbers_not_us_ones():
     assert "911" not in dialled.values(), f"US number leaked into an India response: {dialled}"
 
 
+def test_emergency_error_bodies_use_the_proxy_shape_too():
+    """A proxy method rejects an object body, and the caller sees a bare 502.
+
+    That is the failure mode reported in issue #146: the page received no data
+    at all and fell back to its hardcoded US numbers. The error path has to
+    serialise like the success path.
+    """
+    with mock.patch.object(LF, "get_emergency_services", side_effect=RuntimeError("boom")):
+        res = LF.emergency_contacts_handler({"queryStringParameters": {"country": "IN"}}, None)
+    assert res["statusCode"] == 500
+    assert isinstance(res["body"], str), "proxy integration requires a string body"
+    assert "boom" not in res["body"], "internal detail must go to the log, not the caller"
+    assert json.loads(res["body"])["error"]
+
+
+def test_emergency_errors_through_the_router_use_the_proxy_shape():
+    with mock.patch.object(LF, "get_emergency_services", side_effect=RuntimeError("boom")):
+        res = LF.lambda_handler(
+            {"queryStringParameters": {"service": "emergency_contacts", "country": "IN"}}, None
+        )
+    assert isinstance(res["body"], str)
+
+
+def test_a_malformed_body_does_not_break_an_emergency_lookup():
+    """The query string alone is enough; a stray body must not cause a 500."""
+    for body in ('"just a string"', "[1,2,3]", "not json at all", ""):
+        res = LF.emergency_contacts_handler(
+            {"queryStringParameters": {"country": "IN"}, "body": body}, None
+        )
+        assert res["statusCode"] == 200, body
+        assert json.loads(res["body"])["services"]["fire"]["dial_number"] == "101"
+
+
 def test_error_bodies_are_objects_too():
     res = LF.predict_category_handler({"body": json.dumps({})}, None)
     assert res["statusCode"] == 400

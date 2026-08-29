@@ -155,6 +155,41 @@ curl -X POST https://<api-gateway-url>/emergency-contacts \
 curl -X GET "https://<api-gateway-url>/emergency-contacts?zip=95112&country=US&language=en"
 ```
 
+#### Response
+
+```json
+{
+  "services": {
+    "general_emergency": { "dial_number": "112", "display_number": "११२", "source": "directory", "is_fallback": false },
+    "fire":              { "dial_number": "101", "display_number": "१०१", "source": "directory", "is_fallback": false },
+    "women_helpline":    { "dial_number": "112", "display_number": "११२", "source": "general_emergency_fallback", "is_fallback": true }
+  },
+  "language": "hi",
+  "country": "IN",
+  "match_level": "country",
+  "resolved_location": { "country": "IN" }
+}
+```
+
+- `dial_number` is always ASCII and is what a click-to-call link must use.
+  `display_number` is the same number in the requested language's numerals.
+- `is_fallback` is `true` when the directory holds no entry for that service in
+  that country and the country's own general emergency line is being returned
+  instead. Label those rows as a general emergency line rather than presenting
+  them as the specific service.
+- Numbers never cross a border. If the country cannot be resolved, or the
+  country is not in the directory, the endpoint answers `404` rather than
+  returning another country's numbers. **Clients must render "unavailable" in
+  that case and must not substitute a default of their own** — a hardcoded
+  `911` or `988` is the safety violation described in
+  [issue #146](https://github.com/saayam-for-all/ai/issues/146).
+- Pass `service=<name>` to request a single service. Recognised names are
+  `general_emergency`, `police`, `ambulance`, `fire`, `disaster_management`,
+  `women_helpline` and `suicide_helpline`.
+
+Provenance for the numbers in `services/emergency_numbers.json` is recorded in
+[`docs/emergency_numbers_provenance.md`](docs/emergency_numbers_provenance.md).
+
 ---
 
 ### 5. More Organizations
