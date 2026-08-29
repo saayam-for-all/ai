@@ -110,3 +110,27 @@ def test_error_bodies_are_objects_too():
     res = LF.predict_category_handler({"body": json.dumps({})}, None)
     assert res["statusCode"] == 400
     assert isinstance(res["body"], dict) and "error" in res["body"]
+
+
+def test_router_error_path_keeps_the_proxy_envelope():
+    """The router can fail before the handler is ever reached.
+
+    Emergency Contacts is the one service on PROXY integration, and proxy
+    requires a string body. Returning an object made API Gateway reject our own
+    response, and the page saw a 502 with nothing to diagnose - the failure
+    reported in issue #146. The handler's error path was fixed; the router's
+    own error path has to honour the same rule, because a routing failure
+    produces a response the handler never sees.
+    """
+    import json
+    from unittest import mock
+    import lambda_function as LF
+
+    event = {"queryStringParameters": {"service": "emergency_contacts"}}
+    with mock.patch.object(LF, "emergency_contacts_handler",
+                           side_effect=RuntimeError("boom")):
+        result = LF.lambda_handler(event, None)
+
+    assert result["statusCode"] == 500
+    assert isinstance(result["body"], str), "proxy integration requires a string body"
+    assert json.loads(result["body"])["error"]
