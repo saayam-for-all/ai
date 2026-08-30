@@ -289,13 +289,24 @@ def lambda_handler(event, context):
     Unified Lambda handler that routes requests to appropriate service.
     Supports: predict_category, generate_subject, generate_answer, emergency_contacts, search_orgs
     """
-    service = "predict_category"
+    service = None
     try:
         # Check if service is specified in query parameters or body
         q_params = event.get("queryStringParameters") or {}
         service = q_params.get("service")
 
-        body = _parse_event_body(event)
+        # A body that will not parse must not become a 500. The router reads the
+        # body only to discover which service was asked for, so a malformed one
+        # is a client error - and when the query string already named the
+        # service, the body is not the router's problem at all: the routed
+        # handler reports it in its own, more specific error contract.
+        try:
+            body = _parse_event_body(event)
+        except (json.JSONDecodeError, TypeError, ValueError):
+            if not service:
+                return _response(400, {"error": "Request body is not valid JSON"})
+            body = None
+
         if not service:
             service = body.get("service", "predict_category") if isinstance(body, dict) else "predict_category"
 
@@ -316,10 +327,16 @@ def lambda_handler(event, context):
             return _response(400, {"error": f"Unknown service: {service}. Supported: predict_category, generate_subject, generate_answer, emergency_contacts, search_orgs"})
 
     except Exception as e:
+        # str(e) put the raw exception text in the response. Provider and driver
+        # messages quote the API key, the host and the connection string, so
+        # this path could hand a caller a credential. The detail belongs in
+        # CloudWatch; the caller gets a status and nothing it could not have
+        # worked out for itself.
+        print(f"ERROR: routing failed for service {service!r}: {type(e).__name__}: {e}")
         # emergency_contacts is the one service behind PROXY integration, and a
-        # proxy method rejects an object body with a 502. Match the shape the
-        # routed service would have used.
+        # proxy method rejects an object body with a 502, which is the failure
+        # reported in issue #146. Match the shape the routed service would have
+        # used.
         if service == "emergency_contacts":
-            print(f"ERROR: emergency_contacts routing failed: {type(e).__name__}: {e}")
             return _proxy_response(500, {"error": "Emergency services lookup failed"})
-        return _response(500, {"error": str(e)})
+        return _response(500, {"error": "Request failed"})

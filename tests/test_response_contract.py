@@ -16,6 +16,12 @@ undefined, which is what broke category prediction and subject generation.
 
 No network or keys required.
 """
+
+import pytest
+
+# The API Gateway envelope every service returns - proxy vs non-proxy - which
+# is what the web client actually parses.
+pytestmark = pytest.mark.contract
 import json
 from unittest import mock
 

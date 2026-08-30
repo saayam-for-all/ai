@@ -11,6 +11,9 @@ from unittest import mock
 
 import pytest
 
+# Emergency Contacts resolution behaviour and numeral localisation.
+pytestmark = pytest.mark.unit
+
 import services.emergency as em
 
 DATA = em._load_emergency_numbers()
