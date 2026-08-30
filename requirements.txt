@@ -1,3 +1,11 @@
+# Sandbox dependencies for Mission 1 only. app.py is a small Flask app and this
+# list is deliberately the minimum that runs it.
+#
+# The real service on dev has its own, longer requirements.txt - LangChain,
+# Gemini, psycopg2, boto3. Mission 2 installs that one after switching
+# branches. onboarding_check.py knows the difference and only asks for the
+# dev packages when it finds itself on dev, so this file staying short is not
+# something the self check will punish you for.
 flask
 groq
 python-dotenv

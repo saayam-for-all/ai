@@ -63,6 +63,8 @@ utils/categories*.py            the category taxonomy
 utils/predict_category_list.py  taxonomy helpers
 ```
 
+[`ARCHITECTURE_MAP.md`](ARCHITECTURE_MAP.md) turns that list into a map: how a request travels, which Lambda owns which modules, and where the whole thing tends to fail. Mission 2.5 is where you read it.
+
 `dev` is the branch that matters. `NewJoineeTask` is the simplified sandbox in Mission 1. Other branches are feature work in varying states of completeness. Browsing them is a legitimate way to see what the team is doing.
 
 ---
@@ -95,6 +97,8 @@ curl -X POST http://localhost:8000/predict_categories \
 
 Try an ambiguous description, like "I need help with my car". Is the answer right? Is a right answer even available in the taxonomy?
 
+**If you get back an empty list, that is real, not a broken setup.** For a prompt carrying this many categories, the model occasionally returns nothing at all — the same phenomenon described under "Structured output" further down. The sandbox prints a warning and returns `[]` rather than inventing three categories to fill the gap. Run it again and it will usually answer. Noticing the difference between "no answer" and "a confident wrong answer" is most of the job here.
+
 ---
 
 ## Mission 2: Run the real thing
@@ -102,13 +106,18 @@ Try an ambiguous description, like "I need help with my car". Is the answer righ
 **Win condition:** you get a category, a confidence score and a hierarchy path for your own sentences.
 **Time:** about an hour.
 
-The sandbox is a toy. Switch to `dev` for the real code. The services normally read keys from AWS Parameter Store, which you do not have access to, so a local harness injects your Groq key the same way and the rest of the code path is unchanged.
+The sandbox is a toy. Switch to `dev` for the real code. The services normally read keys from AWS Parameter Store, which you do not have access to, so the harness injects your Groq key the same way and the rest of the code path is unchanged.
+
+**Bring the self check with you.** `onboarding_check.py` is tracked on the `NewJoineeTask` lineage, not on `dev`, so `git checkout dev` deletes it. That is deliberate: `dev` is the protected branch carrying the deployed service, and joiner tooling does not belong in the package that ships to Lambda. Switch first and copy it back afterwards — doing it the other way round does not work, because the checkout removes the copy you just made. It then sits in your working directory as an untracked file for the rest of onboarding.
 
 ```bash
 git checkout dev
+git show NewJoineeTask:onboarding_check.py > onboarding_check.py
 pip install -r requirements.txt
-python local_dev_harness.py -i
+python onboarding_check.py -i
 ```
+
+`git status` on `dev` will now list `onboarding_check.py` and `onboarding_answers.py` as untracked. Expected. Do not commit them, and delete them when you are finished. Everything else in this README you can read from the GitHub page for the `NewJoineeTask` branch while you work on `dev`.
 
 Try these, and note what happens:
 
@@ -124,6 +133,31 @@ Try these, and note what happens:
 3. Which function in `lambda_function.py` handles category prediction?
 4. The plumbing example returns two categories with close confidence. Which, and why is that reasonable?
 5. The car example returns General. Bug or correct behaviour? Defend your answer.
+
+---
+
+## Mission 2.5: Draw the system
+
+**Win condition:** you can say where a change goes, and what it can break, without opening five files to find out.
+**Time:** about an hour.
+
+Running one classifier tells you one service works. It does not tell you how a request reaches it, which other services share its fate, or where the failure modes live. [`ARCHITECTURE_MAP.md`](ARCHITECTURE_MAP.md) is the map: the request path as a diagram, a table of which Lambda owns which modules, the two hosting paradigms and why both exist, a table of where things fail, and the one path a secret takes from Parameter Store into `utils/client.py`.
+
+Like this README, the map is tracked on `NewJoineeTask`, so read it from the GitHub page for that branch while your checkout sits on `dev`.
+
+Read it, then use the tests to check it against reality:
+
+```bash
+pip install -r requirements.txt -r requirements-dev.txt
+python -m pytest -q
+```
+
+No API keys and no AWS credentials are needed. Then pick one **contract** test — `docs/testing/TEST_CATALOGUE.md` says which files those are, and `tests/test_response_contract.py` is the best first one — and read it end to end. Contract tests mirror what the browser actually sees, so they are the fastest correct answer to "what does this endpoint return?".
+
+**Work out the answers to these, you will need them for the self check:**
+
+1. `lambda_handler` in `lambda_function.py` dispatches to how many services?
+2. Which contract test did you read, and what behaviour does it protect? What would break for the web client if it started failing?
 
 ---
 
@@ -160,6 +194,8 @@ Then read the CAPA entry and compare it with your analysis. Where you disagree, 
 
 **Why this matters:** the interesting failures in applied AI are rarely the model being wrong. They are configuration living in code, silent fallbacks, missing observability, and deploy pipelines nobody tested.
 
+This incident is not a one-off anecdote. It is two rows of the failure table in [`ARCHITECTURE_MAP.md`](ARCHITECTURE_MAP.md) happening at once — a provider-layer failure, and a client-side default that renders the result as something milder than an outage. Find them, and check your answers against the rest of that table: which other rows could have produced the same report?
+
 ---
 
 ## Mission 4: Measure something
@@ -193,10 +229,12 @@ The first run creates `onboarding_answers.py`. Fill it in, run again. It checks:
 - **Setup**, Python version, packages, key available
 - **Safety**, your `.env` is not tracked by git, no key hardcoded in any `.py` file
 - **It runs**, a real model call succeeds and classification returns a real category
-- **Reading the code**, your answers verified against the actual code, not against a stored answer key
+- **Reading the code**, your answers verified against the actual code, not against a stored answer key — including the router's service count, parsed out of `lambda_function.py`, and the contract test you read, looked up in `tests/`
 - **Understanding**, your written root cause, prevention, observations and feedback
 
-It prints a checklist and what is outstanding. Nothing is uploaded. When you reach the end, tell your onboarding buddy and bring your feedback answer to your first standup.
+Run it on `dev`, with the copy you carried across in Mission 2. Six of the checks read the real service and can only run there; on the sandbox branch they report that, and say so in the same words.
+
+It prints a checklist, then two lists: what you got wrong, and what you have not reached yet. Nothing is uploaded. When both lists are empty, tell your onboarding buddy and bring your feedback answer to your first standup.
 
 The feedback question is not a formality. You are the last person who will see this with fresh eyes, and every confusing thing you hit is a thing we can fix for the next person.
 

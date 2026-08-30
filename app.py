@@ -22,11 +22,33 @@ def add_cors_headers(response):
     return response
 
 # ---------- Groq client ----------
-# Read key from environment (set GROQ_API_KEY in shell or .env)
-print("GROQ key present at startup:", bool(os.getenv("GROQ_API_KEY")))
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+# Load .env here, before the client is built. The client is constructed at
+# import time, so a load_dotenv() further down the file - which is where this
+# used to live, inside the __main__ block - runs far too late, and `python
+# app.py` dies on the last command of Mission 1.
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
-MODEL_NAME = "llama-3.1-8b-instant"
+# Read key from environment (set GROQ_API_KEY in shell or .env)
+_groq_key = os.getenv("GROQ_API_KEY")
+print("GROQ key present at startup:", bool(_groq_key))
+if not _groq_key:
+    # Groq() raises on a missing key, and its message says nothing about .env.
+    # One actionable line beats a stack trace on somebody's first hour.
+    raise SystemExit(
+        "GROQ_API_KEY is not set. Copy .env.example to .env and put your key in it. "
+        "Get a free key at https://console.groq.com"
+    )
+client = Groq(api_key=_groq_key)
+
+# Groq retired the Llama 3.x models: llama-3.1-8b-instant now answers 404
+# model_not_found, which is the incident Mission 3 is about. dev's
+# utils/client.py runs openai/gpt-oss-20b, so the sandbox runs it too. Meeting
+# that failure as an unexplained crash in Mission 1 teaches nobody anything.
+MODEL_NAME = "openai/gpt-oss-20b"
 
 # ---------- Categories / Prompts ----------
 categories: List[str] = [
@@ -111,9 +133,17 @@ Output (comma-separated categories):
     raw_output = resp.choices[0].message.content.strip()
     result = _parse_categories(raw_output)
 
-    # Fallback: if model returns nothing valid, return first three general categories
+    # No silent fabrication. This used to substitute ["Finance", "Housing",
+    # "Jobs"] whenever nothing parsed, which is a plausible sounding wrong
+    # answer - the one failure mode this team cares about most, and the whole
+    # subject of Mission 3. It is not hypothetical either: for a prompt this
+    # long, openai/gpt-oss-20b intermittently returns an empty string, so the
+    # README's own example could answer with three invented categories.
+    # dev's services/classification_service.py returns [] in the same
+    # situation. So does this. An empty list with a line in the log beats a
+    # confident wrong answer.
     if not result:
-        result = ["Finance", "Housing", "Jobs"][:3]
+        print(f"WARNING: nothing usable parsed from model output: {raw_output!r}")
     return result
 
 
@@ -177,15 +207,6 @@ def lambda_handler(event, context):
 
 # ---------- Local dev runner ----------
 if __name__ == "__main__":
-    # Load .env for local dev if present
-    try:
-        from dotenv import load_dotenv
-        load_dotenv()
-    except Exception:
-        pass
-
-    # Recreate client in case GROQ_API_KEY came from .env after import time
-    if not os.getenv("GROQ_API_KEY"):
-        print("WARNING: GROQ_API_KEY is not set. Set it before calling endpoints that hit Groq.")
-
+    # .env is loaded at the top of this file, before the client is built, so
+    # there is nothing left to do here but start the server.
     app.run(host="0.0.0.0", port=8000, debug=True)

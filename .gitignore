@@ -13,6 +13,13 @@ __pycache__/
 venv/
 .pytest_cache/
 
+# Coverage. Also ignored by PR #138, which adds a test suite to this branch;
+# keeping the union here means whichever of the two lands second resolves as
+# "keep ours".
+.coverage
+.coverage.*
+htmlcov/
+
 # OS / editor
 .DS_Store
 .idea/
