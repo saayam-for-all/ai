@@ -11,6 +11,9 @@ import re
 
 import pytest
 
+# Integrity assertions over the shipped emergency numbers directory.
+pytestmark = pytest.mark.dataset
+
 import services.emergency as em
 
 DATA = em._load_emergency_numbers()
