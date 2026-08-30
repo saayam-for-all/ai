@@ -241,6 +241,85 @@ curl -X POST https://<api-gateway-url>/emergency-contacts \
 curl -X GET "https://<api-gateway-url>/emergency-contacts?zip=95112&country=US&language=en"
 ```
 
+#### Response
+
+```json
+{
+  "services": {
+    "general_emergency": { "dial_number": "112", "display_number": "११२", "source": "directory", "is_fallback": false },
+    "fire":              { "dial_number": "101", "display_number": "१०१", "source": "directory", "is_fallback": false },
+    "women_helpline":    { "dial_number": "112", "display_number": "११२", "source": "general_emergency_fallback", "is_fallback": true }
+  },
+  "language": "hi",
+  "country": "IN",
+  "match_level": "country",
+  "resolved_location": { "country": "IN" }
+}
+```
+
+- `dial_number` is always ASCII and is what a click-to-call link must use.
+  `display_number` is the same number in the requested language's numerals.
+- `is_fallback` is `true` when the directory holds no entry for that service in
+  that country and the country's own general emergency line is being returned
+  instead. Label those rows as a general emergency line rather than presenting
+  them as the specific service.
+- Numbers never cross a border. If the country cannot be resolved, or the
+  country is not in the directory, the endpoint answers `404` rather than
+  returning another country's numbers. **Clients must render "unavailable" in
+  that case and must not substitute a default of their own** — a hardcoded
+  `911` or `988` is the safety violation described in
+  [issue #146](https://github.com/saayam-for-all/ai/issues/146).
+- Pass `service=<name>` to request a single service. Recognised names are
+  `general_emergency`, `police`, `ambulance`, `fire`, `disaster_management`,
+  `women_helpline` and `suicide_helpline`.
+
+Provenance for the numbers in `services/emergency_numbers.json` is recorded in
+[`docs/emergency_numbers_provenance.md`](docs/emergency_numbers_provenance.md).
+
+#### Status codes
+
+| Code | Meaning | What the client should do |
+| --- | --- | --- |
+| `200` | Numbers resolved for the requested country. | Render them. Label any row with `is_fallback: true` as a general emergency line. |
+| `404` | The country could not be resolved, or is not in the directory. **No numbers are returned.** | Render "unavailable". **Never substitute a default.** |
+| `500` | The lookup itself failed. Body is `{"error": "Emergency services lookup failed"}`. | Render "unavailable" and retry. Detail is in CloudWatch, deliberately not in the response. |
+
+This method is the only one on **Lambda PROXY integration**, so its body is a
+JSON **string**. Returning an object body here is what made API Gateway reject
+our own response and surface an undiagnosable `502` — the failure reported in
+[issue #146](https://github.com/saayam-for-all/ai/issues/146). Every path,
+including the error paths and the router fallback, now goes through
+`_proxy_response`.
+
+#### Resolution order
+
+`lat`/`lng` (reverse geocoded) → `zip`/`city`/`state` (geocoded) → bare `city`
+matched in the directory, but **only when exactly one country contains it** →
+caller IP. An explicit `country` overrides all of the above and **discards**
+finer-grained fields resolved elsewhere, so a city belonging to a different
+country cannot match by coincidence.
+
+Within a country: the requested state or city entry, else that **same
+country's** `general_emergency` line, marked `is_fallback: true`. There is no
+step that leaves the country.
+
+#### Known limitation
+
+`country` is matched as an **ISO 3166 alpha-2 code** (`DE`, `IN`, `BR`).
+Full country *names* resolve only through a small alias map covering the United
+States, India, the United Kingdom and the UAE, so `?country=DE` resolves but
+`?country=Germany` returns `404`. This is pre-existing behaviour and it fails
+*safely* — no numbers rather than the wrong country's — but callers should send
+the alpha-2 code. Widening this is tracked as remaining work on issue #146.
+
+#### Regression tests covering this service
+
+| File | Proves |
+| --- | --- |
+| `test_emergency_dataset.py` | Every entry in the shipped directory is well-formed: no empty or undialable value, no number belonging to another country. |
+| `test_emergency_locale.py` | Resolution order, within-country fallback, `is_fallback` flagging, per-service match level, and numeral localisation. |
+| `test_response_contract.py` | The proxy envelope, including on the error paths, so the `502` cannot come back. |
+
 ---
 
 ### 5. More Organizations
@@ -265,6 +344,43 @@ curl -X POST https://<api-gateway-url>/more-organizations \
     "location": "San Jose, CA"
   }'
 ```
+
+---
+
+## Testing
+
+The suite is hermetic: no API keys, no AWS credentials, and no network access.
+
+```bash
+pip install -r requirements.txt -r requirements-dev.txt
+python -m pytest
+```
+
+A clean run is **63 tests** in about a second. Run one slice with a marker —
+`python -m pytest -m contract` is the one to start from for any web-client bug
+report, because contract tests mirror what the browser actually sees.
+
+| Marker | Scope |
+| --- | --- |
+| `unit` | One function, collaborators mocked, no I/O. |
+| `contract` | The Lambda event in, the JSON envelope out. |
+| `dataset` | The shipped data files, such as `services/emergency_numbers.json`. |
+| `integration` | Several modules together, still hermetic. Routing and blast radius. |
+| `needs_network` | Hits a live service. **Excluded from the default run and from CI.** |
+
+`tests/conftest.py` fails any unmarked test that opens a URL, so the suite
+cannot start depending on a third party's uptime by accident.
+
+| Document | What it is for |
+| --- | --- |
+| [`docs/testing/QA_RUNBOOK.md`](docs/testing/QA_RUNBOOK.md) | Run the suite and interpret the result with no prior context. |
+| [`docs/testing/TEST_CATALOGUE.md`](docs/testing/TEST_CATALOGUE.md) | What each test protects. Generated by `tools/gen_test_catalogue.py`. |
+| [`docs/testing/COVERAGE.md`](docs/testing/COVERAGE.md) | Current coverage, the CI threshold, and what is deliberately uncovered. |
+| [`docs/testing/REGRESSION_AUDIT.md`](docs/testing/REGRESSION_AUDIT.md) | Per-issue: the defect, the fix, the covering tests, the residual risk. |
+| [`CHANGELOG.md`](CHANGELOG.md) | What changed and the behaviour difference a tester can observe. |
+
+Every pull request into `dev` runs the full suite and the coverage gate. Build
+and deploy are skipped on pull requests, so a PR never touches AWS.
 
 ---
 

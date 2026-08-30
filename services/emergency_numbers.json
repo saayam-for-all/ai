@@ -25,9 +25,10 @@
   },
   "AU": {
     "default": {
-      "police": "0",
-      "ambulance": "0",
-      "fire": "0"
+      "general_emergency": "000",
+      "police": "000",
+      "ambulance": "000",
+      "fire": "000"
     },
     "states": {}
   },
@@ -41,6 +42,7 @@
   },
   "BE": {
     "default": {
+      "general_emergency": "112",
       "police": "101",
       "ambulance": "112",
       "fire": "112"
@@ -73,6 +75,7 @@
   },
   "CA": {
     "default": {
+      "general_emergency": "911",
       "police": "911",
       "ambulance": "911",
       "fire": "911"
@@ -161,6 +164,7 @@
   },
   "DE": {
     "default": {
+      "general_emergency": "112",
       "police": "110",
       "ambulance": "112",
       "fire": "112"
@@ -177,6 +181,7 @@
   },
   "GR": {
     "default": {
+      "general_emergency": "112",
       "police": "100",
       "ambulance": "166",
       "fire": "199"
@@ -193,9 +198,12 @@
   },
   "IN": {
     "default": {
+      "general_emergency": "112",
       "police": "112",
       "ambulance": "108",
       "fire": "101",
+      "disaster_management": "108",
+      "women_helpline": "1091",
       "suicide_helpline": "9152987821"
     },
     "states": {
@@ -410,6 +418,7 @@
   },
   "NZ": {
     "default": {
+      "general_emergency": "111",
       "police": "111",
       "ambulance": "111",
       "fire": "111"
@@ -435,7 +444,7 @@
   "PK": {
     "default": {
       "police": "15",
-      "ambulance": "115 and 1122",
+      "ambulance": "1122",
       "fire": "16"
     },
     "states": {}
@@ -458,6 +467,7 @@
   },
   "PL": {
     "default": {
+      "general_emergency": "112",
       "police": "997",
       "ambulance": "999",
       "fire": "998"
@@ -482,6 +492,7 @@
   },
   "RU": {
     "default": {
+      "general_emergency": "112",
       "police": "102",
       "ambulance": "103",
       "fire": "101"
@@ -498,6 +509,7 @@
   },
   "RS": {
     "default": {
+      "general_emergency": "112",
       "police": "192",
       "ambulance": "194",
       "fire": "193"
@@ -514,6 +526,7 @@
   },
   "SK": {
     "default": {
+      "general_emergency": "112",
       "police": "158",
       "ambulance": "155",
       "fire": "150"
@@ -562,6 +575,7 @@
   },
   "CH": {
     "default": {
+      "general_emergency": "112",
       "police": "117",
       "ambulance": "144",
       "fire": "118"
@@ -610,6 +624,7 @@
   },
   "UA": {
     "default": {
+      "general_emergency": "112",
       "police": "102",
       "ambulance": "103",
       "fire": "101"
@@ -618,6 +633,7 @@
   },
   "GB": {
     "default": {
+      "general_emergency": "999",
       "police": "999",
       "ambulance": "999",
       "fire": "999"
@@ -626,6 +642,7 @@
   },
   "US": {
     "default": {
+      "general_emergency": "911",
       "police": "911",
       "ambulance": "911",
       "fire": "911",

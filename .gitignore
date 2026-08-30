@@ -5,7 +5,13 @@ __pycache__
 utils/__pycache__
 utils/*.pyc
 *.zip
+# Ad-hoc local scratch scripts such as local_test.py. Note this glob also
+# matches conftest.py, so the committed suite is un-ignored explicitly below -
+# without that, tests/conftest.py is silently dropped and the suite breaks for
+# everyone who clones.
 *test.py
+!tests/conftest.py
+!tests/test_*.py
 *.csv
 .idea
 
