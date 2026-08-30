@@ -31,10 +31,11 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_emergency_locale.py`](../../tests/test_emergency_locale.py) | Unit | #146 | `services/emergency.py` | 59 |
 | [`tests/test_generate_answer.py`](../../tests/test_generate_answer.py) | - | #169 | `generate_answer_handler` | 27 |
 | [`tests/test_import_blast_radius.py`](../../tests/test_import_blast_radius.py) | Integration | #169, #171 | `module-scope imports` | 4 |
+| [`tests/test_org_search_contract.py`](../../tests/test_org_search_contract.py) | - | #170 | `utils/search_orgs.py` | 24 |
 | [`tests/test_response_contract.py`](../../tests/test_response_contract.py) | Contract | #146, #169, #170 | `response envelopes` | 10 |
 | [`tests/test_router.py`](../../tests/test_router.py) | Integration | #171 | `lambda_function.lambda_handler` | 31 |
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
-| | | | **Total** | **166** |
+| | | | **Total** | **190** |
 
 ## Every test
 
@@ -173,6 +174,39 @@ Cross-service blast radius at import time - issue #171.
 | `test_the_module_imports_without_any_api_key_configured` | No key is present in CI, and import must not depend on one. |
 
 > 3 test functions expand to 4 cases through parametrisation.
+
+### `test_org_search_contract.py`
+
+*- · issue #170 · 24 tests*
+
+Tests for More Organizations / the Organizations tab - issue #170.
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_body_stays_an_object_with_an_organizations_list` | Body stays an object with an organizations list. |
+| `test_every_column_the_aggregator_selects_is_present_on_every_row` | Every column the aggregator selects is present on every row. |
+| `test_every_column_the_organizations_tab_renders_is_present` | Every column the organizations tab renders is present. |
+| `test_a_row_missing_fields_from_the_model_is_still_complete` | The model does not always return every key. The aggregator builds a DataFrame from these rows, so a ragged row becomes NaN columns in a different repository. |
+| `test_direct_invoke_and_api_gateway_envelopes_agree` | Direct invoke and api gateway envelopes agree. |
+| `test_charity_navigator_style_score_is_converted_to_the_five_point_scale` | Charity navigator style score is converted to the five point scale. |
+| `test_rating_is_always_a_float_in_range` | Rating is always a float in range. |
+| `test_rating_keeps_one_decimal_place` | Rating keeps one decimal place. |
+| `test_size_is_one_of_the_three_values_or_empty` | Size is one of the three values or empty. |
+| `test_org_type_is_normalised_to_nonprofit_or_for_profit` | Org type is normalised to nonprofit or for profit. |
+| `test_a_bad_rating_from_the_model_does_not_reach_the_sortable_column` | A bad rating from the model does not reach the sortable column. |
+| `test_missing_location_falls_back_to_the_requested_location` | Missing location falls back to the requested location. |
+| `test_causes_is_seeded_from_the_category_when_the_model_omits_it` | Causes is seeded from the category when the model omits it. |
+| `test_the_real_provider_list_is_groq_then_gemini` | The loop above is patched, so pin the production list separately. |
+| `test_gemini_serves_the_request_when_groq_fails` | A Groq outage used to take the whole Organizations tab down. |
+| `test_groq_is_used_alone_when_it_succeeds` | Groq is used alone when it succeeds. |
+| `test_a_provider_returning_no_organizations_falls_through_to_the_next` | A provider returning no organizations falls through to the next. |
+| `test_an_unconfigured_provider_is_skipped_not_fatal` | An unconfigured provider is skipped not fatal. |
+| `test_every_provider_failing_raises_rather_than_returning_an_empty_success` | Every provider failing raises rather than returning an empty success. |
+| `test_total_provider_failure_is_a_502_with_a_code_and_a_list` | Total provider failure is a 502 with a code and a list. |
+| `test_description_is_required` | Description is required. |
+| `test_missing_location_defaults_and_missing_subject_is_tolerated` | Missing location defaults and missing subject is tolerated. |
+| `test_category_is_passed_through_to_the_search` | Category is passed through to the search. |
+| `test_unified_router_reaches_search_orgs` | Unified router reaches search orgs. |
 
 ### `test_response_contract.py`
 
