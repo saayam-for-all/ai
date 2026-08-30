@@ -12,6 +12,12 @@ Guards the two failure modes behind "every request lands in General".
 
 No network calls and no API keys required: the Groq client is stubbed.
 """
+
+import pytest
+
+# Category prediction degrades rather than failing when the model or its
+# artefacts are unavailable.
+pytestmark = pytest.mark.unit
 import json
 
 from groq import GroqError
