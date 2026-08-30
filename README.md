@@ -325,14 +325,127 @@ the alpha-2 code. Widening this is tracked as remaining work on issue #146.
 ### 5. More Organizations
 Returns 6 verified organizations (3 nonprofit, 3 for-profit) close to the user's location related to their request.
 
+**This endpoint has a second consumer outside this repository.** The data
+team's `saayam-org-aggregator` serves `v1/ml/orgAggregatorList` for the Request
+Details **Organizations** tab, and reaches this function by direct
+`lambda.invoke` rather than through API Gateway:
+
+```python
+# saayam-for-all/data : data-engineering/src/saayam-org-aggregator/helpers.py
+response = lambda_client.invoke(
+    FunctionName="More_Org_GenAI_Py_v3126",
+    Payload=json.dumps({"subject": ..., "description": ..., "location": ...}),
+)
+orgs = pd.DataFrame(json.loads(response["Payload"].read())["body"]["organizations"])
+```
+
+Two things follow, and both are pinned by `test_org_search_contract.py`:
+
+* `body` **must stay a JSON object**, not a string. Serialising it breaks the
+  Organizations tab from a different repository (this is what PR #165 would
+  have done before PR #166 reverted it).
+* The field names below are a **contract**, not an implementation detail.
+  Renaming or dropping one is a cross-team change. See issue #170.
+
 #### request Payload
 ```json
 {
   "subject": "shelter",
   "description": "i am on the streets now i dont have a place to stay please help",
-  "location": "San Jose, CA"
+  "location": "San Jose, CA",
+  "category": "Housing"
 }
 ```
+
+`subject` and `location` are optional — `location` defaults to
+`"United States"`. `category` is optional and, when the aggregator passes the
+one it already resolved for its database half, seeds the `causes` field.
+
+#### Response
+```json
+{
+  "organizations": [
+    {
+      "organization_name": "Second Harvest Food Bank",
+      "org_type": "nonprofit",
+      "size": "large",
+      "rating": 4.8,
+      "location": "San Jose, CA",
+      "contact": "+1-408-555-0100",
+      "email": "info@example.org",
+      "source": "https://www.charitynavigator.org/example",
+      "web_url": "https://example.org",
+      "mission": "...",
+      "description": "...",
+      "relevance": "...",
+      "causes": "Food Security"
+    }
+  ]
+}
+```
+
+Every field in `utils.search_orgs.ORGANIZATION_FIELDS` is present on every row,
+even when the model omits it, so a caller building a DataFrame never gets a
+ragged frame. `rating` is always a float clamped to 0.0–5.0 with one decimal
+(a 0–100 source score is divided by 20); `size` is `small`/`medium`/`large` or
+empty; `org_type` is `nonprofit`/`for-profit` or empty.
+
+| Status | Meaning |
+|---|---|
+| 200 | Organizations found |
+| 400 | `description` missing |
+| 502 | `ORG_SEARCH_UNAVAILABLE` — every model provider failed |
+
+The search tries **Groq first, then Gemini**. A single-provider outage no
+longer takes the Organizations tab down. `organizations` is present as `[]`
+even on the error responses, so a caller that reads it before checking the
+status gets an empty list rather than a `KeyError`.
+
+#### This endpoint is the GenAI half of `orgAggregatorList`
+
+The data team's `saayam-org-aggregator` Lambda invokes this function directly
+behind `v1/ml/orgAggregatorList` and reads `payload["body"]["organizations"]`.
+That makes the envelope and the field names a **contract**, not an
+implementation detail. Two consequences:
+
+- The body stays a JSON **object**. This method is on **non-proxy**
+  integration, so API Gateway returns the structure as-is and the caller reads
+  `body.organizations` directly. Serialising the body to a string here would
+  turn every one of those reads into `undefined`.
+- The 13 names in `utils.search_orgs.ORGANIZATION_FIELDS` are fixed. Renaming
+  or dropping one silently breaks a consumer in a different repository, so
+  `test_org_search_contract.py` pins them.
+
+This answers open question **D15** in the BRD for
+[issue #170](https://github.com/saayam-for-all/ai/issues/170): the Lambda GenAI
+owes for `orgAggregatorList` is this one, `search_orgs`.
+
+The service is reachable under `search_orgs`, `search_org` and
+`find_nonprofits`.
+
+#### Normalisation rules and their edges
+
+Model output is prose, so every row is coerced before it leaves:
+
+| Field | Rule |
+| --- | --- |
+| `rating` | Float clamped to `0.0`–`5.0`, one decimal. A value above `5` is read as a 0–100 score and divided by 20. Anything unparseable becomes `0.0`. |
+| `size` | `small` / `medium` / `large`, else empty. |
+| `org_type` | `nonprofit` / `for-profit`, else empty. |
+| `location` | Falls back to the request's `location` when the model omits it. |
+| `causes` | Seeded from the request's `category` when the model omits it. |
+| all others | Present as `""` rather than absent. |
+
+**Known edge:** because any rating above `5` is treated as a 0–100 score, a
+model that answers on a 0–10 scale has `7.5` rewritten to `0.4`. Ratings are
+only as trustworthy as the source the model cites, and no caller should rank
+organizations on this field alone.
+
+#### Regression tests covering this service
+
+| File | Proves |
+| --- | --- |
+| `test_org_search_contract.py` | The body is an object; all 13 field names are present on every row even when the model returns a ragged one; the Groq to Gemini fallback; and that a total outage returns `502` with `ORG_SEARCH_UNAVAILABLE` and `organizations: []` rather than a silent empty `200`. |
 
 #### curl Command
 ```bash
