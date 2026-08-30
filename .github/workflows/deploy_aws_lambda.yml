@@ -4,11 +4,58 @@ on:
   push:
     branches:
       - dev
+  # Pull requests run the test job only. Every job below is guarded on
+  # github.event_name, so a pull request never touches AWS.
+  pull_request:
+    branches:
+      - dev
   workflow_dispatch:
 
 jobs:
+  test:
+    name: Tests & Coverage
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          # Matches the Lambda runtime and the build container below. psycopg2
+          # wheels are built per minor version, so drifting here is exactly the
+          # failure that took the deployment down once already.
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Run the regression suite
+        # Needs no API keys and makes no network calls - tests/conftest.py fails
+        # any unmarked test that opens a URL, and needs_network is excluded by
+        # pytest.ini. A failure here has to stop the deploy rather than be
+        # reviewed after the fact.
+        run: python -m pytest -q
+
+      - name: Coverage
+        # The threshold catches a regression - a change that deletes tests or
+        # adds a large unexercised module. See docs/testing/COVERAGE.md.
+        run: python -m pytest -q --cov --cov-report=term-missing --cov-fail-under=35
+
+      - name: Check the test catalogue is current
+        # The catalogue is generated from the suite. Regenerating it here and
+        # diffing means it cannot drift from the tests it claims to describe.
+        run: |
+          python tools/gen_test_catalogue.py
+          git diff --exit-code -- docs/testing/TEST_CATALOGUE.md             || (echo "::error::TEST_CATALOGUE.md is stale. Run: python tools/gen_test_catalogue.py" && exit 1)
+
   build:
     name: Build & Package
+    needs: test
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
 
     steps:

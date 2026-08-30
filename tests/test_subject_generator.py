@@ -6,6 +6,11 @@ AWS SSM or any external model. Importing utils.subject_generator triggers the
 SSM bootstrap in utils.client, which fails gracefully (no creds) and leaves the
 LLM handles as None; the tests then inject a fake LLM in the module namespace.
 """
+
+import pytest
+
+# Subject generation from a request description.
+pytestmark = pytest.mark.unit
 import utils.subject_generator as sg
 
 

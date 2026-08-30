@@ -8,6 +8,12 @@ utils/search_orgs.py), and the top-level modules must import cleanly.
 No network or API keys required: the SSM lookup in client.py fails gracefully and
 leaves the clients as None, which is fine for import.
 """
+
+import pytest
+
+# utils/client.py must export every name its consumers import, and the
+# top-level modules must import cleanly without keys or network.
+pytestmark = pytest.mark.integration
 import importlib
 
 REQUIRED_CLIENT_EXPORTS = [
