@@ -27,11 +27,12 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | --- | --- | --- | --- | ---: |
 | [`tests/test_classification_resilience.py`](../../tests/test_classification_resilience.py) | Unit | - | `services/classification_service.py` | 5 |
 | [`tests/test_client_imports.py`](../../tests/test_client_imports.py) | Integration | #154 | `utils/client.py` | 2 |
-| [`tests/test_emergency_locale.py`](../../tests/test_emergency_locale.py) | Unit | #146 | `services/emergency.py` | 6 |
-| [`tests/test_response_contract.py`](../../tests/test_response_contract.py) | Contract | #146, #169, #170 | `response envelopes` | 6 |
+| [`tests/test_emergency_dataset.py`](../../tests/test_emergency_dataset.py) | - | #146 | `services/emergency_numbers.json` | 15 |
+| [`tests/test_emergency_locale.py`](../../tests/test_emergency_locale.py) | Unit | #146 | `services/emergency.py` | 59 |
+| [`tests/test_response_contract.py`](../../tests/test_response_contract.py) | Contract | #146, #169, #170 | `response envelopes` | 10 |
 | [`tests/test_router.py`](../../tests/test_router.py) | Integration | #171 | `lambda_function.lambda_handler` | 31 |
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
-| | | | **Total** | **63** |
+| | | | **Total** | **135** |
 
 ## Every test
 
@@ -60,24 +61,70 @@ Guard against the utils/client.py import regression that broke dev.
 | `test_client_exports_all_required_names` | Client exports all required names. |
 | `test_core_modules_import` | Core modules import. |
 
-### `test_emergency_locale.py`
+### `test_emergency_dataset.py`
 
-*Unit · issue #146 · 6 tests*
+*- · issue #146 · 15 tests*
 
-Tests for #146 - Emergency Contacts must never fall back to US numbers (911/988) for non-US or unknown locales. Runs against the real emergency_numbers.json. No network: exercises EmergencyServiceResolver._find_services directly.
+Integrity checks on services/emergency_numbers.json.
 
 | Test | Behaviour it protects |
 | --- | --- |
-| `test_india_missing_service_uses_india_default_not_us` | India missing service uses india default not us. |
-| `test_india_fire_is_indian_not_911` | India fire is indian not 911. |
+| `test_the_file_is_not_empty` | The file is not empty. |
+| `test_country_keys_are_iso_alpha2` | Country keys are iso alpha2. |
+| `test_every_number_is_dialable` | No blanks, no prose, no truncated values. |
+| `test_no_us_only_number_appears_outside_the_us` | The core safety invariant of issue #146, asserted against the data. |
+| `test_every_country_can_answer_a_general_emergency` | Every country must have something for the fallback to reach for. |
+| `test_service_names_are_from_the_known_vocabulary` | An unmodelled service name is silently invisible to the client. |
+| `test_specific_corrected_values` | Specific corrected values. |
+
+> 7 test functions expand to 15 cases through parametrisation.
+
+### `test_emergency_locale.py`
+
+*Unit · issue #146 · 59 tests*
+
+Behaviour tests for issue #146 - Emergency Contacts must never show a user a number from another country, and must never leave a field empty for the web client to fill with a hardcoded US default (911 / 988).
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_india_fire_is_indian_not_911` | Reported symptom 1: the India Fire row showed US 911. |
+| `test_india_mental_health_is_indian_not_988` | Reported symptom 2: the India Mental Health row showed US 988. |
+| `test_india_returns_the_routes_the_ticket_asks_for` | India returns the routes the ticket asks for. |
+| `test_india_full_directory_has_no_us_numbers` | India full directory has no us numbers. |
+| `test_no_response_ever_contains_a_foreign_number` | Every number returned for a country appears in that country's own record. |
+| `test_every_country_answers_every_modelled_service` | No modelled service comes back empty for a country we know. |
+| `test_no_non_us_country_ever_shows_988` | 988 is the one number in the dataset that is unambiguously US-only. |
+| `test_missing_service_falls_back_to_the_countrys_own_general_line` | Missing service falls back to the countrys own general line. |
+| `test_a_fallback_is_labelled_as_one` | A general emergency line must not be passed off as the real service. |
+| `test_a_real_entry_is_never_overwritten_by_the_fallback` | A real entry is never overwritten by the fallback. |
+| `test_unmodelled_service_is_unavailable_not_the_general_line` | Asking for something we do not model must not be answered with 112. |
+| `test_no_service_filter_returns_the_whole_directory` | An absent or blank service parameter means "give me everything". |
+| `test_city_entry_inherits_the_services_it_does_not_list` | Bengaluru lists only police and ambulance. |
+| `test_single_service_reports_the_level_it_actually_came_from` | Bengaluru matches at city level but does not list a fire number. |
+| `test_more_specific_levels_override_broader_ones` | More specific levels override broader ones. |
+| `test_country_with_no_dialable_number_at_all_is_unavailable` | We report nothing rather than invent a fallback out of nothing. |
 | `test_country_name_normalizes_to_iso` | Country name normalizes to iso. |
-| `test_truly_unknown_country_is_unavailable_not_us` | Truly unknown country is unavailable not us. |
-| `test_india_full_set_has_no_us_numbers` | India full set has no us numbers. |
+| `test_truly_unknown_country_is_unavailable_not_us` | A country we do not have is answered "unavailable", never with US numbers. |
 | `test_us_still_works` | Us still works. |
+| `test_a_foreign_state_name_does_not_leak_into_another_country` | "Karnataka" under "US" must not match anything US-side. |
+| `test_explicit_country_discards_a_contradicting_geocode` | Explicit country discards a contradicting geocode. |
+| `test_agreeing_country_override_keeps_the_finer_detail` | Agreeing country override keeps the finer detail. |
+| `test_ambiguous_bare_city_is_not_guessed` | A city name in two countries must not pick one of them. |
+| `test_is_dialable` | Is dialable. |
+| `test_a_non_ip_is_never_put_into_the_lookup_url` | The IP comes from a request header, so it is validated before use. |
+| `test_out_of_range_coordinates_are_rejected_before_any_request` | Out of range coordinates are rejected before any request. |
+| `test_display_number_is_localized_but_dial_number_stays_ascii` | Display number is localized but dial number stays ascii. |
+| `test_unknown_language_falls_back_to_the_ascii_digits` | Unknown language falls back to the ascii digits. |
+| `test_end_to_end_india_response` | End to end india response. |
+| `test_end_to_end_unknown_country_is_404_not_us_numbers` | End to end unknown country is 404 not us numbers. |
+| `test_end_to_end_with_nothing_to_go_on_is_404` | No parameters and no client IP: we say we do not know. |
+| `test_missing_language_defaults_to_english` | Missing language defaults to english. |
+
+> 32 test functions expand to 59 cases through parametrisation.
 
 ### `test_response_contract.py`
 
-*Contract · issue #146, #169, #170 · 6 tests*
+*Contract · issue #146, #169, #170 · 10 tests*
 
 Pin the response contract the deployed web client depends on.
 
@@ -88,7 +135,11 @@ Pin the response contract the deployed web client depends on.
 | `test_subject_is_readable_at_body_subject` | Subject is readable at body subject. |
 | `test_emergency_uses_the_proxy_contract_instead` | Emergency Contacts is the one endpoint on PROXY integration. |
 | `test_emergency_returns_indian_numbers_not_us_ones` | Emergency returns indian numbers not us ones. |
+| `test_emergency_error_bodies_use_the_proxy_shape_too` | A proxy method rejects an object body, and the caller sees a bare 502. |
+| `test_emergency_errors_through_the_router_use_the_proxy_shape` | Emergency errors through the router use the proxy shape. |
+| `test_a_malformed_body_does_not_break_an_emergency_lookup` | The query string alone is enough; a stray body must not cause a 500. |
 | `test_error_bodies_are_objects_too` | Error bodies are objects too. |
+| `test_router_error_path_keeps_the_proxy_envelope` | The router can fail before the handler is ever reached. |
 
 ### `test_router.py`
 
