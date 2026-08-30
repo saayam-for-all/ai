@@ -29,13 +29,14 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_client_imports.py`](../../tests/test_client_imports.py) | Integration | #154 | `utils/client.py` | 2 |
 | [`tests/test_emergency_dataset.py`](../../tests/test_emergency_dataset.py) | Dataset | #146 | `services/emergency_numbers.json` | 15 |
 | [`tests/test_emergency_locale.py`](../../tests/test_emergency_locale.py) | Unit | #146 | `services/emergency.py` | 59 |
-| [`tests/test_generate_answer.py`](../../tests/test_generate_answer.py) | Contract | #169 | `generate_answer_handler` | 27 |
+| [`tests/test_generate_answer.py`](../../tests/test_generate_answer.py) | Contract | #169 | `generate_answer_handler` | 28 |
 | [`tests/test_import_blast_radius.py`](../../tests/test_import_blast_radius.py) | Integration | #169, #171 | `module-scope imports` | 4 |
 | [`tests/test_org_search_contract.py`](../../tests/test_org_search_contract.py) | Contract | #170 | `utils/search_orgs.py` | 24 |
+| [`tests/test_request_db_schema.py`](../../tests/test_request_db_schema.py) | Unit | #169 | `utils/request_db.py` | 9 |
 | [`tests/test_response_contract.py`](../../tests/test_response_contract.py) | Contract | #146, #169, #170 | `response envelopes` | 10 |
 | [`tests/test_router.py`](../../tests/test_router.py) | Integration | #171 | `lambda_function.lambda_handler` | 31 |
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
-| | | | **Total** | **190** |
+| | | | **Total** | **200** |
 
 ## Every test
 
@@ -127,7 +128,7 @@ Behaviour tests for issue #146 - Emergency Contacts must never show a user a num
 
 ### `test_generate_answer.py`
 
-*Contract · issue #169 · 27 tests*
+*Contract · issue #169 · 28 tests*
 
 Tests for the generate_answer endpoint - issue #169.
 
@@ -142,6 +143,7 @@ Tests for the generate_answer endpoint - issue #169.
 | `test_canonical_names_still_win_over_aliases` | Canonical names still win over aliases. |
 | `test_missing_request_is_404` | Missing request is 404. |
 | `test_database_down_is_a_retryable_503_and_leaks_no_connection_detail` | Database down is a retryable 503 and leaks no connection detail. |
+| `test_a_schema_mismatch_is_not_reported_as_a_retryable_outage` | A renamed table is our defect, not an outage - issue #169. |
 | `test_an_empty_rebuilt_database_is_not_reported_as_an_outage` | During the rebuild the tables exist but hold no rows: that is a 404. |
 | `test_row_with_empty_description_is_400_not_a_generated_answer` | Row with empty description is 400 not a generated answer. |
 | `test_model_exception_is_a_502_not_a_200` | Model exception is a 502 not a 200. |
@@ -207,6 +209,24 @@ Tests for More Organizations / the Organizations tab - issue #170.
 | `test_missing_location_defaults_and_missing_subject_is_tolerated` | Missing location defaults and missing subject is tolerated. |
 | `test_category_is_passed_through_to_the_search` | Category is passed through to the search. |
 | `test_unified_router_reaches_search_orgs` | Unified router reaches search orgs. |
+
+### `test_request_db_schema.py`
+
+*Unit · issue #169 · 9 tests*
+
+The SQL this service runs must match the live database - issue #169.
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_the_help_request_table_is_plural` | `request` was renamed to `requests` in the live database on 2026-08-17. |
+| `test_the_joined_tables_keep_their_singular_names` | Only the request table was in the rename set. |
+| `test_the_query_reads_no_table_that_is_not_declared_here` | The complete list of another team's tables that we depend on. |
+| `test_the_request_row_is_looked_up_by_req_user_id` | `req_user_id` is announced to become `creator_id`, and it is our filter. |
+| `test_the_table_name_can_be_corrected_without_a_release` | The DDL repository lags the live database, so this has to be operable. |
+| `test_a_renamed_table_is_a_schema_mismatch_and_not_an_outage` | The distinction that would have caught this in a day instead of thirteen. |
+| `test_a_renamed_column_is_also_a_schema_mismatch` | The announced `req_user_id -> creator_id` rename must land in this branch. |
+| `test_a_database_that_is_down_is_still_a_retryable_outage` | The new branch must not swallow the case it was split out of. |
+| `test_the_connection_is_released_when_the_statement_fails` | A mismatch fires on every single call, so a leak here exhausts the pool. |
 
 ### `test_response_contract.py`
 
