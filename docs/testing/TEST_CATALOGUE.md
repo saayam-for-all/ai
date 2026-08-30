@@ -29,10 +29,12 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_client_imports.py`](../../tests/test_client_imports.py) | Integration | #154 | `utils/client.py` | 2 |
 | [`tests/test_emergency_dataset.py`](../../tests/test_emergency_dataset.py) | - | #146 | `services/emergency_numbers.json` | 15 |
 | [`tests/test_emergency_locale.py`](../../tests/test_emergency_locale.py) | Unit | #146 | `services/emergency.py` | 59 |
+| [`tests/test_generate_answer.py`](../../tests/test_generate_answer.py) | - | #169 | `generate_answer_handler` | 27 |
+| [`tests/test_import_blast_radius.py`](../../tests/test_import_blast_radius.py) | Integration | #169, #171 | `module-scope imports` | 4 |
 | [`tests/test_response_contract.py`](../../tests/test_response_contract.py) | Contract | #146, #169, #170 | `response envelopes` | 10 |
 | [`tests/test_router.py`](../../tests/test_router.py) | Integration | #171 | `lambda_function.lambda_handler` | 31 |
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
-| | | | **Total** | **135** |
+| | | | **Total** | **166** |
 
 ## Every test
 
@@ -121,6 +123,56 @@ Behaviour tests for issue #146 - Emergency Contacts must never show a user a num
 | `test_missing_language_defaults_to_english` | Missing language defaults to english. |
 
 > 32 test functions expand to 59 cases through parametrisation.
+
+### `test_generate_answer.py`
+
+*- · issue #169 · 27 tests*
+
+Tests for the generate_answer endpoint - issue #169.
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_subject_and_description_answer_without_touching_the_database` | The whole point of the fix: no Postgres call when the caller has the text. |
+| `test_database_is_still_used_when_only_identifiers_are_supplied` | Database is still used when only identifiers are supplied. |
+| `test_lookup_fills_only_what_the_caller_did_not_send` | Lookup fills only what the caller did not send. |
+| `test_neither_text_nor_identifiers_is_a_400_that_names_both_options` | Neither text nor identifiers is a 400 that names both options. |
+| `test_request_details_page_payload_is_accepted` | RequestDetails.jsx holds `id`, not `req_id`, and `userDBid`, not `user_id`. |
+| `test_beneficiary_id_alias_is_accepted` | Beneficiary id alias is accepted. |
+| `test_canonical_names_still_win_over_aliases` | Canonical names still win over aliases. |
+| `test_missing_request_is_404` | Missing request is 404. |
+| `test_database_down_is_a_retryable_503_and_leaks_no_connection_detail` | Database down is a retryable 503 and leaks no connection detail. |
+| `test_an_empty_rebuilt_database_is_not_reported_as_an_outage` | During the rebuild the tables exist but hold no rows: that is a 404. |
+| `test_row_with_empty_description_is_400_not_a_generated_answer` | Row with empty description is 400 not a generated answer. |
+| `test_model_exception_is_a_502_not_a_200` | Model exception is a 502 not a 200. |
+| `test_empty_answer_is_a_502_not_a_200_with_an_empty_string` | Empty answer is a 502 not a 200 with an empty string. |
+| `test_no_success_response_ever_carries_an_error_string_as_the_answer` | The old handler returned 200 with answer='Error: Failed to generate answer'. |
+| `test_all_three_invocation_envelopes_work` | All three invocation envelopes work. |
+| `test_malformed_json_body_is_400_not_500` | Malformed json body is 400 not 500. |
+| `test_non_object_body_is_400_not_500` | Non object body is 400 not 500. |
+| `test_conversation_history_that_is_not_a_list_is_dropped` | Conversation history that is not a list is dropped. |
+| `test_conversation_history_list_is_passed_through` | Conversation history list is passed through. |
+| `test_category_id_from_the_row_is_mapped_to_a_category_name` | Category id from the row is mapped to a category name. |
+| `test_unknown_category_id_falls_back_to_general` | Unknown category id falls back to general. |
+| `test_caller_supplied_category_is_used_as_is` | Caller supplied category is used as is. |
+| `test_logging_records_the_shape_but_never_the_description` | Logging records the shape but never the description. |
+| `test_request_db_is_not_imported_at_module_scope` | A driver built for the wrong Python minor version used to fail the whole module, taking predict_category, generate_subject, emergency_contacts and search_orgs down with generate_answer. Only generate_answer needs it. |
+| `test_other_services_survive_a_broken_request_database` | A psycopg2 failure must not reach the four services that never use it. |
+| `test_an_unexpected_lookup_exception_is_a_500_with_no_internals` | An unexpected lookup exception is a 500 with no internals. |
+| `test_unified_router_reaches_generate_answer` | Unified router reaches generate answer. |
+
+### `test_import_blast_radius.py`
+
+*Integration · issue #169, #171 · 4 tests*
+
+Cross-service blast radius at import time - issue #171.
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_importing_the_handler_module_does_not_import_the_database_driver` | psycopg2 must be imported lazily, inside the lookup that needs it. |
+| `test_services_that_do_not_need_a_dependency_survive_it_being_broken` | Emergency Contacts must answer while the database driver is unusable. |
+| `test_the_module_imports_without_any_api_key_configured` | No key is present in CI, and import must not depend on one. |
+
+> 3 test functions expand to 4 cases through parametrisation.
 
 ### `test_response_contract.py`
 
