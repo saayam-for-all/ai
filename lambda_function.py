@@ -309,6 +309,24 @@ def generate_answer_handler(event, context):
                         404,
                         {"error": "No request found for the given user_id and req_id"},
                     )
+                if data.get("error_kind") == "schema_mismatch":
+                    # Our SQL no longer matches the database - a table or
+                    # column was renamed underneath us. That is our defect, and
+                    # no amount of retrying resolves it, so it must not be
+                    # dressed up as a transient outage. This is the alarm that
+                    # says a schema change landed without us.
+                    print(
+                        "ERROR: generate_answer request lookup does not match "
+                        f"the database schema: {err}"
+                    )
+                    return _response(
+                        500,
+                        {
+                            "error": "Request store schema mismatch",
+                            "code": "REQUEST_STORE_SCHEMA_MISMATCH",
+                            "retryable": False,
+                        },
+                    )
                 # The driver's message names the host, database, user and
                 # sslmode. It belongs in CloudWatch, not in the browser. A
                 # store that is down is retryable, which 502 does not say.

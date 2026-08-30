@@ -111,6 +111,50 @@ AWS.
 - Errors no longer leak the DSN, host or API key; logging records payload key
   names, never values.
 
+### Generate Answer — request table pluralization — [#169](https://github.com/saayam-for-all/ai/issues/169)
+
+**Fixed**
+
+- **The request lookup read a table that no longer exists.** The database team
+  renamed `virginia_dev_saayam_rdbms.request` to `requests` in the live
+  Virginia database on **2026-08-17**, as part of the pluralization tracked in
+  [database#73](https://github.com/saayam-for-all/database/issues/73) and
+  recorded in [CAPA#3](https://github.com/saayam-for-all/CAPA/issues/3). Our
+  statement still named the singular table, so every lookup raised
+  `UndefinedTable`.
+  *Observable difference:* a More Information call that falls back to the
+  database — one sending `user_id` and `req_id` without `subject` and
+  `description` — returned `503 REQUEST_STORE_UNAVAILABLE` on **every** attempt
+  since 17 August. It now reaches the row.
+  Only the request table was in the rename set; `req_add_info`,
+  `req_add_info_metadata` and `list_item_metadata` keep their singular names.
+
+**Changed**
+
+- **A stale statement is no longer dressed up as an outage.** A
+  `psycopg2.ProgrammingError` — `UndefinedTable`, `UndefinedColumn` or a syntax
+  error — is classified `schema_mismatch` and returns `500`
+  `REQUEST_STORE_SCHEMA_MISMATCH` with `retryable: false`, instead of the
+  retryable `503` used for a database that is down.
+  *Observable difference:* this is why the rename went unnoticed for thirteen
+  days. Every caller was told "store unavailable, please retry", so the
+  signature looked like a database still being rebuilt rather than a query that
+  had gone stale. The driver message still goes to CloudWatch only.
+- The schema and request table names are read from `SAAYAM_DB_SCHEMA` and
+  `SAAYAM_DB_REQUESTS_TABLE`. The DDL in `saayam-for-all/database` is applied to
+  the live database by hand and lags it — the schema files on `dev` and `main`
+  still create a singular `request` today — so a deployment has to be
+  correctable without a code change if a rename lands or is rolled back.
+
+**Added**
+
+- `tests/test_request_db_schema.py` — 9 tests naming, in one reviewable place,
+  every table and key column we depend on in another team's schema. Nothing in
+  the suite executed this statement before: all endpoint tests mock the lookup
+  at `_lookup_request`, which is precisely why a renamed table passed 190 green
+  tests. Includes a guard on `req_user_id`, which the same wiki page lists as
+  pending rename to `creator_id`.
+
 ### Organizations search — [#170](https://github.com/saayam-for-all/ai/issues/170) · PR [#177](https://github.com/saayam-for-all/ai/pull/177)
 
 **Added**

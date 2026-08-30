@@ -177,6 +177,34 @@ def test_database_down_is_a_retryable_503_and_leaks_no_connection_detail(capsys)
     assert "rds.amazonaws.com" in capsys.readouterr().out
 
 
+def test_a_schema_mismatch_is_not_reported_as_a_retryable_outage(capsys):
+    """A renamed table is our defect, not an outage - issue #169.
+
+    `request` was renamed to `requests` in the live database on 2026-08-17
+    (saayam-for-all/database#73, CAPA#3). Every call failed from that day, and
+    because the failure was reported as a retryable 503 it read as a database
+    that was still being rebuilt. Retrying never resolves a stale statement, so
+    it must not be advertised as retryable.
+    """
+    driver_error = (
+        'UndefinedTable: relation "virginia_dev_saayam_rdbms.request" '
+        "does not exist"
+    )
+    with _lookup({"error": driver_error, "error_kind": "schema_mismatch"}):
+        res = LF.generate_answer_handler(
+            _event({"user_id": "SID-1", "req_id": "REQ-1"}), None
+        )
+
+    assert res["statusCode"] == 500
+    assert res["body"]["code"] == "REQUEST_STORE_SCHEMA_MISMATCH"
+    assert res["body"]["retryable"] is False
+
+    # The failing relation names our schema, so it stays out of the browser
+    # and goes to CloudWatch, where it names the fix.
+    assert "virginia_dev_saayam_rdbms" not in json.dumps(res["body"])
+    assert "does not exist" in capsys.readouterr().out
+
+
 def test_an_empty_rebuilt_database_is_not_reported_as_an_outage():
     """During the rebuild the tables exist but hold no rows: that is a 404."""
     with _lookup({"error": "No data found for given user_id and req_id",

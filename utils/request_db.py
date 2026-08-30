@@ -88,13 +88,40 @@ def _schema() -> str:
     return os.getenv("SAAYAM_DB_SCHEMA", "virginia_dev_saayam_rdbms")
 
 
-def get_request_full_details(user_id: str, req_id: str) -> dict[str, Any]:
+def _requests_table() -> str:
+    """The help request table.
+
+    Renamed `request` -> `requests` in the live Virginia database on
+    2026-08-17, as part of the table pluralization tracked in
+    saayam-for-all/database#73 and recorded in the CAPA incident log
+    (saayam-for-all/CAPA#3, "Phase 2: Microservices Functionality &
+    Pluralization"). The executed statement is on the database wiki page
+    "Changes to the Database, Waiting for Microservice":
+
+        ALTER TABLE virginia_dev_saayam_rdbms.request RENAME TO requests;
+
+    Read this from the environment rather than writing it into the SQL because
+    the DDL in saayam-for-all/database is applied to the live database by hand
+    and lags behind it - the schema files on `dev` and `main` still create a
+    singular `request` today. An override lets a deployment be corrected in
+    place if a rename lands, or is rolled back, between our releases.
+
+    The three tables this query joins - req_add_info, req_add_info_metadata and
+    list_item_metadata - were not in the rename set and keep singular names.
     """
-    Returns request row fields plus additional_info grouped by metadata question.
-    On failure or no rows, returns {"error": "..."}.
+    return os.getenv("SAAYAM_DB_REQUESTS_TABLE", "requests")
+
+
+def build_query(schema: str | None = None, requests_table: str | None = None) -> str:
+    """Build the one statement this module runs.
+
+    Split out from the call that executes it so the suite can assert which
+    tables and columns we depend on without opening a connection. Those names
+    are owned by another team and have changed underneath us before.
     """
-    sch = _schema()
-    query = f"""
+    sch = schema if schema is not None else _schema()
+    requests = requests_table if requests_table is not None else _requests_table()
+    return f"""
         SELECT
             r.req_id,
             r.req_user_id,
@@ -111,7 +138,7 @@ def get_request_full_details(user_id: str, req_id: str) -> dict[str, Any]:
             m.field_type,
             l.item_value       AS list_answer,
             rai.field_value
-        FROM {sch}.request r
+        FROM {sch}.{requests} r
         LEFT JOIN {sch}.req_add_info rai
             ON r.req_id = rai.req_id
         LEFT JOIN {sch}.req_add_info_metadata m
@@ -122,6 +149,14 @@ def get_request_full_details(user_id: str, req_id: str) -> dict[str, Any]:
           AND r.req_id = %s
         ORDER BY rai.field_id;
     """
+
+
+def get_request_full_details(user_id: str, req_id: str) -> dict[str, Any]:
+    """
+    Returns request row fields plus additional_info grouped by metadata question.
+    On failure or no rows, returns {"error": "..."}.
+    """
+    query = build_query()
     conn = None
     try:
         conn = get_connection()
@@ -183,10 +218,22 @@ def get_request_full_details(user_id: str, req_id: str) -> dict[str, Any]:
         result["additional_info"] = list(questions.values())
         return result
 
+    except psycopg2.ProgrammingError as e:
+        # UndefinedTable, UndefinedColumn and a plain syntax error all say the
+        # same thing: this statement no longer matches the database it is being
+        # run against. Retrying cannot fix that, and calling it an outage is
+        # exactly how the 2026-08-17 rename went unnoticed - every caller was
+        # told "store unavailable, please retry" and dutifully retried, so the
+        # signature in CloudWatch looked like a database that was still being
+        # rebuilt rather than a query that had gone stale.
+        return {
+            "error": f"{type(e).__name__}: {e}",
+            "error_kind": "schema_mismatch",
+        }
+
     except Exception as e:
-        # Connection refusals, auth failures and a missing schema all land here.
-        # None of them mean the request is absent, so none of them should be
-        # reported to the caller as one.
+        # Connection refusals and auth failures land here. Neither means the
+        # request is absent, so neither should be reported to the caller as one.
         return {
             "error": f"{type(e).__name__}: {e}",
             "error_kind": "unavailable",
