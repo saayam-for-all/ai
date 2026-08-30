@@ -11,8 +11,11 @@
 # Optional env:
 #   DEPLOY_S3_BUCKET S3 bucket for large packages
 #   LAMBDA_TIMEOUT   seconds; when set, updates the function timeout after deploy
+#   EXPECTED_RUNTIME Lambda runtime the package was built for (default python3.11)
 
 set -euo pipefail
+
+EXPECTED_RUNTIME="${EXPECTED_RUNTIME:-python3.11}"
 
 if [ -z "${FUNCTION_NAME:-}" ]; then
   echo "::error::FUNCTION_NAME is empty. The Lambda ARN secret for this function is missing."
@@ -21,6 +24,27 @@ fi
 
 if [ ! -f deployment.zip ]; then
   echo "::error::deployment.zip not found."
+  exit 1
+fi
+
+# The package is built inside public.ecr.aws/sam/build-python3.11, so every
+# wheel in it is a cp311 build. psycopg2-binary, pydantic-core and the grpc
+# libraries are compiled C extensions: a function configured on a different
+# Python minor version loads none of them and dies at import with
+# Runtime.ImportModuleError, before any application logging runs. Nothing in
+# this pipeline used to notice, so a hand-created function on the wrong runtime
+# stayed broken through green deploys. Fail here instead.
+current_runtime=$(aws lambda get-function-configuration \
+  --function-name "$FUNCTION_NAME" \
+  --query 'Runtime' --output text --no-cli-pager)
+
+echo "Function runtime: ${current_runtime} (package built for ${EXPECTED_RUNTIME})"
+
+if [ "$current_runtime" != "$EXPECTED_RUNTIME" ]; then
+  echo "::error::${FUNCTION_NAME} is configured for ${current_runtime} but the package"
+  echo "::error::was built for ${EXPECTED_RUNTIME}. Compiled dependencies will not import."
+  echo "::error::Set the function runtime to ${EXPECTED_RUNTIME}, or rebuild against"
+  echo "::error::${current_runtime} and update EXPECTED_RUNTIME and the build image together."
   exit 1
 fi
 

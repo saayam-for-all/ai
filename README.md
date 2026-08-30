@@ -103,9 +103,25 @@ curl -X POST https://<api-gateway-url>/generate-subject \
 ---
 
 ### 3. Generate Answer
-Generates structured context-aware responses to user help requests based on database records.
+Generates a structured, context-aware response to a help request. Backs the
+**More Information** button on the Request Details page.
 
-#### request Payload
+The database is a *source* of the request text, not a precondition. Send the
+text you already have and the request row is never read; send identifiers and
+the row is read to fill in what is missing. See issue #169.
+
+#### request Payload — text supplied by the caller (no database read)
+```json
+{
+  "subject": "Need winter coats",
+  "description": "Two children, no warm clothing, snow forecast next week.",
+  "location": "Chicago",
+  "category": "Clothing",
+  "conversation_history": []
+}
+```
+
+#### request Payload — looked up from the request row
 ```json
 {
   "user_id": "SID-00-000-02-356",
@@ -113,6 +129,76 @@ Generates structured context-aware responses to user help requests based on data
   "conversation_history": []
 }
 ```
+
+`user_id` also accepts `userId`, `req_user_id`, `beneficiary_id`,
+`beneficiaryId` and `userDBid`. `req_id` also accepts `request_id`,
+`requestId` and `id`, which is what the Request Details page holds. At least
+one of the two payload styles must be satisfied: either `subject` **and**
+`description`, or `user_id` **and** `req_id`.
+
+#### Response
+```json
+{ "answer": "<markdown>", "source": "request" }
+```
+
+This method uses **non-proxy** integration, so the client reads
+`response.body.answer`. `source` is `"request"` when the text came from the
+payload and `"database"` when it came from the request row.
+
+| Status | Meaning |
+|---|---|
+| 200 | Answer generated |
+| 400 | Neither text nor identifiers supplied, or the body is not a JSON object |
+| 404 | No request row for that `user_id` / `req_id` |
+| 503 | `REQUEST_STORE_UNAVAILABLE` — Postgres is down; retryable |
+| 502 | `ANSWER_GENERATION_FAILED` / `ANSWER_EMPTY` — the model failed |
+
+A model failure is never reported as a 200. Driver-level database errors are
+logged to CloudWatch and never returned to the caller.
+
+#### What the client must do with each status
+
+| Status | Client behaviour |
+| --- | --- |
+| `200` | Render `answer`. It is markdown. |
+| `400` | A payload bug — the request did not carry text *or* identifiers. Do not retry unchanged. |
+| `404` | The request genuinely does not exist. Do not retry. |
+| `503` | Postgres is down. The body carries `"retryable": true` — offer a retry rather than showing a permanent failure. |
+| `502` | Answer generation failed. Show "couldn't generate an answer", **not** the raw body. |
+
+The old behaviour returned `200` with the literal string
+`"Error: Failed to generate answer"` in `answer`, which the page rendered to
+the beneficiary as if it were advice, and which hid model outages from every
+metric. Clients must stop treating a `200` as proof of a usable answer and
+must branch on the status code.
+
+**Send the text when you have it.** The Request Details page already displays
+`subject` and `description`, so passing them means the answer does not depend
+on the request store being up at all. Sending only identifiers makes the call
+fail whenever Postgres is unavailable.
+
+#### Operational notes
+
+`utils/request_db.py` imports `psycopg2`, a compiled C extension, and is
+imported **lazily** inside the lookup rather than at module scope. At module
+scope a packaging problem in that one dependency took down every service in the
+deployment — including `predict_category` and `emergency_contacts`, which never
+touch the database — before any handler code could run.
+
+The handler logs the **key names** of the payload and never its values. A help
+request description carries health, housing and financial detail, and the
+headers carry the caller's token.
+
+`.github/scripts/deploy_lambda.sh` verifies the deployed function's Python
+runtime and fails the deploy on a mismatch, because a silent runtime drift is
+how the `psycopg2` breakage reached production in the first place.
+
+#### Regression tests covering this service
+
+| File | Proves |
+| --- | --- |
+| `test_generate_answer.py` | Every row of the status table above; that a payload carrying text performs **no** database call; that all identifier aliases resolve; and that no API key, host or provider name appears in any error body. |
+| `test_client_imports.py` | The module imports without the database driver present, so one dependency cannot take down the other services. |
 
 #### curl Command
 ```bash

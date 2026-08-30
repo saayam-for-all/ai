@@ -130,7 +130,15 @@ def get_request_full_details(user_id: str, req_id: str) -> dict[str, Any]:
         rows = cur.fetchall()
 
         if not rows:
-            return {"error": "No data found for given user_id and req_id"}
+            # error_kind lets the caller tell "this request does not exist"
+            # (a 404 the client can act on) from "the store is down" (a 503 the
+            # client should retry). Matching on the message text, which is what
+            # the handler used to do, made a rebuilt but empty database look
+            # exactly like a bad req_id.
+            return {
+                "error": "No data found for given user_id and req_id",
+                "error_kind": "not_found",
+            }
 
         first = dict(rows[0])
         result: dict[str, Any] = {
@@ -176,7 +184,13 @@ def get_request_full_details(user_id: str, req_id: str) -> dict[str, Any]:
         return result
 
     except Exception as e:
-        return {"error": str(e)}
+        # Connection refusals, auth failures and a missing schema all land here.
+        # None of them mean the request is absent, so none of them should be
+        # reported to the caller as one.
+        return {
+            "error": f"{type(e).__name__}: {e}",
+            "error_kind": "unavailable",
+        }
 
     finally:
         if conn:
