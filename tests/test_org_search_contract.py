@@ -22,6 +22,11 @@ No network or keys required.
 import json
 from unittest import mock
 
+import pytest
+
+# The envelope saayam-org-aggregator reads out of More Organizations.
+pytestmark = pytest.mark.contract
+
 import lambda_function as LF
 from utils import search_orgs as SO
 

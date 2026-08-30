@@ -27,11 +27,11 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | --- | --- | --- | --- | ---: |
 | [`tests/test_classification_resilience.py`](../../tests/test_classification_resilience.py) | Unit | - | `services/classification_service.py` | 5 |
 | [`tests/test_client_imports.py`](../../tests/test_client_imports.py) | Integration | #154 | `utils/client.py` | 2 |
-| [`tests/test_emergency_dataset.py`](../../tests/test_emergency_dataset.py) | - | #146 | `services/emergency_numbers.json` | 15 |
+| [`tests/test_emergency_dataset.py`](../../tests/test_emergency_dataset.py) | Dataset | #146 | `services/emergency_numbers.json` | 15 |
 | [`tests/test_emergency_locale.py`](../../tests/test_emergency_locale.py) | Unit | #146 | `services/emergency.py` | 59 |
-| [`tests/test_generate_answer.py`](../../tests/test_generate_answer.py) | - | #169 | `generate_answer_handler` | 27 |
+| [`tests/test_generate_answer.py`](../../tests/test_generate_answer.py) | Contract | #169 | `generate_answer_handler` | 27 |
 | [`tests/test_import_blast_radius.py`](../../tests/test_import_blast_radius.py) | Integration | #169, #171 | `module-scope imports` | 4 |
-| [`tests/test_org_search_contract.py`](../../tests/test_org_search_contract.py) | - | #170 | `utils/search_orgs.py` | 24 |
+| [`tests/test_org_search_contract.py`](../../tests/test_org_search_contract.py) | Contract | #170 | `utils/search_orgs.py` | 24 |
 | [`tests/test_response_contract.py`](../../tests/test_response_contract.py) | Contract | #146, #169, #170 | `response envelopes` | 10 |
 | [`tests/test_router.py`](../../tests/test_router.py) | Integration | #171 | `lambda_function.lambda_handler` | 31 |
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
@@ -66,7 +66,7 @@ Guard against the utils/client.py import regression that broke dev.
 
 ### `test_emergency_dataset.py`
 
-*- · issue #146 · 15 tests*
+*Dataset · issue #146 · 15 tests*
 
 Integrity checks on services/emergency_numbers.json.
 
@@ -127,7 +127,7 @@ Behaviour tests for issue #146 - Emergency Contacts must never show a user a num
 
 ### `test_generate_answer.py`
 
-*- · issue #169 · 27 tests*
+*Contract · issue #169 · 27 tests*
 
 Tests for the generate_answer endpoint - issue #169.
 
@@ -177,7 +177,7 @@ Cross-service blast radius at import time - issue #171.
 
 ### `test_org_search_contract.py`
 
-*- · issue #170 · 24 tests*
+*Contract · issue #170 · 24 tests*
 
 Tests for More Organizations / the Organizations tab - issue #170.
 

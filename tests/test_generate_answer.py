@@ -19,6 +19,11 @@ the model call are patched.
 import json
 from unittest import mock
 
+import pytest
+
+# Lambda event in, JSON envelope out, for the More Information endpoint.
+pytestmark = pytest.mark.contract
+
 import lambda_function as LF
 
 
