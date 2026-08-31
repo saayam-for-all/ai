@@ -1,0 +1,26 @@
+# Secrets. Never commit these.
+.env
+.env.*
+!.env.example
+
+# Your onboarding answers are yours, no need to commit them.
+onboarding_answers.py
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# Coverage. Also ignored by PR #138, which adds a test suite to this branch;
+# keeping the union here means whichever of the two lands second resolves as
+# "keep ours".
+.coverage
+.coverage.*
+htmlcov/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
