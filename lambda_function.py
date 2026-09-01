@@ -68,6 +68,15 @@ _USER_ID_KEYS = (
 )
 _REQ_ID_KEYS = ("req_id", "request_id", "requestId", "id")
 
+# Shown to the person when the request store cannot be read and there is no
+# question we can answer without it. It says what is happening and what to do,
+# and it names nothing about our infrastructure.
+_STORE_FAILURE_MESSAGE = (
+    "We could not load the details of this request just now, so there is "
+    "nothing to summarise yet. Your request itself is safe and unchanged. "
+    "Please try again in a few minutes."
+)
+
 
 def _first_present(body, keys):
     """Return the first non empty value among keys, or None."""
@@ -76,6 +85,51 @@ def _first_present(body, keys):
         if value not in (None, ""):
             return value
     return None
+
+
+def _last_user_question(conversation_history):
+    """The most recent thing the person actually asked, or None.
+
+    The More Information chat appends the user's new question to
+    `conversation_history` and sends nothing else, so on every turn after the
+    first this is the real question and the request description is background.
+    """
+    if not isinstance(conversation_history, list):
+        return None
+    for message in reversed(conversation_history):
+        if not isinstance(message, dict) or message.get("role") != "user":
+            continue
+        content = str(message.get("content") or "").strip()
+        if content:
+            return content
+    return None
+
+
+def _describe_additional_info(additional_info):
+    """Flatten the request's additional-info answers into prompt context.
+
+    The lookup has always joined `req_add_info` and its metadata, and the
+    handler has always thrown the result away - the model was answering from
+    the subject and description alone while the specifics the beneficiary
+    actually filled in (household size, dates, documents held) sat unused in
+    the row. Everything the request store gives us should reach the model.
+    """
+    if not isinstance(additional_info, list):
+        return ""
+
+    lines = []
+    for entry in additional_info:
+        if not isinstance(entry, dict):
+            continue
+        question = str(entry.get("question") or "").strip()
+        answers = entry.get("answers")
+        if not question or not isinstance(answers, list):
+            continue
+        values = [str(a).strip() for a in answers if str(a or "").strip()]
+        if values:
+            lines.append(f"- {question}: {', '.join(values)}")
+
+    return "\n".join(lines)
 
 
 def _parse_params(event):
@@ -289,7 +343,16 @@ def generate_answer_handler(event, context):
         user_id = _first_present(body, _USER_ID_KEYS)
         req_id = _first_present(body, _REQ_ID_KEYS)
 
+        # The chat sends the person's newest question inside the history and
+        # nothing else, so this is what they are actually waiting on an answer
+        # to. It is also the one piece of context that survives a request store
+        # that cannot be read.
+        follow_up = _last_user_question(conversation_history)
+
         source = "request"
+        degraded_from = None
+        additional_info = ""
+
         if not subject or not description:
             if not user_id or not req_id:
                 return _response(
@@ -309,6 +372,7 @@ def generate_answer_handler(event, context):
                         404,
                         {"error": "No request found for the given user_id and req_id"},
                     )
+
                 if data.get("error_kind") == "schema_mismatch":
                     # Our SQL no longer matches the database - a table or
                     # column was renamed underneath us. That is our defect, and
@@ -319,33 +383,58 @@ def generate_answer_handler(event, context):
                         "ERROR: generate_answer request lookup does not match "
                         f"the database schema: {err}"
                     )
-                    return _response(
+                    failure = (
                         500,
+                        "Request store schema mismatch",
+                        "REQUEST_STORE_SCHEMA_MISMATCH",
+                        False,
+                    )
+                else:
+                    # The driver's message names the host, database, user and
+                    # sslmode. It belongs in CloudWatch, not in the browser. A
+                    # store that is down is retryable, which 502 does not say.
+                    print(f"ERROR: generate_answer request lookup failed: {err}")
+                    failure = (
+                        503,
+                        "Request store is unavailable, please retry",
+                        "REQUEST_STORE_UNAVAILABLE",
+                        True,
+                    )
+
+                if follow_up:
+                    # Degraded, not broken. The person asked a question we can
+                    # answer on its own merits; losing the request row costs us
+                    # the tailoring, not the reply. The failure is still logged
+                    # above and still named in the response, so this never
+                    # hides an outage from whoever is triaging one - it only
+                    # stops the outage reaching the beneficiary as a dead end.
+                    subject = subject or follow_up[:120]
+                    description = follow_up
+                    source = "conversation"
+                    degraded_from = failure[2]
+                else:
+                    status, message, code, retryable = failure
+                    return _response(
+                        status,
                         {
-                            "error": "Request store schema mismatch",
-                            "code": "REQUEST_STORE_SCHEMA_MISMATCH",
-                            "retryable": False,
+                            "error": message,
+                            "code": code,
+                            "retryable": retryable,
+                            # Presentable text for clients that surface
+                            # something to the person rather than a raw status.
+                            # Deliberately not called `answer`: it is never
+                            # advice and must never be rendered as any.
+                            "message": _STORE_FAILURE_MESSAGE,
                         },
                     )
-                # The driver's message names the host, database, user and
-                # sslmode. It belongs in CloudWatch, not in the browser. A
-                # store that is down is retryable, which 502 does not say.
-                print(f"ERROR: generate_answer request lookup failed: {err}")
-                return _response(
-                    503,
-                    {
-                        "error": "Request store is unavailable, please retry",
-                        "code": "REQUEST_STORE_UNAVAILABLE",
-                        "retryable": True,
-                    },
-                )
-
-            source = "database"
-            subject = subject or str(data.get("req_subj") or "").strip()
-            description = description or str(data.get("req_desc") or "").strip()
-            location = location or data.get("req_loc")
-            if not category:
-                category = help_categories.get(str(data.get("req_cat_id")))
+            else:
+                source = "database"
+                subject = subject or str(data.get("req_subj") or "").strip()
+                description = description or str(data.get("req_desc") or "").strip()
+                location = location or data.get("req_loc")
+                if not category:
+                    category = help_categories.get(str(data.get("req_cat_id")))
+                additional_info = _describe_additional_info(data.get("additional_info"))
 
         if not description:
             return _response(400, {"error": "description is required and was empty"})
@@ -354,12 +443,23 @@ def generate_answer_handler(event, context):
 
         category = str(category).strip() if category else "General"
 
+        # Everything the request store gave us goes to the model. The
+        # additional-info join has been running on every lookup since this
+        # endpoint was written and its result was never read.
+        if additional_info:
+            description = (
+                f"{description}\n\n"
+                f"Additional details provided with this request:\n{additional_info}"
+            )
+
         try:
             answer = generate_ai_answer(
                 category=category,
                 subject=subject,
                 description=description,
                 location=location,
+                gender=body.get("gender"),
+                age=body.get("age"),
                 conversation_history=conversation_history,
             )
         except Exception as e:
@@ -382,7 +482,14 @@ def generate_answer_handler(event, context):
 
         # source tells the caller whether the text came from the request row or
         # from the payload, which is what makes a degraded run legible.
-        return _response(200, {"answer": answer, "source": source})
+        payload = {"answer": answer, "source": source}
+        if degraded_from:
+            # Named, not hidden: a dashboard can count these, and a client can
+            # tell the person the reply is general rather than tailored to
+            # their request. The key is absent on a healthy call, so nothing
+            # that does not care about it has to change.
+            payload["degraded"] = degraded_from
+        return _response(200, payload)
 
     except Exception as e:
         print(f"ERROR: generate_answer failed: {type(e).__name__}: {e}")
