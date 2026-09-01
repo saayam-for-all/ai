@@ -155,6 +155,62 @@ AWS.
   tests. Includes a guard on `req_user_id`, which the same wiki page lists as
   pending rename to `creator_id`.
 
+### Generate Answer — follow-up questions — [#183](https://github.com/saayam-for-all/ai/issues/183)
+
+**Fixed**
+
+- **The chat answered the original request instead of the follow-up question.**
+  The More Information modal appends the person's new question to
+  `conversation_history` and sends nothing else, so from the second turn
+  onwards the last entry of the transcript *is* the question. The service put
+  it one turn upstream and made the final message
+  `Subject: <subject>\nQuestion: <original description>` — and the final
+  message is the one a model answers. Every follow-up was therefore answered as
+  if the person had re-asked their request.
+  *Observable difference:* asking "which documents do I need to bring?" used to
+  return another general answer about the original request. It now answers the
+  question. Demonstrated before and after on the same payload:
+
+  ```
+  before  'Subject: Need help with fixing wooden cabinet\nQuestion: Need help with tiling wooden cabinet'
+  after   'Which documents do I need to bring?'
+  ```
+
+  The request itself is still given to the model — as background appended to
+  the system prompt, which is where context belongs rather than in the position
+  the model treats as the question.
+- **A transcript that was not a list raised `TypeError` from inside the
+  service.** The handler drops a non-list before it gets there, but this is a
+  public service method and the data team's aggregator invokes the package
+  directly, so it cannot assume a caller has checked.
+
+**Changed**
+
+- Single-shot behaviour is unchanged, deliberately and byte-for-byte: with no
+  history — the opening click, and the aggregator's direct invoke — the prompt
+  is exactly what it was, and the request-context block is not added at all.
+
+**Security**
+
+- A `system` role in the client transcript is still dropped, so a caller cannot
+  replace the instructions the answer is generated under. This was already true
+  and is now covered by a test, because the follow-up path is a second place
+  that reads the transcript.
+
+**Added**
+
+- Bounds on what a client transcript can spend: `MAX_HISTORY_MESSAGES` (20
+  most recent turns) and `MAX_MESSAGE_CHARS` (4000 per message). The modal
+  enforces five questions and 250 characters in the browser, which is a UI
+  convenience, not a limit anyone else is held to. Trimming never removes the
+  question being asked.
+- `tests/test_answer_conversation.py` — 21 tests over the exact message list
+  that would be sent to the provider. Nothing in the suite asserted prompt
+  assembly before, which is why a wrong final turn passed 200 green tests.
+  Includes the regression test for this defect, the single-shot prompt asserted
+  literally, transcript hygiene (non-dict entries, unknown roles, blank turns,
+  a trailing assistant turn) and the Groq→Gemini fallback on a follow-up.
+
 ### Organizations search — [#170](https://github.com/saayam-for-all/ai/issues/170) · PR [#177](https://github.com/saayam-for-all/ai/pull/177)
 
 **Added**

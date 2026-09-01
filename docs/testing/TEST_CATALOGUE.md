@@ -25,6 +25,7 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 
 | File | Kind | Issue | Covers | Tests |
 | --- | --- | --- | --- | ---: |
+| [`tests/test_answer_conversation.py`](../../tests/test_answer_conversation.py) | Unit | #183 | `utils/__init__.py prompt assembly` | 21 |
 | [`tests/test_classification_resilience.py`](../../tests/test_classification_resilience.py) | Unit | - | `services/classification_service.py` | 5 |
 | [`tests/test_client_imports.py`](../../tests/test_client_imports.py) | Integration | #154 | `utils/client.py` | 2 |
 | [`tests/test_emergency_dataset.py`](../../tests/test_emergency_dataset.py) | Dataset | #146 | `services/emergency_numbers.json` | 15 |
@@ -36,9 +37,37 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_response_contract.py`](../../tests/test_response_contract.py) | Contract | #146, #169, #170 | `response envelopes` | 10 |
 | [`tests/test_router.py`](../../tests/test_router.py) | Integration | #171 | `lambda_function.lambda_handler` | 31 |
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
-| | | | **Total** | **200** |
+| | | | **Total** | **221** |
 
 ## Every test
+
+### `test_answer_conversation.py`
+
+*Unit · issue #183 · 21 tests*
+
+What the model is actually asked, turn by turn - issue #183.
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_the_follow_up_question_is_what_the_model_is_asked` | The regression test for #183. This fails against the previous code. |
+| `test_the_request_is_still_given_to_the_model_as_background` | Answering the question must not mean losing what it is about. |
+| `test_the_turns_before_the_question_are_kept_in_order` | A follow-up only makes sense against what was already said. |
+| `test_a_single_shot_call_is_untouched` | No history: the description is the question, exactly as before. |
+| `test_a_single_shot_call_gets_no_request_context_block` | The block exists to keep the request out of the question position. |
+| `test_anything_that_is_not_a_transcript_is_a_single_shot_call` | Anything that is not a transcript is a single shot call. |
+| `test_a_transcript_ending_in_an_assistant_turn_has_no_pending_question` | A resumed session, or a client that posts our reply back to us. |
+| `test_entries_that_are_not_messages_are_dropped` | Entries that are not messages are dropped. |
+| `test_a_blank_turn_is_not_a_question` | Whitespace is not something to ask a model to answer. |
+| `test_a_system_turn_in_the_transcript_never_becomes_a_system_message` | The transcript is user input; the system prompt is ours. |
+| `test_only_the_most_recent_turns_are_forwarded` | An unbounded transcript is an unbounded prompt and an unbounded bill. |
+| `test_the_question_survives_the_cap` | Trimming the oldest turns must never trim the thing being asked. |
+| `test_an_oversized_message_is_truncated_rather_than_forwarded_whole` | The 250-character limit is enforced in the browser, which is not a limit. |
+| `test_a_follow_up_still_falls_back_to_gemini_when_groq_is_down` | The provider fallback added in #150 must survive this change. |
+| `test_a_missing_subject_or_description_does_not_break_the_context_block` | The degraded path in #169 answers with neither, and must still work. |
+| `test_the_answer_is_returned_stripped` | The answer is returned stripped. |
+| `test_location_gender_and_age_still_reach_the_system_prompt` | Location gender and age still reach the system prompt. |
+
+> 17 test functions expand to 21 cases through parametrisation.
 
 ### `test_classification_resilience.py`
 
