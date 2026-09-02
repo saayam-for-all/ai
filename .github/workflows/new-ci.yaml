@@ -134,13 +134,56 @@
           run: |
             echo "=== Pytest with coverage (output below) ==="
             source .venv/bin/activate
-            python -u -m pytest \
-              test_classification_resilience.py \
+
+            # Base test files and modules to track
+            TEST_TARGETS="test_classification_resilience.py \
               test_client_imports.py \
               test_emergency_locale.py \
               test_subject_generator.py \
-              --cov=lambda_function --cov=services --cov=utils \
-              --cov-report=xml --cov-report=term-missing -v -s --tb=short
+              --cov=lambda_function --cov=services --cov=utils"
+
+            # Explicit reporting configurations
+            REPORT_FLAGS="--cov-report=xml --cov-report=term-missing -v -s --tb=short"
+
+            # Determine target branch safely for both pushes and PRs
+            TARGET_BRANCH="${{ github.base_ref || github.ref_name }}"
+
+            set +e
+            if [ "$TARGET_BRANCH" = "dev" ] || [ "$TARGET_BRANCH" = "main" ]; then
+              echo "🔒 Stable branch validation: Enforcing strict 90% code coverage gate."
+              python -u -m pytest $TEST_TARGETS $REPORT_FLAGS --cov-fail-under=90
+            else
+              echo "🧪 Sandbox testing environment ($TARGET_BRANCH): Running unit tests without strict coverage limits."
+              python -u -m pytest $TEST_TARGETS $REPORT_FLAGS
+            fi
+            PYTEST_EXIT_CODE=$?
+
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "## Coverage Summary" >> "$GITHUB_STEP_SUMMARY"
+
+            python - <<'PY'
+            import os
+            import xml.etree.ElementTree as ET
+            from pathlib import Path
+
+            coverage_file = Path("coverage.xml")
+            summary_file = Path(os.environ["GITHUB_STEP_SUMMARY"])
+
+            if coverage_file.exists():
+                root = ET.parse(coverage_file).getroot()
+                line_rate = float(root.attrib.get("line-rate", "0")) * 100
+                coverage_text = f"{line_rate:.2f}%"
+                print(f"Coverage: {coverage_text}")
+                with summary_file.open("a", encoding="utf-8") as fh:
+                    fh.write(f"### Code coverage: **{coverage_text}**\n")
+                print(f"::notice title=Coverage::Current code coverage is {coverage_text}")
+            else:
+                print("Coverage XML not found; report was not generated.")
+                with summary_file.open("a", encoding="utf-8") as fh:
+                    fh.write("### Code coverage: **unavailable**\n")
+            PY
+
+            exit $PYTEST_EXIT_CODE
 
         # FIX: upload coverage.xml as an artifact instead of generating and discarding it
         - name: Upload coverage report
