@@ -410,3 +410,261 @@ def test_unified_router_reaches_generate_answer():
 
     assert res["statusCode"] == 200
     assert res["body"]["answer"]
+
+
+# -------------------------------------------------------------------
+# Degrading instead of dying - issue #169
+# -------------------------------------------------------------------
+#
+# When the request store cannot be read, the person is usually mid-conversation
+# and has just asked something we can answer perfectly well on its own. Losing
+# the request row costs us the tailoring, not the reply.
+#
+# The rule these tests hold in place: degrade only where degrading is honest.
+# A failure is still logged, still named in the response, and never invented
+# where authorization was the thing that failed.
+
+STORE_DOWN = {"error": "OperationalError: connection refused",
+              "error_kind": "unavailable"}
+SCHEMA_MOVED = {"error": "UndefinedColumn: column r.req_user_id does not exist",
+                "error_kind": "schema_mismatch"}
+
+FOLLOW_UP = [
+    {"role": "assistant", "content": "Here is what you can do."},
+    {"role": "user", "content": "Which documents do I need to bring?"},
+]
+
+
+def test_a_follow_up_question_is_answered_when_the_request_store_is_down():
+    """The person asked something answerable. An outage is not their problem."""
+    with _lookup(STORE_DOWN), _generation("Bring photo ID and a utility bill.") as gen:
+        res = LF.generate_answer_handler(
+            _event({"user_id": "SID-1", "req_id": "REQ-1",
+                    "conversation_history": FOLLOW_UP}),
+            None,
+        )
+
+    assert res["statusCode"] == 200
+    assert res["body"]["answer"] == "Bring photo ID and a utility bill."
+    assert res["body"]["source"] == "conversation"
+    assert res["body"]["degraded"] == "REQUEST_STORE_UNAVAILABLE"
+    assert gen.call_args.kwargs["description"] == "Which documents do I need to bring?"
+
+
+def test_a_follow_up_question_is_answered_when_the_schema_has_moved():
+    """The failure this issue is about. It must not reach the beneficiary."""
+    with _lookup(SCHEMA_MOVED), _generation():
+        res = LF.generate_answer_handler(
+            _event({"user_id": "SID-1", "req_id": "REQ-1",
+                    "conversation_history": FOLLOW_UP}),
+            None,
+        )
+
+    assert res["statusCode"] == 200
+    assert res["body"]["degraded"] == "REQUEST_STORE_SCHEMA_MISMATCH"
+
+
+def test_degrading_still_logs_the_failure_it_degraded_around(capsys):
+    """A fallback that hides the outage from CloudWatch is how #169 lasted 13 days."""
+    with _lookup(SCHEMA_MOVED), _generation():
+        LF.generate_answer_handler(
+            _event({"user_id": "SID-1", "req_id": "REQ-1",
+                    "conversation_history": FOLLOW_UP}),
+            None,
+        )
+
+    logged = capsys.readouterr().out
+    assert "ERROR" in logged
+    assert "does not match" in logged
+
+
+def test_the_degraded_flag_is_absent_on_a_healthy_call():
+    """Nothing that does not care about degradation has to learn a new key."""
+    with _lookup(dict(ROW)), _generation():
+        res = LF.generate_answer_handler(
+            _event({"user_id": "SID-1", "req_id": "REQ-1",
+                    "conversation_history": FOLLOW_UP}),
+            None,
+        )
+
+    assert res["body"]["source"] == "database"
+    assert "degraded" not in res["body"]
+
+
+def test_the_opening_call_has_no_question_to_fall_back_to_and_still_fails():
+    """conversation_history is [] on the first click: there is nothing to answer."""
+    with _lookup(STORE_DOWN), _generation():
+        res = LF.generate_answer_handler(
+            _event({"user_id": "SID-1", "req_id": "REQ-1",
+                    "conversation_history": []}),
+            None,
+        )
+
+    assert res["statusCode"] == 503
+    assert res["body"]["code"] == "REQUEST_STORE_UNAVAILABLE"
+    assert "answer" not in res["body"]
+
+
+def test_a_history_with_no_user_turn_does_not_fabricate_a_question():
+    with _lookup(STORE_DOWN), _generation():
+        res = LF.generate_answer_handler(
+            _event({"user_id": "SID-1", "req_id": "REQ-1",
+                    "conversation_history": [{"role": "assistant", "content": "Hi"}]}),
+            None,
+        )
+
+    assert res["statusCode"] == 503
+
+
+def test_a_blank_user_turn_is_not_a_question():
+    with _lookup(STORE_DOWN), _generation():
+        res = LF.generate_answer_handler(
+            _event({"user_id": "SID-1", "req_id": "REQ-1",
+                    "conversation_history": [{"role": "user", "content": "   "}]}),
+            None,
+        )
+
+    assert res["statusCode"] == 503
+
+
+def test_a_request_that_does_not_exist_is_never_answered_from_the_history():
+    """The owner check is what makes 404 a 404. Degrading past it is a leak.
+
+    `not_found` means the store answered and this caller does not own that
+    request. Falling back to the conversation there would answer a question
+    about a request the caller has no right to, on the strength of an id they
+    guessed.
+    """
+    absent = {"error": "No data found for given user_id and req_id",
+              "error_kind": "not_found"}
+    with _lookup(absent), _generation():
+        res = LF.generate_answer_handler(
+            _event({"user_id": "SID-1", "req_id": "REQ-someone-elses",
+                    "conversation_history": FOLLOW_UP}),
+            None,
+        )
+
+    assert res["statusCode"] == 404
+    assert "degraded" not in res["body"]
+
+
+# -------------------------------------------------------------------
+# What we tell the person when there is nothing to say
+# -------------------------------------------------------------------
+
+def test_a_store_failure_carries_text_a_client_can_show():
+    """So a dead end reads as "not right now" rather than as a broken page."""
+    with _lookup(STORE_DOWN), _generation():
+        res = LF.generate_answer_handler(
+            _event({"user_id": "SID-1", "req_id": "REQ-1"}), None
+        )
+
+    assert res["body"]["message"]
+    assert res["body"]["retryable"] is True
+
+
+def test_the_presentable_message_is_not_called_answer():
+    """It is never advice, so it must never land in a field rendered as advice."""
+    with _lookup(SCHEMA_MOVED), _generation():
+        res = LF.generate_answer_handler(
+            _event({"user_id": "SID-1", "req_id": "REQ-1"}), None
+        )
+
+    assert "answer" not in res["body"]
+    assert res["body"]["code"] == "REQUEST_STORE_SCHEMA_MISMATCH"
+
+
+def test_the_presentable_message_names_nothing_about_our_infrastructure():
+    with _lookup(STORE_DOWN), _generation():
+        res = LF.generate_answer_handler(
+            _event({"user_id": "SID-1", "req_id": "REQ-1"}), None
+        )
+
+    message = res["body"]["message"].lower()
+    for leak in ("database", "postgres", "schema", "table", "column",
+                 "lambda", "sql", "rds"):
+        assert leak not in message, f"{leak} must not be shown to a beneficiary"
+
+
+# -------------------------------------------------------------------
+# Everything the request store gives us reaches the model
+# -------------------------------------------------------------------
+
+ROW_WITH_INFO = dict(
+    ROW,
+    additional_info=[
+        {"question": "How many children?", "field_type": "text", "answers": ["2"]},
+        {"question": "Sizes needed", "field_type": "list",
+         "answers": ["Age 6", "Age 9"]},
+    ],
+)
+
+
+def test_additional_info_answers_reach_the_model():
+    """The join has run on every lookup since this endpoint was written.
+
+    Its result was never read: the model was answering from the subject and
+    description alone while the specifics the beneficiary filled in sat unused
+    in the row we had already paid to fetch.
+    """
+    with _lookup(dict(ROW_WITH_INFO)), _generation() as gen:
+        LF.generate_answer_handler(
+            _event({"user_id": "SID-1", "req_id": "REQ-1"}), None
+        )
+
+    description = gen.call_args.kwargs["description"]
+    assert ROW["req_desc"] in description
+    assert "How many children?: 2" in description
+    assert "Sizes needed: Age 6, Age 9" in description
+
+
+def test_a_row_without_additional_info_leaves_the_description_untouched():
+    with _lookup(dict(ROW)), _generation() as gen:
+        LF.generate_answer_handler(
+            _event({"user_id": "SID-1", "req_id": "REQ-1"}), None
+        )
+
+    assert gen.call_args.kwargs["description"] == ROW["req_desc"]
+
+
+@pytest.mark.parametrize(
+    "additional_info",
+    [
+        None,
+        "not a list",
+        [None, 3, "text"],
+        [{"question": "", "answers": ["x"]}],
+        [{"question": "Q", "answers": None}],
+        [{"question": "Q", "answers": []}],
+        [{"question": "Q", "answers": ["", "   "]}],
+    ],
+)
+def test_malformed_additional_info_is_ignored_rather_than_raised(additional_info):
+    """It comes from another team's tables, so nothing about it is guaranteed."""
+    with _lookup(dict(ROW, additional_info=additional_info)), _generation() as gen:
+        res = LF.generate_answer_handler(
+            _event({"user_id": "SID-1", "req_id": "REQ-1"}), None
+        )
+
+    assert res["statusCode"] == 200
+    assert gen.call_args.kwargs["description"] == ROW["req_desc"]
+
+
+def test_gender_and_age_are_passed_through_when_the_caller_sends_them():
+    """The prompt builder has always accepted these; the handler never sent them."""
+    with _generation() as gen:
+        LF.generate_answer_handler(
+            _event({"subject": "S", "description": "D", "gender": "female", "age": "68"}),
+            None,
+        )
+
+    assert gen.call_args.kwargs["gender"] == "female"
+    assert gen.call_args.kwargs["age"] == "68"
+
+
+def test_absent_gender_and_age_stay_absent():
+    with _generation() as gen:
+        LF.generate_answer_handler(_event({"subject": "S", "description": "D"}), None)
+
+    assert gen.call_args.kwargs["gender"] is None
+    assert gen.call_args.kwargs["age"] is None

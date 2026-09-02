@@ -155,6 +155,92 @@ AWS.
   tests. Includes a guard on `req_user_id`, which the same wiki page lists as
   pending rename to `creator_id`.
 
+### Generate Answer — owner column rename and schema drift — [#169](https://github.com/saayam-for-all/ai/issues/169)
+
+The second half of the same migration. Pluralization was only one of the
+changes applied to the live `requests` table; the entry above fixed the table
+name, and the very next call failed on a column.
+
+**Fixed**
+
+- **`req_user_id` no longer exists.** It was renamed to `creator_id` and
+  `beneficiary_id` / `lead_volunteer_id` were added alongside it, per
+  [database#224](https://github.com/saayam-for-all/database/issues/224). Our
+  statement both projected and filtered on the old name, so every
+  database-backed lookup raised `UndefinedColumn`.
+  *Observable difference:* a More Information call sending `user_id` and
+  `req_id` returned `500 REQUEST_STORE_SCHEMA_MISMATCH` on every attempt. It
+  now reaches the row.
+- **Both owner columns are matched.** `creator_id` and `beneficiary_id` are
+  different people — the creator raised the request, the beneficiary is who it
+  is for. The web client resolves the `user_id` it sends from whichever its
+  page happens to hold, so filtering on one alone returned "no request found"
+  for a large share of real traffic.
+
+**Added**
+
+- **Schema introspection.** The statement is now built from what
+  `information_schema` reports the request store actually has, resolved once
+  per Lambda container and cached per schema. A renamed optional column is
+  projected as `NULL`; a missing additional-info table drops the join; a
+  singular `request` table with `req_user_id` — which the DDL repository and
+  the Ireland region scripts still describe — produces the old statement
+  instead of an outage.
+  *Observable difference:* neither of the two renames that took this endpoint
+  down would have taken it down under this code.
+- **A degraded answer instead of a dead end.** When the request store cannot
+  be read and the person has asked a follow-up question, that question is
+  answered on its own and the response carries `source: "conversation"` and
+  `degraded: "<code>"`. The failure is still logged to CloudWatch and still
+  named in the response.
+  *Observable difference:* mid-conversation, a store outage now produces an
+  answer marked as general rather than an error dialog.
+- **A presentable `message` on store-failure responses**, so a client can show
+  the person something human. Deliberately not called `answer`: it is never
+  advice and must never be rendered as any.
+- **The additional-info join is finally read.** `req_add_info` and its metadata
+  have been fetched on every lookup since this endpoint was written and the
+  result was discarded. The answers the beneficiary filled in now reach the
+  model as request context.
+  *Observable difference:* answers reference details from the request form —
+  household size, dates, documents held — that were previously invisible to the
+  model.
+- `gender` and `age` are passed through to the prompt builder when the caller
+  sends them. The builder has always accepted them; the handler never sent
+  them.
+
+**Changed**
+
+- Two new operator overrides beside the existing `SAAYAM_DB_SCHEMA` and
+  `SAAYAM_DB_REQUESTS_TABLE`: `SAAYAM_DB_REQUEST_OWNER_COLUMNS` (comma
+  separated) pins the owner predicate, and `SAAYAM_DB_SCHEMA_INTROSPECTION=off`
+  disables discovery. Configuration still beats discovery so an incident can be
+  handled without a release; a pin that names a column the database no longer
+  has degrades to the discovered set rather than breaking.
+
+**Security**
+
+- The owner predicate is never dropped. If a schema is ever found with no
+  recognised owner column the lookup fails closed with `schema_mismatch`,
+  rather than widening to `WHERE req_id = %s` and handing any request to
+  anyone holding its id.
+- The degraded path is not reachable from `not_found`. A request that does not
+  exist, or does not belong to the caller, is still a `404` even when a
+  follow-up question is present — otherwise a guessed `req_id` would be
+  answered on the strength of the question alone.
+
+**Added — tests** (`tests/test_request_db_schema.py`, `tests/test_generate_answer.py`)
+
+- 249 tests pass, up from 190. Coverage 65%, up from 56%;
+  `utils/request_db.py` 84%, `lambda_function.py` 93%.
+- The guard written in the previous entry did its job: the test asserting
+  `WHERE r.req_user_id = %s` failed on the first run after the rename landed,
+  naming the WHERE clause. It has been rewritten to assert the current columns
+  and now records that history.
+- New coverage for every degradation path — rolled-back database, missing
+  optional column, missing join tables, introspection denied, introspection
+  disabled, stale operator pin, two regions with different layouts — and for
+  every refusal: no request table, no owner column, no `req_desc`.
 ### Generate Answer — follow-up questions — [#183](https://github.com/saayam-for-all/ai/issues/183)
 
 **Fixed**
