@@ -29,14 +29,14 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_client_imports.py`](../../tests/test_client_imports.py) | Integration | #154 | `utils/client.py` | 2 |
 | [`tests/test_emergency_dataset.py`](../../tests/test_emergency_dataset.py) | Dataset | #146 | `services/emergency_numbers.json` | 15 |
 | [`tests/test_emergency_locale.py`](../../tests/test_emergency_locale.py) | Unit | #146 | `services/emergency.py` | 59 |
-| [`tests/test_generate_answer.py`](../../tests/test_generate_answer.py) | Contract | #169 | `generate_answer_handler` | 28 |
+| [`tests/test_generate_answer.py`](../../tests/test_generate_answer.py) | Contract | #169 | `generate_answer_handler` | 50 |
 | [`tests/test_import_blast_radius.py`](../../tests/test_import_blast_radius.py) | Integration | #169, #171 | `module-scope imports` | 4 |
 | [`tests/test_org_search_contract.py`](../../tests/test_org_search_contract.py) | Contract | #170 | `utils/search_orgs.py` | 24 |
-| [`tests/test_request_db_schema.py`](../../tests/test_request_db_schema.py) | Unit | #169 | `utils/request_db.py` | 9 |
+| [`tests/test_request_db_schema.py`](../../tests/test_request_db_schema.py) | Unit | #169 | `utils/request_db.py` | 44 |
 | [`tests/test_response_contract.py`](../../tests/test_response_contract.py) | Contract | #146, #169, #170 | `response envelopes` | 10 |
 | [`tests/test_router.py`](../../tests/test_router.py) | Integration | #171 | `lambda_function.lambda_handler` | 31 |
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
-| | | | **Total** | **200** |
+| | | | **Total** | **257** |
 
 ## Every test
 
@@ -128,7 +128,7 @@ Behaviour tests for issue #146 - Emergency Contacts must never show a user a num
 
 ### `test_generate_answer.py`
 
-*Contract · issue #169 · 28 tests*
+*Contract · issue #169 · 50 tests*
 
 Tests for the generate_answer endpoint - issue #169.
 
@@ -162,6 +162,24 @@ Tests for the generate_answer endpoint - issue #169.
 | `test_other_services_survive_a_broken_request_database` | A psycopg2 failure must not reach the four services that never use it. |
 | `test_an_unexpected_lookup_exception_is_a_500_with_no_internals` | An unexpected lookup exception is a 500 with no internals. |
 | `test_unified_router_reaches_generate_answer` | Unified router reaches generate answer. |
+| `test_a_follow_up_question_is_answered_when_the_request_store_is_down` | The person asked something answerable. An outage is not their problem. |
+| `test_a_follow_up_question_is_answered_when_the_schema_has_moved` | The failure this issue is about. It must not reach the beneficiary. |
+| `test_degrading_still_logs_the_failure_it_degraded_around` | A fallback that hides the outage from CloudWatch is how #169 lasted 13 days. |
+| `test_the_degraded_flag_is_absent_on_a_healthy_call` | Nothing that does not care about degradation has to learn a new key. |
+| `test_the_opening_call_has_no_question_to_fall_back_to_and_still_fails` | conversation_history is [] on the first click: there is nothing to answer. |
+| `test_a_history_with_no_user_turn_does_not_fabricate_a_question` | A history with no user turn does not fabricate a question. |
+| `test_a_blank_user_turn_is_not_a_question` | A blank user turn is not a question. |
+| `test_a_request_that_does_not_exist_is_never_answered_from_the_history` | The owner check is what makes 404 a 404. Degrading past it is a leak. |
+| `test_a_store_failure_carries_text_a_client_can_show` | So a dead end reads as "not right now" rather than as a broken page. |
+| `test_the_presentable_message_is_not_called_answer` | It is never advice, so it must never land in a field rendered as advice. |
+| `test_the_presentable_message_names_nothing_about_our_infrastructure` | The presentable message names nothing about our infrastructure. |
+| `test_additional_info_answers_reach_the_model` | The join has run on every lookup since this endpoint was written. |
+| `test_a_row_without_additional_info_leaves_the_description_untouched` | A row without additional info leaves the description untouched. |
+| `test_malformed_additional_info_is_ignored_rather_than_raised` | It comes from another team's tables, so nothing about it is guaranteed. |
+| `test_gender_and_age_are_passed_through_when_the_caller_sends_them` | The prompt builder has always accepted these; the handler never sent them. |
+| `test_absent_gender_and_age_stay_absent` | Absent gender and age stay absent. |
+
+> 44 test functions expand to 50 cases through parametrisation.
 
 ### `test_import_blast_radius.py`
 
@@ -212,7 +230,7 @@ Tests for More Organizations / the Organizations tab - issue #170.
 
 ### `test_request_db_schema.py`
 
-*Unit · issue #169 · 9 tests*
+*Unit · issue #169 · 44 tests*
 
 The SQL this service runs must match the live database - issue #169.
 
@@ -221,12 +239,43 @@ The SQL this service runs must match the live database - issue #169.
 | `test_the_help_request_table_is_plural` | `request` was renamed to `requests` in the live database on 2026-08-17. |
 | `test_the_joined_tables_keep_their_singular_names` | Only the request table was in the rename set. |
 | `test_the_query_reads_no_table_that_is_not_declared_here` | The complete list of another team's tables that we depend on. |
-| `test_the_request_row_is_looked_up_by_req_user_id` | `req_user_id` is announced to become `creator_id`, and it is our filter. |
+| `test_the_request_row_is_looked_up_by_its_current_owner_columns` | `req_user_id` became `creator_id`, and this is the test that caught it. |
+| `test_the_owner_predicate_is_never_dropped` | The only thing between a caller and somebody else's help request. |
+| `test_parameters_are_ordered_the_way_the_statement_names_them` | req_id first, then the user id once per owner column. |
 | `test_the_table_name_can_be_corrected_without_a_release` | The DDL repository lags the live database, so this has to be operable. |
 | `test_a_renamed_table_is_a_schema_mismatch_and_not_an_outage` | The distinction that would have caught this in a day instead of thirteen. |
 | `test_a_renamed_column_is_also_a_schema_mismatch` | The announced `req_user_id -> creator_id` rename must land in this branch. |
 | `test_a_database_that_is_down_is_still_a_retryable_outage` | The new branch must not swallow the case it was split out of. |
 | `test_the_connection_is_released_when_the_statement_fails` | A mismatch fires on every single call, so a leak here exhausts the pool. |
+| `test_the_live_layout_is_discovered_and_used` | The post-database#224 database: plural table, creator_id, beneficiary_id. |
+| `test_a_rolled_back_database_still_works` | The exact failure of 2026-08-17 and database#224, in reverse. |
+| `test_the_plural_table_wins_when_a_migration_leaves_both` | A rename done by hand can leave a backup of the old table behind. |
+| `test_a_column_we_do_not_need_disappearing_costs_only_that_column` | `iscalamity` or `req_loc` going away must not fail the whole statement. |
+| `test_losing_the_additional_info_tables_drops_the_join_not_the_answer` | Enrichment is enrichment. The request row alone still answers. |
+| `test_no_request_table_at_all_is_a_schema_mismatch` | Neither name present: this is our statement being wrong, not an outage. |
+| `test_a_table_with_no_owner_column_is_refused_rather_than_widened` | Never trade authorization for availability. |
+| `test_losing_the_text_the_answer_is_built_from_is_a_schema_mismatch` | Without req_subj/req_desc there is nothing to answer, so say so. |
+| `test_a_mismatch_is_not_cached_so_the_next_container_looks_again` | The database team applies DDL by hand; a mismatch is often minutes old. |
+| `test_introspection_that_is_not_permitted_falls_back_to_the_known_names` | Our database grants are managed by another team. |
+| `test_introspection_can_be_switched_off_without_a_release` | Introspection can be switched off without a release. |
+| `test_the_resolved_schema_is_cached_for_the_life_of_the_container` | One introspection per cold start, not one per invocation. |
+| `test_two_regions_do_not_share_one_resolved_layout` | Virginia is migrated; Ireland may not be. The cache is keyed by schema. |
+| `test_an_operator_can_pin_the_table_during_an_incident` | The pin wins over both candidates - but it is looked up like them. |
+| `test_a_pin_naming_a_table_that_is_not_there_degrades_to_what_is` | A pin set during an incident and forgotten must not become the next one. |
+| `test_a_name_that_is_not_an_identifier_never_reaches_the_statement` | Table and column names cannot be bound as parameters, so they are checked. |
+| `test_an_operator_can_pin_the_owner_columns` | Useful if the two ids ever stop meaning what we think they mean. |
+| `test_a_stale_pin_degrades_to_what_exists_rather_than_breaking` | A pin set during an incident and forgotten must not become the next one. |
+| `test_the_connection_is_released_after_a_successful_read` | The connection is released after a successful read. |
+| `test_the_connection_is_released_when_introspection_refuses` | A mismatch fires on every call, so a leak here exhausts the pool. |
+| `test_repeated_join_rows_are_grouped_into_one_entry_per_question` | The join repeats the request row once per answer; the caller wants one. |
+| `test_a_request_with_no_additional_info_still_returns_the_row` | LEFT JOIN gives one row with every metadata column NULL. |
+| `test_a_question_that_was_asked_but_not_answered_carries_no_answers` | Both answer columns NULL means the beneficiary skipped the field. |
+| `test_the_list_answer_wins_over_the_free_text_column` | A list-backed field stores its label in list_item_metadata, not field_value. |
+| `test_submission_date_is_stringified_and_a_missing_one_stays_none` | It is a timestamp on the way out of psycopg2 and JSON on the way to a client. |
+| `test_introspection_reads_tuple_rows_as_well_as_dict_rows` | The cursor factory is the caller's choice, not this function's business. |
+| `test_a_request_that_is_not_there_is_not_found_and_not_an_outage` | Zero rows after a healthy introspection means exactly one thing. |
+
+> 38 test functions expand to 44 cases through parametrisation.
 
 ### `test_response_contract.py`
 
