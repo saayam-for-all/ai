@@ -39,6 +39,7 @@ FILE_META = {
     "test_emergency_dataset.py": ("#146", "services/emergency_numbers.json"),
     "test_generate_answer.py": ("#169", "generate_answer_handler"),
     "test_request_db_schema.py": ("#169", "utils/request_db.py"),
+    "test_answer_conversation.py": ("#183", "utils/__init__.py prompt assembly"),
     "test_import_blast_radius.py": ("#169, #171", "module-scope imports"),
     "test_org_search_contract.py": ("#170", "utils/search_orgs.py"),
     "test_client_imports.py": ("#154", "utils/client.py"),
