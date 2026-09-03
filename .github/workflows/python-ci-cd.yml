@@ -12,10 +12,7 @@
         - test
         - dev
         - main
-      #dhara-start
-      # This tells GitHub to run my feature branch update, remove this later!
-        - 'dhara0611/feature-ai-cicd' 
-      #dhara-end
+        - 'dhara0611/feature-ai-cicd'
 
     pull_request:
       branches:
@@ -26,6 +23,7 @@
         - opened
         - synchronize
         - reopened
+        - closed
 
   jobs:
     build-and-test:
@@ -116,7 +114,6 @@
         # --- TESTS [SAST]: Static Application Security Testing ---
         # FIX - changed -lll to -ll for broader security coverage
         - name: SAST with Bandit
-          #dhara0611-remove this line later "continue on error" 
           continue-on-error: true 
           run: |
             echo "=== SAST with Bandit (output below) ==="
@@ -200,7 +197,6 @@
             source .venv/bin/activate
             flake8 . --max-line-length=150 --exclude=.venv,__pycache__,.git,build,dist
         
-        #dhara0611-start
         ## --- PACKAGING: Zip the Python app + dependencies ---
         - name: Package Lambda application
           run: |
@@ -234,13 +230,14 @@
             path: |
               lambda-code.zip
               lambda-layer.zip
-        #dhara0611-end
 
     
-    #dhara0611-start
     deploy:
       needs: build-and-test
-      if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+      if: >
+        (github.event_name == 'push' && (github.ref_name == 'dev' || github.ref_name == 'test' || github.ref_name == 'main')) ||
+        (github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true && (github.base_ref == 'dev' || github.base_ref == 'test' || github.base_ref == 'main'))
+
       runs-on: ubuntu-latest
       
       env:
@@ -277,31 +274,58 @@
             aws-access-key-id: ${{ secrets.AWS_AI_ACCESS_KEY }}
             aws-secret-access-key: ${{ secrets.AWS_AI_SECRET_ACCESS_KEY }}
         
-         # --- BRANCH STRATEGY 2: DEV BRANCH DEPLOYMENT ---
-        - name: Upload to S3 Bucket (Dev Branch)
+         # --- DYNAMIC ENVIRONMENT S3 UPLOAD BLOCK ---
+        - name: Upload to S3 Bucket (Environment specific)
           id: upload-to-s3
-          if: github.ref_name == 'dev' || github.ref_name == 'dhara0611/feature-ai-cicd'
           run: |
-            echo "Uploading Lambda archives to S3 (dev)..."
-            CODE_S3_KEY="code/dev/ai/v1.0.0/${{ steps.ver.outputs.code_archive_name }}"
-            LAYER_S3_KEY="code/dev/ai/v1.0.0/${{ steps.ver.outputs.layer_archive_name }}"
+            echo "Uploading Lambda archives to S3..."
+
+            # Determine branch name for pushes and PRs.
+            TARGET_BRANCH="${{ github.base_ref }}"
+            if [ -z "$TARGET_BRANCH" ]; then
+              TARGET_BRANCH="${{ github.ref_name }}"
+            fi
+
+            # Map branch name with env path and 'main' branch to 'prod' directory structure
+            ENV_PATH="$TARGET_BRANCH"
+            if [ "$ENV_PATH" = "main" ]; then
+              ENV_PATH="prod"
+            fi
+
+            if [ -z "$ENV_PATH" ]; then
+              echo "No target branch detected. Falling back to dev."
+              ENV_PATH="dev"
+            fi
+
+            echo "Determined Environment Path: code/$ENV_PATH"
+
+            CODE_S3_KEY="code/$ENV_PATH/ai/v1.0.0/${{ steps.ver.outputs.code_archive_name }}"
+            LAYER_S3_KEY="code/$ENV_PATH/ai/v1.0.0/${{ steps.ver.outputs.layer_archive_name }}"
 
             aws s3 cp "lambda-code.zip" "s3://${{ env.S3_BUCKET }}/$CODE_S3_KEY"
             aws s3 cp "lambda-layer.zip" "s3://${{ env.S3_BUCKET }}/$LAYER_S3_KEY"
 
             echo "code_s3_key=$CODE_S3_KEY" >> "$GITHUB_OUTPUT"
             echo "layer_s3_key=$LAYER_S3_KEY" >> "$GITHUB_OUTPUT"
+            echo "env_path=$ENV_PATH" >> "$GITHUB_OUTPUT"
+            echo "lambda_function_name=${{ env.APP_NAME }}-${ENV_PATH}" >> "$GITHUB_OUTPUT"
+            echo "layer_name=${{ env.APP_NAME }}-${ENV_PATH}-dependencies" >> "$GITHUB_OUTPUT"
 
-        - name: Create or update AWS Lambda and Layer from S3 (Dev Branch)
-          if: github.ref_name == 'dev' || github.ref_name == 'dhara0611/feature-ai-cicd'
+        - name: Create or update AWS Lambda and Layer from S3
           run: |
-            LAMBDA_FUNCTION_NAME="${{ env.APP_NAME }}-dev"
+            ENV_PATH="${{ steps.upload-to-s3.outputs.env_path }}"
+            LAMBDA_FUNCTION_NAME="${{ steps.upload-to-s3.outputs.lambda_function_name }}"
+            LAYER_NAME="${{ steps.upload-to-s3.outputs.layer_name }}"
             CODE_KEY="${{ steps.upload-to-s3.outputs.code_s3_key }}"
             LAYER_KEY="${{ steps.upload-to-s3.outputs.layer_s3_key }}"
 
+            echo "Using environment: $ENV_PATH"
+            echo "Target Lambda: $LAMBDA_FUNCTION_NAME"
+            echo "Target Layer: $LAYER_NAME"
+
             echo "Publishing dependency layer..."
             LAYER_ARN=$(aws lambda publish-layer-version \
-              --layer-name "${{ env.APP_NAME }}-dev-dependencies" \
+              --layer-name "$LAYER_NAME" \
               --content "S3Bucket=${{ env.S3_BUCKET }},S3Key=$LAYER_KEY" \
               --compatible-runtimes "python3.11" \
               --query "LayerVersionArn" --output text)
@@ -313,7 +337,7 @@
               >/dev/null 2>&1; then
               echo "Updating existing Lambda function: $LAMBDA_FUNCTION_NAME"
 
-              #1. Update the execution code
+              # 1. Update the execution code
               aws lambda update-function-code \
                 --function-name "$LAMBDA_FUNCTION_NAME" \
                 --s3-bucket "${{ env.S3_BUCKET }}" \
@@ -321,8 +345,8 @@
                 --no-publish
               aws lambda wait function-updated \
                 --function-name "$LAMBDA_FUNCTION_NAME"
-              
-              #2. Update configuration to attach freshly updated dependency layer
+
+              # 2. Update configuration to attach freshly updated dependency layer
               aws lambda update-function-configuration \
                 --function-name "$LAMBDA_FUNCTION_NAME" \
                 --layers "$LAYER_ARN"
@@ -343,5 +367,5 @@
               aws lambda wait function-active \
                 --function-name "$LAMBDA_FUNCTION_NAME"
             fi
-    #dhara-end
+
         
