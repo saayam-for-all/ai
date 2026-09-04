@@ -12,7 +12,6 @@
         - test
         - dev
         - main
-        - 'dhara0611/feature-ai-cicd'
 
     pull_request:
       branches:
@@ -235,7 +234,7 @@
     deploy:
       needs: build-and-test
       if: >
-        (github.event_name == 'push' && (github.ref_name == 'dev' || github.ref_name == 'test' || github.ref_name == 'main' || github.ref_name == 'dhara0611/feature-ai-cicd')) ||
+        (github.event_name == 'push' && (github.ref_name == 'dev' || github.ref_name == 'test' || github.ref_name == 'main')) ||
         (github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true && (github.base_ref == 'dev' || github.base_ref == 'test' || github.base_ref == 'main'))
 
       runs-on: ubuntu-latest
@@ -290,8 +289,6 @@
             ENV_PATH="$TARGET_BRANCH"
             if [ "$ENV_PATH" = "main" ]; then
               ENV_PATH="prod"
-            elif [ "$ENV_PATH" = "dhara0611/feature-ai-cicd" ]; then
-              ENV_PATH="dev"
             fi
 
             echo "Determined Environment Path: code/$ENV_PATH"
