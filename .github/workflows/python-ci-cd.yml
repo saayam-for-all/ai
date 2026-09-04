@@ -131,11 +131,8 @@
             echo "=== Pytest with coverage (output below) ==="
             source .venv/bin/activate
 
-            # Base test files and modules to track
-            TEST_TARGETS="test_classification_resilience.py \
-              test_client_imports.py \
-              test_emergency_locale.py \
-              test_subject_generator.py \
+            # Run the complete suite from its dedicated test directory.
+            TEST_TARGETS="tests/ \
               --cov=lambda_function --cov=services --cov=utils"
 
             # Explicit reporting configurations
