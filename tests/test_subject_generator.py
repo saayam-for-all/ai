@@ -38,7 +38,7 @@ def _use_fake(monkeypatch, content):
 # ---------- _clean_subject ----------
 
 def test_clean_subject_strips_leading_label():
-    assert sg._clean_subject("Subject: Roommate Wanted") == "Roommate Wanted"
+    assert sg._clean_subject("Subject: Roommate Wanted") == "Roommate"
     assert sg._clean_subject("Title - Toothache Relief") == "Toothache Relief"
 
 
@@ -54,6 +54,18 @@ def test_clean_subject_strips_label_and_quotes_together():
 def test_clean_subject_empty_falls_back():
     assert sg._clean_subject("") == "General Inquiry"
     assert sg._clean_subject("   ") == "General Inquiry"
+
+
+def test_clean_subject_strips_status_words():
+    assert sg._clean_subject("Math Help") == "Math"
+    assert sg._clean_subject("Twisted Knee, Need Physiotherapy") == "Twisted Knee, Physiotherapy"
+    assert sg._clean_subject("Kid Needs Warm Winter Coat for School") == "Kid Warm Winter Coat for School"
+    assert sg._clean_subject("Running Out of Food, Looking for Nearby Food Pantry") == (
+        "Running Out of Food, Nearby Food Pantry"
+    )
+    assert sg._clean_subject("College Scholarship Application Guidance for Fall") == (
+        "College Scholarship Application for Fall"
+    )
 
 
 # ---------- _truncate_with_word_boundary ----------
