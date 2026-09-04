@@ -12,6 +12,7 @@
         - test
         - dev
         - main
+        - 'dhara0611/feature-ai-cicd'
 
     pull_request:
       branches:
