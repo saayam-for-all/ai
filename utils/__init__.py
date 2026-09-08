@@ -6,20 +6,21 @@ Python 3.14+ compatible.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-
-from typing import TypedDict, Literal
+from typing import Literal, TypedDict
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 
+from utils import token_usage
 from utils.client import (
-    GROQ_MODEL,
-    GROQ_TEMPERATURE,
     GEMINI_MODEL,
     GEMINI_TEMPERATURE,
-    groq_llm,
+    GROQ_MODEL,
+    GROQ_TEMPERATURE,
     gemini_llm,
+    groq_llm,
 )
 from utils.prompts import get_conversational_prompt
+
 
 class ChatMessage(TypedDict):
     role: Literal["system", "user", "assistant"]
@@ -136,23 +137,34 @@ class GroqAnswerGenerationService(AnswerGenerationServiceInterface):
             return messages[:-1], messages[-1]
         return messages, None
 
-    def _generate_with_gemini(self, messages: list[BaseMessage]) -> str:
+    def _generate_with_gemini(
+        self, messages: list[BaseMessage], accumulator: dict | None = None
+    ) -> str:
         """Fallback to Gemini API if Groq fails."""
         if not gemini_llm:
             raise ValueError("Gemini client not initialized")
         resp = gemini_llm.invoke(messages)
+        token_usage.record(
+            accumulator, resp, provider="gemini", model=self.gemini_model
+        )
         content = resp.content if hasattr(resp, "content") else str(resp)
         return (content or "").strip()
 
-    def _try_groq(self, messages: list[BaseMessage]) -> str | None:
+    def _try_groq(
+        self, messages: list[BaseMessage], accumulator: dict | None = None
+    ) -> str | None:
         if not groq_llm:
             return None
         try:
             resp = groq_llm.invoke(messages)
-            content = resp.content if hasattr(resp, "content") else str(resp)
-            return (content or "").strip() or None
         except Exception:
             return None
+        # Recorded outside the try: a Groq call that succeeded and then failed
+        # to parse still cost tokens, and a fallback to Gemini bills the same
+        # request twice. Both halves have to show up in the total.
+        token_usage.record(accumulator, resp, provider="groq", model=self.model)
+        content = resp.content if hasattr(resp, "content") else str(resp)
+        return (content or "").strip() or None
 
     def generate_answer(
         self,
@@ -204,7 +216,18 @@ class GroqAnswerGenerationService(AnswerGenerationServiceInterface):
                 question,
             ]
 
-        return (
-            self._try_groq(messages)
-            or self._generate_with_gemini(messages)
-        )
+        usage = token_usage.new_accumulator()
+        try:
+            return (
+                self._try_groq(messages, usage)
+                or self._generate_with_gemini(messages, usage)
+            )
+        finally:
+            # In a finally so a Gemini failure still reports what Groq already
+            # spent on the way there.
+            token_usage.log_usage(
+                "generate_answer",
+                usage,
+                category=category,
+                history_turns=len(prior) + (1 if question else 0),
+            )

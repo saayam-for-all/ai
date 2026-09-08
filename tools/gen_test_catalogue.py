@@ -45,6 +45,7 @@ FILE_META = {
     "test_client_imports.py": ("#154", "utils/client.py"),
     "test_classification_resilience.py": ("-", "services/classification_service.py"),
     "test_subject_generator.py": ("-", "utils/subject_generator.py"),
+    "test_token_usage.py": ("#159", "utils/token_usage.py"),
 }
 
 HEADER = """# Test catalogue
