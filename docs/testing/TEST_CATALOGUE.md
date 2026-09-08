@@ -36,8 +36,8 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_request_db_schema.py`](../../tests/test_request_db_schema.py) | Unit | #169 | `utils/request_db.py` | 44 |
 | [`tests/test_response_contract.py`](../../tests/test_response_contract.py) | Contract | #146, #169, #170 | `response envelopes` | 10 |
 | [`tests/test_router.py`](../../tests/test_router.py) | Integration | #171 | `lambda_function.lambda_handler` | 31 |
-| [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
-| | | | **Total** | **278** |
+| [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 14 |
+| | | | **Total** | **279** |
 
 ## Every test
 
@@ -351,7 +351,7 @@ Router-level regression tests - issue #171.
 
 ### `test_subject_generator.py`
 
-*Unit · issue - · 13 tests*
+*Unit · issue - · 14 tests*
 
 Unit tests for the Generate Subject service.
 
@@ -361,6 +361,7 @@ Unit tests for the Generate Subject service.
 | `test_clean_subject_strips_surrounding_quotes` | Clean subject strips surrounding quotes. |
 | `test_clean_subject_strips_label_and_quotes_together` | Clean subject strips label and quotes together. |
 | `test_clean_subject_empty_falls_back` | Clean subject empty falls back. |
+| `test_clean_subject_strips_status_words` | Clean subject strips status words. |
 | `test_truncate_enforces_max_length` | Truncate enforces max length. |
 | `test_generate_cleans_label_and_quotes` | Generate cleans label and quotes. |
 | `test_generate_enforces_max_length` | Generate enforces max length. |
