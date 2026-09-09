@@ -99,7 +99,30 @@ INCIDENT_ROOT_CAUSE = ""
 INCIDENT_PREVENTION = ""
 
 
-# --- Mission 4: your own observations ---------------------------------------
+# --- Mission 4: tools -------------------------------------------------------
+
+# You measured the tool path against asking the model directly. For a lookup
+# over 73 fixed rows, does a model belong in the request path at all? Say what
+# you measured and what you concluded. Disagreeing with the README is fine if
+# you show your numbers.
+TOOL_VS_DIRECT = ""
+
+
+# --- Mission 6: grounding (elective) ----------------------------------------
+
+# Your grounded search returns fewer organizations than the current one, and
+# some queries return none. Explain that to somebody who wanted six results.
+GROUNDING_TRADEOFF = ""
+
+
+# --- Mission 5: evaluation --------------------------------------------------
+
+# Which metric did you choose, and what does it fail to capture? Every metric
+# is wrong about something; name yours.
+EVAL_METRIC = ""
+
+
+# --- Your own observations and feedback -------------------------------------
 
 # Run a few descriptions through the harness. Write 3+ sentences on something
 # that surprised you, confused you, or looked wrong.
@@ -505,6 +528,185 @@ def _written(attr, min_words, label):
     return PASS, f"{words} words"
 
 
+@check("Your tool schema describes a real function", "Mission 4: tools")
+def _q_tool_schema():
+    guard = _dev_guard()
+    if guard:
+        return guard
+    mod, err = _joiner_module("agent_tools")
+    if mod is None:
+        return FAIL, f"{err}. See Mission 4"
+
+    schema = getattr(mod, "TOOL_SCHEMA", None)
+    if not isinstance(schema, dict):
+        return FAIL, "TOOL_SCHEMA is missing or is not a dict"
+    for key in ("name", "description", "parameters"):
+        if not schema.get(key):
+            return FAIL, f"TOOL_SCHEMA has no {key!r}"
+    params = schema["parameters"]
+    if not isinstance(params, dict) or params.get("type") != "object":
+        return FAIL, "TOOL_SCHEMA['parameters'] must be a JSON Schema object"
+    props = params.get("properties") or {}
+    missing = [p for p in ("country", "service") if p not in props]
+    if missing:
+        return FAIL, f"parameters.properties is missing {', '.join(missing)}"
+    if not params.get("required"):
+        return FAIL, "parameters has no 'required' list, so nothing is mandatory"
+    # The description is a prompt. A placeholder one is worse than none.
+    if len(str(schema["description"]).split()) < 8:
+        return FAIL, ("the description is the only thing telling the model when "
+                      "to call this. Write at least a sentence")
+    return PASS, f"{schema['name']}, {len(props)} parameters"
+
+
+@check("Your lookup returns real numbers and refuses bad input", "Mission 4: tools")
+def _q_tool_behaviour():
+    guard = _dev_guard()
+    if guard:
+        return guard
+    mod, err = _joiner_module("agent_tools")
+    if mod is None:
+        return FAIL, f"{err}. See Mission 4"
+    fn = getattr(mod, "lookup_emergency_number", None)
+    if not callable(fn):
+        return FAIL, "no lookup_emergency_number(country, service) function"
+
+    # Known-good values read straight from services/emergency_numbers.json.
+    for country, service, expected in (("AU", "police", "000"),
+                                       ("AF", "ambulance", "112"),
+                                       ("AF", "fire", "119")):
+        try:
+            got = fn(country, service)
+        except Exception as e:
+            return FAIL, f"lookup({country!r}, {service!r}) raised {type(e).__name__}"
+        if str(got).strip() != expected:
+            return FAIL, f"lookup({country!r}, {service!r}) gave {got!r}, expected {expected!r}"
+
+    # The model will invent country codes. The function must not.
+    for bad in ("ZZ", "Japan", "", None, "'; DROP TABLE requests;--"):
+        try:
+            got = fn(bad, "police")
+        except Exception as e:
+            return FAIL, (f"lookup({bad!r}, 'police') raised {type(e).__name__}. "
+                          "Invalid input is expected, not exceptional")
+        if got not in (None, ""):
+            return FAIL, (f"lookup({bad!r}, 'police') returned {got!r}. A country "
+                          "code the model invented must not resolve to a number")
+
+    # An unmodelled service must not be answered with a different one.
+    if fn("AU", "poison_control") not in (None, ""):
+        return FAIL, ("lookup('AU', 'poison_control') returned a number. We do not "
+                      "model that service; answering it with another is the P0 "
+                      "from issue #146")
+    return PASS, "correct on 3 known values, refuses 5 bad inputs and 1 unknown service"
+
+
+@check("Your eval harness can tell a worse prompt from a better one", "Mission 5: evals")
+def _q_evals():
+    guard = _dev_guard()
+    if guard:
+        return guard
+    mod, err = _joiner_module("evals/run", "evals_run")
+    if mod is None:
+        return FAIL, f"{err}. See Mission 5"
+
+    golden = getattr(mod, "GOLDEN", None)
+    if not isinstance(golden, (list, tuple)):
+        return FAIL, "GOLDEN is missing or is not a list"
+    if len(golden) < 30:
+        return FAIL, f"GOLDEN has {len(golden)} cases, the mission asks for 30 or more"
+
+    run = getattr(mod, "run", None)
+    good = getattr(mod, "PROMPT", None)
+    control = getattr(mod, "CONTROL_PROMPT", None)
+    if not callable(run) or good is None or control is None:
+        return FAIL, "needs run(prompt), PROMPT and CONTROL_PROMPT"
+    try:
+        with _quiet():
+            a, b = run(good), run(control)
+    except Exception as e:
+        return FAIL, f"run() raised {type(e).__name__}: {str(e)[:60]}"
+    for name, r in (("PROMPT", a), ("CONTROL_PROMPT", b)):
+        if not isinstance(r, dict) or not isinstance(r.get("score"), (int, float)):
+            return FAIL, f"run({name}) did not return a dict with a numeric 'score'"
+    if a["score"] <= b["score"]:
+        return FAIL, (f"your real prompt scored {a['score']:.3f} and the deliberately "
+                      f"worse one scored {b['score']:.3f}. The harness cannot yet "
+                      "tell them apart, which is the thing to fix")
+    return PASS, (f"{len(golden)} cases, real {a['score']:.3f} vs control "
+                  f"{b['score']:.3f}")
+
+
+@check("Your grounded search cites data you did not write", "Mission 6: grounding")
+def _q_grounding():
+    guard = _dev_guard()
+    if guard:
+        return guard
+    mod, err = _joiner_module("grounded_orgs")
+    if mod is None:
+        return SKIP, "Mission 6 is elective. Skipped"
+    search = getattr(mod, "search", None)
+    resolve = getattr(mod, "source_record", None)
+    if not callable(search) or not callable(resolve):
+        return FAIL, ("needs search(query, location) and "
+                      "source_record(source_id) -> record or None")
+    try:
+        results = search("help repairing a wheelchair ramp", "Chicago")
+    except Exception as e:
+        return FAIL, f"search() raised {type(e).__name__}: {str(e)[:60]}"
+    if not isinstance(results, list):
+        return FAIL, f"search() returned {type(results).__name__}, expected a list"
+    if not results:
+        return FAIL, ("a query your data can answer returned nothing. A search that "
+                      "always returns an empty list satisfies every rule below and "
+                      "helps nobody")
+
+    import re
+    fiction = re.compile(r"\b555[-.\s]?01\d\d\b|\(\d{3}\)\s*555[-.\s]?\d{4}")
+    for org in results:
+        if not isinstance(org, dict):
+            return FAIL, "search() returned something that is not a dict"
+        sid = org.get("source_id")
+        if not sid:
+            return FAIL, "an organization came back with no source_id"
+        if resolve(sid) is None:
+            return FAIL, (f"source_id {sid!r} does not resolve in your data. That is "
+                          "a generated organization wearing a citation")
+        if fiction.search(str(org.get("contact", ""))):
+            return FAIL, (f"{org.get('name') or sid} carries a reserved-for-fiction "
+                          "555 number. That is the defect this mission exists for")
+
+    # Refusing is the point. A query nothing can match must return nothing.
+    nonsense = search("zzzqqx nonexistent category of help", "Nowhere")
+    if nonsense:
+        return FAIL, (f"a nonsense query returned {len(nonsense)} organizations. "
+                      "Returning nothing is the correct answer")
+    return PASS, f"{len(results)} organizations, all resolving, nonsense refused"
+
+
+# The written reflections reuse the existing _written() helper.
+
+@check("You judged whether a model belongs in the tool path", "Mission 4: tools")
+def _q_tool_written():
+    return _written("TOOL_VS_DIRECT", 25, "tool comparison")
+
+
+@check("You named what your metric fails to capture", "Mission 5: evals")
+def _q_eval_written():
+    return _written("EVAL_METRIC", 20, "metric choice")
+
+@check("You explained the grounding tradeoff", "Mission 6: grounding")
+def _q_grounding_written():
+    a, _ = _answered("GROUNDING_TRADEOFF")
+    if a is None or not str(getattr(a, "GROUNDING_TRADEOFF", "")).strip():
+        if not (ROOT / "grounded_orgs.py").is_file():
+            return SKIP, "Mission 6 is elective. Skipped"
+    return _written("GROUNDING_TRADEOFF", 25, "grounding tradeoff")
+
+
+# ---------------------------------------------------------------------------
+
+
 @check("You explained the incident root cause", "Understanding")
 def _q_root():
     return _written("INCIDENT_ROOT_CAUSE", 8, "root cause")
@@ -585,6 +787,43 @@ def interactive():
 
 # ---------------------------------------------------------------------- main
 
+def _joiner_module(*candidates):
+    """Import a module the joiner wrote, trying each candidate path in turn.
+
+    Missions 1 to 5 verify answers about code that already exists. Missions 6
+    onwards verify code the joiner produced, so the checker has to load it.
+    Import errors are returned rather than raised: a half-written file is a
+    normal state to be in, and the message should say which one it was.
+
+    Paths are relative to the repo root, with or without the .py suffix, so
+    both "agent_tools" and "evals/run" work.
+    """
+    import importlib.util
+    tried = []
+    for rel in candidates:
+        rel = rel if rel.endswith(".py") else f"{rel}.py"
+        path = ROOT / rel
+        tried.append(rel)
+        if not path.is_file():
+            continue
+        name = rel[:-3].replace("/", "_").replace("\\", "_")
+        try:
+            spec = importlib.util.spec_from_file_location(name, path)
+            mod = importlib.util.module_from_spec(spec)
+            with _quiet():
+                spec.loader.exec_module(mod)
+            return mod, None
+        except Exception as e:
+            return None, f"{rel} did not import: {type(e).__name__}: {str(e)[:70]}"
+    if len(tried) == 1:
+        return None, f"no {tried[0]} in this checkout"
+    return None, f"none of {', '.join(tried)} in this checkout"
+
+
+# ---------------------------------------------------------------------------
+# 3. Checks
+# ---------------------------------------------------------------------------
+
 def main():
     if not ANSWERS.exists():
         ANSWERS.write_text(ANSWERS_TEMPLATE, encoding="utf-8")
@@ -597,6 +836,7 @@ def main():
     counts = {PASS: 0, FAIL: 0, SKIP: 0}
     section = None
     todo, not_attempted = [], []
+    seen = {}
 
     for sec, name, fn in results:
         if sec != section:
@@ -611,6 +851,7 @@ def main():
         print(f"  {mark} {name}")
         if detail:
             print(f"        {detail}")
+        seen[name] = status
         if status == FAIL:
             todo.append(name)
         elif status == SKIP:
@@ -621,6 +862,20 @@ def main():
     print(f"  {counts[PASS]} of {total} complete"
           f"   ({counts[FAIL]} outstanding, {counts[SKIP]} not attempted)")
     print("-" * 62)
+
+    # The worked example is worth nothing before you have written your own,
+    # and there is no gate on it. Pointing at it here rather than in the
+    # README means it arrives when it is useful instead of when it is a
+    # shortcut.
+    code_checks = ("Your tool schema describes a real function",
+                   "Your lookup returns real numbers and refuses bad input",
+                   "Your eval harness can tell a worse prompt from a better one")
+    if all(seen.get(n) == PASS for n in code_checks):
+        print("\n  Your missions pass. One last thing:\n")
+        print("      git show NewJoineeTask:worked_example/agent_tools.py\n")
+        print("  It passes every check above and is wrong in at least three")
+        print("  ways. Find them. Answers are in worked_example/README.md,")
+        print("  so do not open that one first.")
 
     if not todo and not not_attempted:
         print("\n  All done. Tell your onboarding buddy you are through,")
