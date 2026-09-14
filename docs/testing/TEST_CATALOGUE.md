@@ -37,7 +37,8 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_response_contract.py`](../../tests/test_response_contract.py) | Contract | #146, #169, #170 | `response envelopes` | 10 |
 | [`tests/test_router.py`](../../tests/test_router.py) | Integration | #171 | `lambda_function.lambda_handler` | 31 |
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
-| | | | **Total** | **278** |
+| [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 49 |
+| | | | **Total** | **327** |
 
 ## Every test
 
@@ -370,3 +371,56 @@ Unit tests for the Generate Subject service.
 | `test_prompt_keeps_no_status_word_rule` | Prompt keeps no status word rule. |
 | `test_prompt_forbids_subject_label_in_output` | Prompt forbids subject label in output. |
 | `test_prompt_includes_the_description` | Prompt includes the description. |
+
+### `test_token_usage.py`
+
+*- · issue #159 · 49 tests*
+
+The shared token counter (issue #159).
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_groq_raw_sdk_shape` | Groq raw sdk shape. |
+| `test_gemini_raw_sdk_shape` | Gemini raw sdk shape. |
+| `test_langchain_message_shape` | Langchain message shape. |
+| `test_langchain_falls_back_to_response_metadata` | Older LangChain versions populate only the provider-shaped dict. |
+| `test_the_two_usage_metadata_shapes_do_not_collide` | A raw Gemini response and an AIMessage both have `.usage_metadata`. |
+| `test_gemini_thinking_tokens_count_as_completion` | Gemini 2.5 bills thoughts as output but reports them apart. |
+| `test_langchain_reasoning_tokens_count_as_completion` | Langchain reasoning tokens count as completion. |
+| `test_unknown_shapes_return_zeros_rather_than_raising` | Unknown shapes return zeros rather than raising. |
+| `test_a_provider_that_raises_on_attribute_access_returns_zeros` | A provider that raises on attribute access returns zeros. |
+| `test_none_counts_do_not_poison_the_accumulator` | A provider that reports None used to raise TypeError inside `+=`. |
+| `test_total_is_derived_when_the_provider_omits_it` | Total is derived when the provider omits it. |
+| `test_recording_into_a_broken_accumulator_does_not_raise` | The caller's request succeeded; only the telemetry is lost. |
+| `test_accumulator_sums_across_providers` | Accumulator sums across providers. |
+| `test_labels_land_on_the_call_record` | Labels land on the call record. |
+| `test_a_none_accumulator_makes_counting_opt_in` | A none accumulator makes counting opt in. |
+| `test_new_accumulator_matches_the_shape_predict_category_returns` | `body.token_usage` is already in the browser's response. |
+| `test_per_call_records_keep_the_published_field_names` | Per call records keep the published field names. |
+| `test_log_usage_emits_one_parseable_line` | Log usage emits one parseable line. |
+| `test_log_usage_is_silent_when_nothing_was_counted` | Log usage is silent when nothing was counted. |
+| `test_log_usage_survives_an_unserialisable_label` | Log usage survives an unserialisable label. |
+| `test_subject_generation_reports_its_usage` | Subject generation reports its usage. |
+| `test_answer_generation_reports_its_usage` | Answer generation reports its usage. |
+| `test_a_groq_failure_still_bills_the_gemini_retry` | The fallback path spends twice on one request. |
+| `test_organization_search_reports_its_usage` | The service that could not report usage at all before #159. |
+| `test_classification_counts_every_call_in_its_walk` | Classification is a loop, and the loop is the cost. |
+| `test_classification_usage_survives_having_no_provider` | No key configured must still return the published (results, usage) pair. |
+| `test_classification_logs_as_well_as_returns` | Classification is the one service that does both. |
+| `test_invoke_provider_still_parses_after_the_chain_split` | The two-step form must return exactly what `| parser` used to. |
+| `test_invoke_provider_captures_usage_from_the_message` | The whole point of the split: the AIMessage is no longer discarded. |
+| `test_invoke_provider_works_without_an_accumulator` | Counting is opt-in; the default call path must not require it. |
+| `test_model_name_falls_back_when_the_model_has_no_id` | A usage record with a blank model column is not worth logging. |
+| `test_every_subject_branch_records_usage` | Every subject branch records usage. |
+| `test_a_subject_falls_back_to_gemini_and_bills_both` | Groq answered, then failed to parse; Gemini was asked the same thing. |
+| `test_subject_with_no_provider_logs_nothing_spent` | Subject with no provider logs nothing spent. |
+| `test_output_token_details_without_reasoning_changes_nothing` | The details dict is present on plenty of non-reasoning responses. |
+| `test_log_usage_never_raises_on_a_hostile_accumulator` | Telemetry failing must not take down the request that succeeded. |
+| `test_answer_generation_with_no_provider_at_all` | No keys configured: Gemini raises, and the spend log is still emitted. |
+| `test_both_providers_failing_on_a_long_description_still_reports` | The long-description branch has its own fallback pair. |
+| `test_a_broken_extractor_is_logged_not_hidden` | A broken extractor is logged not hidden. |
+| `test_an_unrecognised_response_warns` | A provider that stops reporting usage bills us exactly the same. |
+| `test_recording_into_a_broken_accumulator_is_logged` | Recording into a broken accumulator is logged. |
+| `test_an_unserialisable_record_degrades_to_totals_rather_than_vanishing` | Losing the labels is acceptable; losing the whole request is not. |
+
+> 42 test functions expand to 49 cases through parametrisation.

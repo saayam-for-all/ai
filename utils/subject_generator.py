@@ -1,6 +1,14 @@
 import re
 
-from utils.client import groq_llm, gemini_llm, _use_groq, _use_gemini
+from utils import token_usage
+from utils.client import (
+    GEMINI_MODEL,
+    GROQ_MODEL,
+    _use_gemini,
+    _use_groq,
+    gemini_llm,
+    groq_llm,
+)
 
 # Strips a leading "Subject:" / "Title:" label that some models prepend despite
 # being told not to.
@@ -33,7 +41,37 @@ def _truncate_with_word_boundary(text: str, max_length: int) -> str:
 
     return truncated.strip()
 
+def _invoke_counted(llm, prompt, provider, model, accumulator, branch):
+    """Invoke a LangChain model and record what the call cost.
+
+    Returns the message content, or "" when the model returned nothing. The
+    caller keeps its own try/except: a provider failure is a fallback signal,
+    not this function's business.
+    """
+    message = llm.invoke(prompt)
+    token_usage.record(
+        accumulator, message, provider=provider, model=model, branch=branch
+    )
+    return getattr(message, "content", None) or ""
+
+
 def generate_subject_from_description(description: str, max_length: int = 70) -> str:
+    """Generate a subject line, reporting what the call cost.
+
+    The accumulator lives here rather than inside the branching body below,
+    which has eight exit points; a finally is the only way to log a total
+    that is right on every one of them.
+    """
+    usage = token_usage.new_accumulator()
+    try:
+        return _generate_subject(description, max_length, usage)
+    finally:
+        token_usage.log_usage(
+            "generate_subject", usage, description_chars=len(description or "")
+        )
+
+
+def _generate_subject(description: str, max_length: int, usage: dict) -> str:
     """
     Generate a concise subject summary from a description using LLM.
     Automatically generates a subject without asking the user for input.
@@ -80,8 +118,9 @@ Description: {description}"""
         # Try Groq (LangChain) first
         if _use_groq and groq_llm:
             try:
-                ai_message = groq_llm.invoke(prompt)
-                content = getattr(ai_message, "content", None) or ""
+                content = _invoke_counted(
+                    groq_llm, prompt, "groq", GROQ_MODEL, usage, "short"
+                )
                 generated_subject = _clean_subject(content)
 
                 # Strictly enforce max_length - truncate if necessary
@@ -94,8 +133,9 @@ Description: {description}"""
         # Fallback to Gemini (LangChain)
         if _use_gemini and gemini_llm:
             try:
-                ai_message = gemini_llm.invoke(prompt)
-                content = getattr(ai_message, "content", None) or ""
+                content = _invoke_counted(
+                    gemini_llm, prompt, "gemini", GEMINI_MODEL, usage, "short"
+                )
                 generated_subject = _clean_subject(content)
 
                 # Strictly enforce max_length - truncate if necessary
@@ -114,8 +154,9 @@ Description: {description}"""
     # Try Groq (LangChain) first
     if _use_groq and groq_llm:
         try:
-            ai_message = groq_llm.invoke(prompt)
-            content = getattr(ai_message, "content", None) or ""
+            content = _invoke_counted(
+                groq_llm, prompt, "groq", GROQ_MODEL, usage, "long"
+            )
             generated_subject = str(content).strip().strip('"').strip("'") or "General Inquiry"
 
             # Strictly enforce max_length (70 characters)
@@ -128,8 +169,9 @@ Description: {description}"""
     # Fallback to Gemini (LangChain)
     if _use_gemini and gemini_llm:
         try:
-            ai_message = gemini_llm.invoke(prompt)
-            content = getattr(ai_message, "content", None) or ""
+            content = _invoke_counted(
+                gemini_llm, prompt, "gemini", GEMINI_MODEL, usage, "long"
+            )
             generated_subject = str(content).strip().strip('"').strip("'") or "General Inquiry"
 
             # Strictly enforce max_length
