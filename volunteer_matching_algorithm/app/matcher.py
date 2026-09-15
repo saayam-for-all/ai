@@ -21,15 +21,15 @@ def match_volunteers(request_id, top_k=3):
     requests = load_requests()
 
     # Handle both column naming conventions (RequestId vs REQ_ID)
-    req_id_column = "REQ_ID" if "REQ_ID" in requests.columns else "RequestId"
-
+    #req_id_column = "REQ_ID" if "REQ_ID" in requests.columns else "RequestId"
     # Find the request
-    matching_requests = requests[requests[req_id_column] == request_id]
+    matching_requests = requests[requests["RequestId"] == request_id]
+     #matching_requests = requests[requests[req_id_column] == request_id]
     if matching_requests.empty:
         return pd.DataFrame()
 
     req = matching_requests.iloc[0]
-
+    
     # Get active volunteers only
     active = volunteers[volunteers["Status"] == "Active"].copy()
     if active.empty:
@@ -105,6 +105,7 @@ def match_volunteers(request_id, top_k=3):
     # Sort by score and return top_k
     active = active.sort_values(by="FinalScore", ascending=False)
     return active.head(top_k)
+    
 
 
 def match_volunteer_group(request_id, group_size=5):
@@ -128,7 +129,7 @@ def match_volunteer_group(request_id, group_size=5):
     volunteers = load_volunteers()
     requests = load_requests()
     
-    matching_requests = requests[requests["REQ_ID"] == request_id]
+    matching_requests = requests[requests["RequestId"] == request_id]
     if matching_requests.empty:
         return pd.DataFrame()
     
