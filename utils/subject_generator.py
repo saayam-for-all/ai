@@ -6,12 +6,25 @@ from utils.client import groq_llm, gemini_llm, _use_groq, _use_gemini
 # being told not to.
 _LABEL_RE = re.compile(r"^\s*(subject|title)\s*[:\-]\s*", re.IGNORECASE)
 
+# Safety net for status words the prompt already forbids. Models still slip
+# these into subjects; stripping here is deterministic.
+_STATUS_PHRASE_RE = re.compile(r"\blooking for\b", re.IGNORECASE)
+_STATUS_WORD_RE = re.compile(
+    r"\b(needed|needs|need|required|wanted|seeking|help|guidance|request|assistance)\b",
+    re.IGNORECASE,
+)
+
 
 def _clean_subject(text) -> str:
-    """Normalize a raw LLM subject: drop a leading label and surrounding quotes."""
+    """Normalize a raw LLM subject: drop a leading label, quotes, and status words."""
     s = str(text).strip()
     s = _LABEL_RE.sub("", s)
     s = s.strip().strip('"').strip("'").strip()
+    s = _STATUS_PHRASE_RE.sub(" ", s)
+    s = _STATUS_WORD_RE.sub(" ", s)
+    s = re.sub(r"\s*,\s*", ", ", s)
+    s = re.sub(r"\s+", " ", s)
+    s = s.strip(" ,-")
     return s or "General Inquiry"
 
 
@@ -59,8 +72,9 @@ Rules:
 - If the person raises a possible cause, body part, or specialty they are worried about (e.g. "not sure if it's my heart"), keep that cue but frame it as THEIR concern (e.g. "Heart Concern"), NOT as a diagnosis. Do not add words like "Possible", "Issue", "Condition", or "Disorder" that they did not say.
 - Do not introduce assessment, severity, or certainty words the person did not use (e.g. "severe", "chronic", "acute", "unexplained").
 - Do NOT over-generalize away specifics: keep "ringing / congestion" (not "ear problem"); keep BOTH symptoms if two are stated; keep a stated timeframe like "short/mid term".
-- Name the thing itself; do NOT append status words like "Needed", "Required", "Wanted", "Seeking", "Request", "Assistance", or "Appointment". E.g. "Knee Injury Physiotherapy Needed" -> "Knee Injury Physiotherapy".
+- Name the thing itself; do NOT use status words like "Needed", "Needs", "Required", "Wanted", "Seeking", "Looking for", "Help", "Guidance", "Request", "Assistance", or "Appointment". E.g. "Knee Injury Physiotherapy Needed" -> "Knee Injury Physiotherapy"; "Kid Needs Warm Winter Coat" -> "Warm Winter Coat for School".
 - Do not invent details.
+- Do not invent abstract labels the person did not use. E.g. "my car broke down and I cannot afford the repair" -> "Car Breakdown, Cannot Afford Repair", never "Affordability".
 - Output ONLY the subject text: no quotes, no "Subject:"/"Title:" label, no explanation.
 
 Examples (description -> subject):
