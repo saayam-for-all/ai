@@ -1,8 +1,11 @@
 from sentence_transformers import SentenceTransformer
+from functools import lru_cache
 import numpy as np
 
 model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
 
+# Caching the embeddings
+@lru_cache(maxsize=None)
 def get_embedding(text):
     if not text:
         return np.zeros(384)

@@ -31,7 +31,18 @@ def match_volunteers(request_id, top_k=3):
     req = matching_requests.iloc[0]
     
     # Get active volunteers only
-    active = volunteers[volunteers["Status"] == "Active"].copy()
+    # Normalizing volunteer statuses
+    ELIGIBLE_STATUSES = {"active", "available", "open"}
+
+    volunteers["NormalizedStatus"] = (volunteers["Status"]
+                                      .str.strip()
+                                      .str.lower()
+                                     )
+    
+    active = volunteers[volunteers["NormalizedStatus"]
+                        .isin(ELIGIBLE_STATUSES)
+                        ].copy()
+    
     if active.empty:
         return pd.DataFrame()
 
