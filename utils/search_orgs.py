@@ -12,10 +12,13 @@ as an object rather than a JSON string, and the reason the field names below
 are a contract rather than an implementation detail. See issue #170.
 """
 
-from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
-from pydantic import BaseModel, Field
+from langchain_core.prompts import ChatPromptTemplate
 from langchain_groq import ChatGroq
+from pydantic import BaseModel, Field
+
+from utils import token_usage
+
 
 # -----------------------------
 # 1. JSON Schema Definition
@@ -235,15 +238,35 @@ def normalize_result(result, location=None, category=None):
 # -----------------------------
 # 5. Main Function
 # -----------------------------
-def _invoke_provider(llm, prompt, subject, description, location):
-    """Run one provider's chain. Split out so the fallback loop is testable."""
-    chain = prompt | llm | parser
-    return chain.invoke({
+def _invoke_provider(llm, prompt, subject, description, location, usage=None, name=""):
+    """Run one provider's chain. Split out so the fallback loop is testable.
+
+    The chain is deliberately not `prompt | llm | parser` any more. That form
+    hands the parser's output straight back, and the AIMessage - the only thing
+    carrying the token counts - is discarded in between, which is why
+    organization search was the one service that could not report its usage
+    (issue #159). Invoking the model and the parser as two steps costs nothing
+    and keeps the message in reach.
+    """
+    message = (prompt | llm).invoke({
         "subject": subject,
         "description": description,
         "location": location,
         "format_instructions": parser.get_format_instructions(),
     })
+    token_usage.record(
+        usage, message, provider=name or "unknown", model=_model_name(llm)
+    )
+    return parser.invoke(message)
+
+
+def _model_name(llm) -> str:
+    """Best-effort model id off a LangChain chat model, for the usage record."""
+    for attribute in ("model_name", "model"):
+        value = getattr(llm, attribute, None)
+        if isinstance(value, str) and value:
+            return value
+    return type(llm).__name__
 
 
 
@@ -255,6 +278,7 @@ def find_organizations(subject: str, description: str, location: str, category: 
     """
     prompt = build_prompt(subject, description, location)
     failures = []
+    usage = token_usage.new_accumulator()
 
     for name, loader in _providers():
         try:
@@ -268,7 +292,9 @@ def find_organizations(subject: str, description: str, location: str, category: 
             continue
 
         try:
-            raw = _invoke_provider(llm, prompt, subject, description, location)
+            raw = _invoke_provider(
+                llm, prompt, subject, description, location, usage, name
+            )
         except Exception as e:
             print(f"WARN: organization search via {name} failed: {type(e).__name__}: {e}")
             failures.append(f"{name}: {type(e).__name__}: {e}")
@@ -278,8 +304,15 @@ def find_organizations(subject: str, description: str, location: str, category: 
         if result["organizations"]:
             print(f"LOG: organization search served by {name}, "
                   f"{len(result['organizations'])} organizations")
+            token_usage.log_usage(
+                "search_orgs", usage, served_by=name,
+                organizations=len(result["organizations"]),
+            )
             return result
 
         failures.append(f"{name}: returned no organizations")
 
+    # Every provider failed, and the ones that failed after answering still
+    # cost tokens. Report before raising or that spend goes unrecorded.
+    token_usage.log_usage("search_orgs", usage, served_by=None, failures=len(failures))
     raise OrganizationSearchError("; ".join(failures) or "no provider configured")
