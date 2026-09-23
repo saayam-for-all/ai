@@ -19,7 +19,7 @@ import urllib.request
 
 
 S3_BUCKET = os.environ.get("EMERGENCY_CONTACTS_S3_BUCKET", "saayam-virginia-public")
-S3_KEY = os.environ.get("EMERGENCY_CONTACTS_S3_KEY", "emergency_contact.json")
+S3_KEY = os.environ.get("EMERGENCY_CONTACTS_S3_KEY", "Emergency_Contact_no.json")
 AWS_REGION = os.environ.get("AWS_REGION", "us-east-1")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
