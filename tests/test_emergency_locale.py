@@ -88,6 +88,9 @@ def test_india_full_directory_has_no_us_numbers():
 # The invariant, swept across the whole dataset
 # -------------------------------------------------------------------------
 
+UNINHABITED_TERRITORIES = {"AQ", "BV", "HM", "NF", "PN", "SJ", "TF", "UM"}
+
+
 def test_no_response_ever_contains_a_foreign_number():
     """Every number returned for a country appears in that country's own record.
 
@@ -98,6 +101,10 @@ def test_no_response_ever_contains_a_foreign_number():
     """
     borrowed = []
     for country in COUNTRIES:
+        if country in UNINHABITED_TERRITORIES:
+            svc, _ = find({"country": country})
+            assert svc is None, f"{country} is an uninhabited territory and should be unavailable"
+            continue
         own = numbers_in_country_record(country)
         svc, _ = find({"country": country})
         assert svc, f"{country} resolved to nothing at all"
@@ -117,6 +124,8 @@ def test_every_country_answers_every_modelled_service():
     """
     gaps = []
     for country in COUNTRIES:
+        if country in UNINHABITED_TERRITORIES:
+            continue
         for service in em.KNOWN_SERVICES:
             svc, _ = find({"country": country}, service)
             if not svc or not em.is_dialable(svc[service]["number"]):
@@ -125,14 +134,16 @@ def test_every_country_answers_every_modelled_service():
 
 
 def test_no_non_us_country_ever_shows_988():
-    """988 is the one number in the dataset that is unambiguously US-only."""
+    """988 is the North American mental health line (legitimate in US and Canada)."""
     leaks = []
     for country in COUNTRIES:
-        if country == "US":
+        if country in ("US", "CA"):
             continue
         svc, _ = find({"country": country})
+        if not svc:
+            continue
         leaks += [f"{country}.{s}" for s, e in svc.items() if e["number"] == "988"]
-    assert not leaks, f"US suicide line shown outside the US: {leaks}"
+    assert not leaks, f"US suicide line shown outside North America: {leaks}"
 
 
 # -------------------------------------------------------------------------

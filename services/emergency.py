@@ -18,19 +18,46 @@ import urllib.parse
 import urllib.request
 
 
+S3_BUCKET = os.environ.get("EMERGENCY_CONTACTS_S3_BUCKET", "saayam-virginia-public")
+S3_KEY = os.environ.get("EMERGENCY_CONTACTS_S3_KEY", "Emergency_Contact_no.json")
+AWS_REGION = os.environ.get("AWS_REGION", "us-east-1")
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_FILE = os.path.join(BASE_DIR, "emergency_numbers.json")
 
-# Module-level cache: reused across Lambda invocations in the same warm container (same as pre-refactor).
+# Module-level cache: reused across Lambda invocations in the same warm container.
 _emergency_numbers_cache = None
 
 
 def _load_emergency_numbers():
     global _emergency_numbers_cache
-    if _emergency_numbers_cache is None:
+    if _emergency_numbers_cache is not None:
+        return _emergency_numbers_cache
+
+    # Attempt to load from S3 if configured
+    if S3_BUCKET and S3_KEY:
+        try:
+            import boto3
+            from botocore.config import Config
+
+            s3_client = boto3.client(
+                "s3",
+                region_name=AWS_REGION,
+                config=Config(connect_timeout=1.5, read_timeout=1.5, retries={"max_attempts": 1}),
+            )
+            response = s3_client.get_object(Bucket=S3_BUCKET, Key=S3_KEY)
+            _emergency_numbers_cache = json.loads(response["Body"].read().decode("utf-8"))
+            return _emergency_numbers_cache
+        except Exception as e:
+            # Fall back to local bundled JSON on any S3 error (IAM deny, missing key, network, local dev)
+            print(f"WARN: Could not fetch emergency numbers from s3://{S3_BUCKET}/{S3_KEY} ({type(e).__name__}: {e}). Falling back to local file.")
+
+    if os.path.exists(DATA_FILE):
         with open(DATA_FILE, "r", encoding="utf-8") as f:
             _emergency_numbers_cache = json.load(f)
-    return _emergency_numbers_cache
+        return _emergency_numbers_cache
+
+    raise RuntimeError("Emergency numbers dataset is not available from S3 or local package.")
 
 
 # -------------------------------------------------------------------------
@@ -50,6 +77,12 @@ KNOWN_SERVICES = (
     "disaster_management",
     "women_helpline",
     "suicide_helpline",
+    "child_helpline",
+    "coastguard",
+    "traffic_police",
+    "gendarmerie",
+    "gas_leak",
+    "general_emergency_alternate",
 )
 
 # How a returned number was arrived at. The client can label a fallback

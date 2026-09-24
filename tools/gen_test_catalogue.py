@@ -45,6 +45,7 @@ FILE_META = {
     "test_client_imports.py": ("#154", "utils/client.py"),
     "test_classification_resilience.py": ("-", "services/classification_service.py"),
     "test_subject_generator.py": ("-", "utils/subject_generator.py"),
+    "test_emergency_s3_reader.py": ("#334", "services/emergency.py S3 reader"),
     "test_token_usage.py": ("#159", "utils/token_usage.py"),
 }
 

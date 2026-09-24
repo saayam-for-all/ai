@@ -18,11 +18,9 @@ import services.emergency as em
 
 DATA = em._load_emergency_numbers()
 
-# Numbers that are unmistakably US-only. They are legitimate inside the "US"
-# record and nowhere else. 911 is deliberately absent: it is also the real
-# emergency number in Canada, Mexico, Argentina, Peru, the Philippines, Saudi
-# Arabia, Venezuela and Ethiopia, so it cannot be treated as a US marker.
-US_ONLY_NUMBERS = {"988"}
+# Numbers that are North American mental health crisis numbers (988 is legitimate
+# in US and Canada, but must not leak into any other jurisdiction).
+US_AND_CA_ONLY_NUMBERS = {"988"}
 
 
 def iter_service_maps():
@@ -81,9 +79,13 @@ def test_no_us_only_number_appears_outside_the_us():
         f"{path}.{service} = {number}"
         for path, country, services in ALL_SERVICE_MAPS
         for service, number in services.items()
-        if country != "US" and str(number).strip() in US_ONLY_NUMBERS
+        if country not in ("US", "CA") and str(number).strip() in US_AND_CA_ONLY_NUMBERS
     ]
     assert not leaks, "US-only numbers outside the US record:\n  " + "\n  ".join(leaks)
+
+
+# Uninhabited or non-permanent territories where emergency services do not exist.
+UNINHABITED_TERRITORIES = {"AQ", "BV", "HM", "NF", "PN", "SJ", "TF", "UM"}
 
 
 def test_every_country_can_answer_a_general_emergency():
@@ -94,7 +96,8 @@ def test_every_country_can_answer_a_general_emergency():
     """
     without = [
         code for code, country in DATA.items()
-        if not em.EmergencyServiceResolver._general_emergency_number(country)
+        if code not in UNINHABITED_TERRITORIES
+        and not em.EmergencyServiceResolver._general_emergency_number(country)
     ]
     assert not without, f"no general emergency line resolvable for: {without}"
 

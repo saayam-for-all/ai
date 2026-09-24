@@ -30,6 +30,7 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_client_imports.py`](../../tests/test_client_imports.py) | Integration | #154 | `utils/client.py` | 2 |
 | [`tests/test_emergency_dataset.py`](../../tests/test_emergency_dataset.py) | Dataset | #146 | `services/emergency_numbers.json` | 15 |
 | [`tests/test_emergency_locale.py`](../../tests/test_emergency_locale.py) | Unit | #146 | `services/emergency.py` | 59 |
+| [`tests/test_emergency_s3_reader.py`](../../tests/test_emergency_s3_reader.py) | Unit | #334 | `services/emergency.py S3 reader` | 9 |
 | [`tests/test_generate_answer.py`](../../tests/test_generate_answer.py) | Contract | #169 | `generate_answer_handler` | 50 |
 | [`tests/test_import_blast_radius.py`](../../tests/test_import_blast_radius.py) | Integration | #169, #171 | `module-scope imports` | 4 |
 | [`tests/test_org_search_contract.py`](../../tests/test_org_search_contract.py) | Contract | #170 | `utils/search_orgs.py` | 24 |
@@ -38,7 +39,7 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_router.py`](../../tests/test_router.py) | Integration | #171 | `lambda_function.lambda_handler` | 31 |
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
 | [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 49 |
-| | | | **Total** | **327** |
+| | | | **Total** | **336** |
 
 ## Every test
 
@@ -127,7 +128,7 @@ Behaviour tests for issue #146 - Emergency Contacts must never show a user a num
 | `test_india_full_directory_has_no_us_numbers` | India full directory has no us numbers. |
 | `test_no_response_ever_contains_a_foreign_number` | Every number returned for a country appears in that country's own record. |
 | `test_every_country_answers_every_modelled_service` | No modelled service comes back empty for a country we know. |
-| `test_no_non_us_country_ever_shows_988` | 988 is the one number in the dataset that is unambiguously US-only. |
+| `test_no_non_us_country_ever_shows_988` | 988 is the North American mental health line (legitimate in US and Canada). |
 | `test_missing_service_falls_back_to_the_countrys_own_general_line` | Missing service falls back to the countrys own general line. |
 | `test_a_fallback_is_labelled_as_one` | A general emergency line must not be passed off as the real service. |
 | `test_a_real_entry_is_never_overwritten_by_the_fallback` | A real entry is never overwritten by the fallback. |
@@ -155,6 +156,24 @@ Behaviour tests for issue #146 - Emergency Contacts must never show a user a num
 | `test_missing_language_defaults_to_english` | Missing language defaults to english. |
 
 > 32 test functions expand to 59 cases through parametrisation.
+
+### `test_emergency_s3_reader.py`
+
+*Unit · issue #334 · 9 tests*
+
+Unit tests for issue #334 - S3 dataset loader with caching and zero-downtime fallback.
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_load_emergency_numbers_from_s3_success` | Verify that when S3 returns a valid JSON, it is loaded into the cache. |
+| `test_warm_container_caching_avoids_repeated_s3_calls` | Verify that once loaded, subsequent invocations read from the in-memory cache. |
+| `test_fallback_to_local_file_on_s3_error` | When S3 returns an error (e.g. AccessDenied, timeout), fall back to local file. |
+| `test_custom_environment_variables_for_bucket_and_key` | Verify that environment variables control S3 bucket and key. |
+| `test_runtime_error_when_both_s3_and_local_file_unavailable` | When both S3 and local file are absent, raise RuntimeError. |
+| `test_location_resolution_with_mocked_reverse_geocode` | Verify reverse geocoding path when lat and lng are provided. |
+| `test_location_resolution_with_mocked_geocode_place` | Verify geocode place path when city/state/zip is provided without lat/lng. |
+| `test_location_resolution_with_mocked_ip_lookup` | Verify fallback to client IP location when coordinate/place fields are absent. |
+| `test_location_resolution_inferred_city` | Verify city inference when city exists and no country was resolved. |
 
 ### `test_generate_answer.py`
 
