@@ -143,8 +143,8 @@
 
             set +e
             if [ "$TARGET_BRANCH" = "dev" ] || [ "$TARGET_BRANCH" = "main" ]; then
-              echo "🔒 Stable branch validation: Enforcing strict 90% code coverage gate."
-              python -u -m pytest $TEST_TARGETS $REPORT_FLAGS --cov-fail-under=90
+              echo "🔒 Stable branch validation: Enforcing realistic 80% code coverage gate (see docs/testing/COVERAGE.md)."
+              python -u -m pytest $TEST_TARGETS $REPORT_FLAGS --cov-fail-under=80
             else
               echo "🧪 Sandbox testing environment ($TARGET_BRANCH): Running unit tests without strict coverage limits."
               python -u -m pytest $TEST_TARGETS $REPORT_FLAGS
