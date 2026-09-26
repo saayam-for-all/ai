@@ -473,13 +473,14 @@ def test_classification_counts_every_call_in_its_walk(monkeypatch):
 def test_classification_usage_survives_having_no_provider(monkeypatch):
     """No key configured must still return the published (results, usage) pair."""
     import services.classification_service as cs
+    from utils.model_fallback import ModelChainExhausted
 
     monkeypatch.setattr(cs, "client", None)
     monkeypatch.setattr(cs, "_use_groq", False)
     monkeypatch.setattr(cs, "_gemini_client", None)
 
     service = cs.GroqClassificationService()
-    with pytest.raises(ValueError):
+    with pytest.raises(ModelChainExhausted):
         # No provider at all is a real failure, not a silent empty result.
         service.predict_categories("I need help")
 
