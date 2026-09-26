@@ -80,6 +80,7 @@ jobs:
           cp -r *.py package/
           cp -r utils package/utils
           cp -r services package/services
+          cp -r config package/config
 
       - name: Trim files the Lambda runtime already provides
         run: |
