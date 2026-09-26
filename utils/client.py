@@ -6,15 +6,17 @@ import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 import logging
 
+from utils.model_fallback import ModelTarget
+
 logger = logging.getLogger(__name__)
 
 GROQ_PARAM = "/dev/saayam/GenAI/groq/key"
 GEMINI_PARAM = "/dev/saayam/GenAI/gemini/key"
 
-# Model / temperature configuration.
-# Imported by utils/__init__.py (answer generation) and used to build the models below.
-# Groq retired the Llama 3.x/4 models; openai/gpt-oss-20b is the current lightweight
-# instruction model. Classification adds reasoning_effort="low" on its JSON calls.
+# Legacy defaults used by the prebuilt LangChain exports below.  New fallback
+# code gets model IDs and per-model options from config/model_routing.json.
+# Keep these until subject and answer generation finish migrating to the
+# target-aware factory.
 GROQ_MODEL = "openai/gpt-oss-20b"
 GROQ_TEMPERATURE = 0.3
 GEMINI_MODEL = "gemini-2.5-flash"
@@ -22,6 +24,40 @@ GEMINI_TEMPERATURE = 0.3
 
 GROQ_API_KEY = None
 GEMINI_API_KEY = None
+
+
+def create_chat_model(target: ModelTarget, *, temperature: float):
+    """Construct a LangChain chat model for one configured target.
+
+    Model selection and fallback order belong to ``model_routing.json`` and
+    ``run_model_chain``.  This factory only turns the selected target into the
+    matching provider client using the credentials loaded by this module.
+    """
+    if target.provider == "groq":
+        if not GROQ_API_KEY:
+            raise ValueError("Groq API key is not configured")
+
+        kwargs = {
+            "api_key": GROQ_API_KEY,
+            "model": target.model,
+            "temperature": temperature,
+        }
+        if target.reasoning_effort:
+            kwargs["reasoning_effort"] = target.reasoning_effort
+        return ChatGroq(**kwargs)
+
+    if target.provider == "gemini":
+        if not GEMINI_API_KEY:
+            raise ValueError("Gemini API key is not configured")
+
+        return ChatGoogleGenerativeAI(
+            google_api_key=GEMINI_API_KEY,
+            model=target.model,
+            temperature=temperature,
+        )
+
+    raise ValueError(f"Unsupported model provider: {target.provider}")
+
 
 # Fetching keys from parameter store
 try:
@@ -55,8 +91,8 @@ print(f"INIT LOG: Gemini Key Found: {bool(GEMINI_API_KEY)}")
 client = None
 _gemini_client = None
 
-# LangChain chat models (used by utils/__init__.py answer generation and
-# utils/subject_generator.py):  groq_llm.invoke(...) / gemini_llm.invoke(...)
+# Legacy prebuilt LangChain models used by answer and subject generation until
+# those services call create_chat_model(target, ...) from the shared chain.
 groq_llm = None
 gemini_llm = None
 
@@ -66,9 +102,8 @@ _use_gemini = False
 if GROQ_API_KEY:
     try:
         client = Groq(api_key=GROQ_API_KEY)
-        groq_llm = ChatGroq(
-            api_key=GROQ_API_KEY,
-            model=GROQ_MODEL,
+        groq_llm = create_chat_model(
+            ModelTarget(provider="groq", model=GROQ_MODEL),
             temperature=GROQ_TEMPERATURE,
         )
         _use_groq = True
@@ -84,10 +119,9 @@ else:
 if GEMINI_API_KEY:
     try:
         _gemini_client = genai.Client(api_key=GEMINI_API_KEY)
-        gemini_llm = ChatGoogleGenerativeAI(
-            model=GEMINI_MODEL,
+        gemini_llm = create_chat_model(
+            ModelTarget(provider="gemini", model=GEMINI_MODEL),
             temperature=GEMINI_TEMPERATURE,
-            google_api_key=GEMINI_API_KEY,
         )
         _use_gemini = True
         print("INIT LOG: Gemini clients (raw + LangChain) successfully initialized.")
