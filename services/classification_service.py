@@ -1,7 +1,7 @@
 import json
-from groq import GroqError
 from utils.categories_with_description import TAXONOMY
-from utils.client import client, _use_groq, _gemini_client, GROQ_MODEL
+from utils.client import client, _use_groq, _gemini_client
+from utils.model_fallback import ModelTarget, run_model_chain
 from utils.predict_category_list import (
     help_categories,
     category_name_to_number,
@@ -14,21 +14,15 @@ from utils import token_usage
 
 
 class GroqClassificationService:
-    def __init__(self, model=None, temperature=0.8, top_p=0.3):
-        # Default to the single source of truth in utils.client so a model change
-        # only has to happen in one place.
-        self.model = model or GROQ_MODEL
+    def __init__(self, temperature=0.8, top_p=0.3):
         self.temperature = temperature
         self.top_p = top_p
-        self.gemini_model = "gemini-2.0-flash"
 
-    def _groq_extra_kwargs(self) -> dict:
-        # gpt-oss reasoning models default to high reasoning effort, which can starve
-        # the grammar-constrained JSON output and return empty content
-        # (Groq: json_validate_failed). Low effort keeps the JSON reliable. No-op for
-        # non gpt-oss models.
-        if "gpt-oss" in self.model:
-            return {"reasoning_effort": "low"}
+    @staticmethod
+    def _groq_extra_kwargs(target: ModelTarget) -> dict:
+        """Return only the request options configured for this model."""
+        if target.reasoning_effort:
+            return {"reasoning_effort": target.reasoning_effort}
         return {}
 
     def _build_prompt_for_candidates(
@@ -141,59 +135,90 @@ class GroqClassificationService:
             return mapped
         return None
 
-    def _predict_with_gemini_single(
-        self, prompt: str, candidates: set[str], accumulator: dict, depth: int
+    def _request_json(
+        self,
+        target: ModelTarget,
+        prompt: str,
+        accumulator: dict,
+        depth: int,
+    ) -> dict:
+        """Call one configured model and decode its classification JSON."""
+        if target.provider == "groq":
+            if not (_use_groq and client):
+                raise ValueError("Groq client not initialized")
+
+            response = client.chat.completions.create(
+                model=target.model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=self.temperature,
+                top_p=self.top_p,
+                response_format={"type": "json_object"},
+                **self._groq_extra_kwargs(target),
+            )
+            token_usage.record(
+                accumulator,
+                response,
+                provider=target.provider,
+                model=target.model,
+                depth=depth,
+            )
+            content = response.choices[0].message.content
+        elif target.provider == "gemini":
+            if not _gemini_client:
+                raise ValueError("Gemini client not initialized")
+
+            response = _gemini_client.models.generate_content(
+                model=target.model,
+                contents=prompt,
+                config={"response_mime_type": "application/json"},
+            )
+            token_usage.record(
+                accumulator,
+                response,
+                provider=target.provider,
+                model=target.model,
+                depth=depth,
+            )
+            content = response.text
+        else:
+            raise ValueError(f"Unsupported model provider: {target.provider}")
+
+        if not content or not str(content).strip():
+            raise ValueError(f"{target.provider} response content is empty")
+
+        decoded = json.loads(str(content).strip())
+        if not isinstance(decoded, dict):
+            raise ValueError(f"{target.provider} response must be a JSON object")
+        return decoded
+
+    def _predict_single_target(
+        self,
+        target: ModelTarget,
+        prompt: str,
+        candidates: set[str],
+        accumulator: dict,
+        depth: int,
     ) -> dict | None:
-        if not _gemini_client:
-            raise ValueError("Gemini client not initialized")
-
-        response = _gemini_client.models.generate_content(
-            model=self.gemini_model, contents=prompt
-        )
-        token_usage.record(
-            accumulator, response,
-            provider="gemini", model=self.gemini_model, depth=depth,
-        )
-        text = response.text
-        if not text:
+        data = self._request_json(target, prompt, accumulator, depth)
+        category_id = data.get("category")
+        normalized_id = self._normalize_category_id(category_id, candidates)
+        if not normalized_id:
             return None
-        text = text.strip()
-        if text.startswith("{"):
-            try:
-                data = json.loads(text)
-                category_id = data.get("category")
-                normalized_id = self._normalize_category_id(category_id, candidates)
-                if normalized_id:
-                    confidence = self._normalize_confidence(data.get("confidence"))
-                    return {"category": normalized_id, "confidence": confidence}
-            except (json.JSONDecodeError, KeyError, TypeError) as e:
-                print(f"LOG: Error parsing Gemini response: {str(e)}")
-        return None
+        return {
+            "category": normalized_id,
+            "confidence": self._normalize_confidence(data.get("confidence")),
+        }
 
-    def _predict_with_gemini_ranked(
-        self, prompt: str, candidates: set[str], accumulator: dict, depth: int
+    def _predict_ranked_target(
+        self,
+        target: ModelTarget,
+        prompt: str,
+        candidates: set[str],
+        accumulator: dict,
+        depth: int,
     ) -> list[dict]:
-        if not _gemini_client:
-            raise ValueError("Gemini client not initialized")
-
-        response = _gemini_client.models.generate_content(
-            model=self.gemini_model, contents=prompt
-        )
-        token_usage.record(
-            accumulator, response,
-            provider="gemini", model=self.gemini_model, depth=depth,
-        )
-        text = response.text
-        if not text:
-            return []
-        text = text.strip()
-        if text.startswith("{"):
-            try:
-                data = json.loads(text)
-                return self._parse_ranked_categories(data, candidates)
-            except (json.JSONDecodeError, KeyError, TypeError) as e:
-                print(f"LOG: Error parsing Gemini response: {str(e)}")
-        return []
+        data = self._request_json(target, prompt, accumulator, depth)
+        return self._parse_ranked_categories(data, candidates)
 
     def _parse_ranked_categories(
         self, response_data: dict, candidate_set: set[str]
@@ -237,44 +262,17 @@ class GroqClassificationService:
 
         prompt = self._build_prompt_for_candidates(description, candidates)
         candidate_set = set(candidates)
-
-        if _use_groq and client:
-            res_content = None
-            try:
-                print(f"LOG: Attempting Groq classification with model {self.model}...")
-                response = client.chat.completions.create(
-                    model=self.model,
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=self.temperature,
-                    top_p=self.top_p,
-                    response_format={"type": "json_object"},
-                    **self._groq_extra_kwargs(),
-                )
-                token_usage.record(
-                    accumulator, response,
-                    provider="groq", model=self.model, depth=depth,
-                )
-                message_content = response.choices[0].message.content
-                if not message_content:
-                    raise ValueError("Groq response content is empty")
-                res_content = message_content.strip()
-                res_data = json.loads(res_content)
-                category_id = res_data.get("category")
-                normalized_id = self._normalize_category_id(category_id, candidate_set)
-                if normalized_id:
-                    confidence = self._normalize_confidence(res_data.get("confidence"))
-                    return {"category": normalized_id, "confidence": confidence}
-                print(
-                    f"LOG ERROR: Groq returned invalid category: {category_id}. Raw={res_content}"
-                )
-            except (json.JSONDecodeError, KeyError, TypeError, ValueError, GroqError) as e:
-                # GroqError covers API failures (model 404, rate limit, json_validate_failed)
-                # so a Groq outage degrades to the Gemini fallback instead of crashing the
-                # whole request (which would leave the frontend stuck on General).
-                print(f"LOG ERROR: Groq attempt failed: {str(e)}")
-
-        print("LOG: Falling back to Gemini...")
-        return self._predict_with_gemini_single(prompt, candidate_set, accumulator=accumulator, depth=depth)
+        return run_model_chain(
+            invoke=lambda target: self._predict_single_target(
+                target,
+                prompt,
+                candidate_set,
+                accumulator,
+                depth,
+            ),
+            is_valid=bool,
+            operation=f"predict_category.single.depth_{depth}",
+        )
 
     def _predict_ranked_level(
         self, description: str, candidates: list[str], accumulator: dict, depth: int
@@ -284,42 +282,17 @@ class GroqClassificationService:
 
         prompt = self._build_ranked_prompt_for_candidates(description, candidates)
         candidate_set = set(candidates)
-
-        if _use_groq and client:
-            res_content = None
-            try:
-                print(f"LOG: Attempting Groq classification with model {self.model}...")
-                response = client.chat.completions.create(
-                    model=self.model,
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=self.temperature,
-                    top_p=self.top_p,
-                    response_format={"type": "json_object"},
-                    **self._groq_extra_kwargs(),
-                )
-                token_usage.record(
-                    accumulator, response,
-                    provider="groq", model=self.model, depth=depth,
-                )
-                res_content = response.choices[0].message.content
-                if not res_content:
-                    raise ValueError("Groq response content is empty")
-                res_data = json.loads(res_content)
-                ranked_results = self._parse_ranked_categories(res_data, candidate_set)
-                if ranked_results:
-                    return ranked_results
-                print(
-                    "LOG ERROR: Groq ranked response yielded no valid categories. "
-                    f"Candidates={len(candidate_set)}"
-                )
-            except (json.JSONDecodeError, KeyError, TypeError, ValueError, GroqError) as e:
-                # GroqError covers API failures (model 404, rate limit, json_validate_failed)
-                # so a Groq outage degrades to the Gemini fallback instead of crashing the
-                # whole request (which would leave the frontend stuck on General).
-                print(f"LOG ERROR: Groq attempt failed: {str(e)}")
-
-        print("LOG: Falling back to Gemini...")
-        return self._predict_with_gemini_ranked(prompt, candidate_set, accumulator=accumulator, depth=depth)
+        return run_model_chain(
+            invoke=lambda target: self._predict_ranked_target(
+                target,
+                prompt,
+                candidate_set,
+                accumulator,
+                depth,
+            ),
+            is_valid=bool,
+            operation=f"predict_category.ranked.depth_{depth}",
+        )
 
     def predict_categories(self, description: str) -> tuple:
         """Walk the taxonomy, returning (ranked results, usage).

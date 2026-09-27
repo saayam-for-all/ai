@@ -192,7 +192,7 @@
           run: |
             source .venv/bin/activate
             flake8 . --max-line-length=150 --exclude=.venv,__pycache__,.git,build,dist
-        
+
         ## --- PACKAGING: Zip the Python app + dependencies ---
         - name: Package Lambda application
           run: |
@@ -201,7 +201,7 @@
             mkdir -p dist_code dist_layer/python
 
             cp lambda_function.py dist_code/
-            cp -r utils services dist_code/
+            cp -r utils services config dist_code/
 
             cd dist_code
             zip -r ../lambda-code.zip .
@@ -358,5 +358,3 @@
               aws lambda wait function-active \
                 --function-name "$LAMBDA_FUNCTION_NAME"
             fi
-
-        

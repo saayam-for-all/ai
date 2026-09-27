@@ -3,6 +3,7 @@ from utils.subject_generator import generate_subject_from_description
 from services.classification_service import predict_categories
 from utils.categories import help_categories
 from utils.generate_answer_service import generate_ai_answer
+from utils.model_fallback import ModelChainExhausted
 from services.emergency import get_emergency_services
 from utils.search_orgs import OrganizationSearchError, find_organizations
 
@@ -223,6 +224,15 @@ def predict_category_handler(event, context):
         # label from category_name. Return the ranked objects unchanged.
         return _response(200, {"categories": ranked_categories, "token_usage": token_usage})
 
+    except ModelChainExhausted as e:
+        print(f"ERROR: category prediction model chain exhausted: {e}")
+        return _response(
+            502,
+            {
+                "error": "Category prediction failed",
+                "code": "CATEGORY_PREDICTION_UNAVAILABLE",
+            },
+        )
     except Exception as e:
         return _response(500, {"error": str(e)})
 
