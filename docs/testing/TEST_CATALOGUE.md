@@ -26,20 +26,22 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | File | Kind | Issue | Covers | Tests |
 | --- | --- | --- | --- | ---: |
 | [`tests/test_answer_conversation.py`](../../tests/test_answer_conversation.py) | Unit | #183 | `utils/__init__.py prompt assembly` | 21 |
-| [`tests/test_classification_resilience.py`](../../tests/test_classification_resilience.py) | Unit | - | `services/classification_service.py` | 5 |
+| [`tests/test_classification_resilience.py`](../../tests/test_classification_resilience.py) | Unit | - | `services/classification_service.py` | 10 |
+| [`tests/test_client_factory.py`](../../tests/test_client_factory.py) | Unit | #193 | `utils/client.py create_chat_model` | 7 |
 | [`tests/test_client_imports.py`](../../tests/test_client_imports.py) | Integration | #154 | `utils/client.py` | 2 |
 | [`tests/test_emergency_dataset.py`](../../tests/test_emergency_dataset.py) | Dataset | #146 | `services/emergency_numbers.json` | 15 |
 | [`tests/test_emergency_locale.py`](../../tests/test_emergency_locale.py) | Unit | #146 | `services/emergency.py` | 59 |
 | [`tests/test_emergency_s3_reader.py`](../../tests/test_emergency_s3_reader.py) | Unit | #334 | `services/emergency.py S3 reader` | 9 |
 | [`tests/test_generate_answer.py`](../../tests/test_generate_answer.py) | Contract | #169 | `generate_answer_handler` | 50 |
 | [`tests/test_import_blast_radius.py`](../../tests/test_import_blast_radius.py) | Integration | #169, #171 | `module-scope imports` | 4 |
+| [`tests/test_model_fallback.py`](../../tests/test_model_fallback.py) | Unit | #193 | `utils/model_fallback.py` | 9 |
 | [`tests/test_org_search_contract.py`](../../tests/test_org_search_contract.py) | Contract | #170 | `utils/search_orgs.py` | 24 |
 | [`tests/test_request_db_schema.py`](../../tests/test_request_db_schema.py) | Unit | #169 | `utils/request_db.py` | 44 |
 | [`tests/test_response_contract.py`](../../tests/test_response_contract.py) | Contract | #146, #169, #170 | `response envelopes` | 10 |
 | [`tests/test_router.py`](../../tests/test_router.py) | Integration | #171 | `lambda_function.lambda_handler` | 31 |
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
 | [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 49 |
-| | | | **Total** | **336** |
+| | | | **Total** | **357** |
 
 ## Every test
 
@@ -73,17 +75,40 @@ What the model is actually asked, turn by turn - issue #183.
 
 ### `test_classification_resilience.py`
 
-*Unit · issue - · 5 tests*
+*Unit · issue - · 10 tests*
 
 Guards the two failure modes behind "every request lands in General".
 
 | Test | Behaviour it protects |
 | --- | --- |
-| `test_service_model_defaults_to_client_source_of_truth` | Service model defaults to client source of truth. |
+| `test_classifier_does_not_own_hardcoded_model_ids` | Classifier does not own hardcoded model ids. |
 | `test_gpt_oss_uses_low_reasoning_effort` | Gpt oss uses low reasoning effort. |
 | `test_retired_model_error_does_not_crash_request` | Retired model error does not crash request. |
 | `test_json_validate_failed_does_not_crash_request` | Json validate failed does not crash request. |
 | `test_parsing_errors_still_handled` | Parsing errors still handled. |
+| `test_primary_failure_tries_secondary_groq_before_gemini` | Both raw classification calls must use the shared model chain. |
+| `test_healthy_primary_is_not_retried` | Healthy primary is not retried. |
+| `test_all_groq_failures_reach_the_configured_gemini_model` | All groq failures reach the configured gemini model. |
+| `test_total_chain_failure_is_a_clear_502` | Total chain failure is a clear 502. |
+
+> 9 test functions expand to 10 cases through parametrisation.
+
+### `test_client_factory.py`
+
+*Unit · issue #193 · 7 tests*
+
+Unit tests for target-aware LangChain client construction.
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_groq_factory_uses_the_target_model_temperature_and_credentials` | Groq factory uses the target model temperature and credentials. |
+| `test_groq_factory_omits_unconfigured_reasoning_effort` | Groq factory omits unconfigured reasoning effort. |
+| `test_gemini_factory_uses_the_target_model_temperature_and_credentials` | Gemini factory uses the target model temperature and credentials. |
+| `test_factory_rejects_a_target_whose_provider_has_no_key` | Factory rejects a target whose provider has no key. |
+| `test_factory_rejects_an_unsupported_provider` | Factory rejects an unsupported provider. |
+| `test_constructor_failure_can_fall_through_to_another_provider` | Constructor failure can fall through to another provider. |
+
+> 6 test functions expand to 7 cases through parametrisation.
 
 ### `test_client_imports.py`
 
@@ -243,6 +268,24 @@ Cross-service blast radius at import time - issue #171.
 | `test_the_module_imports_without_any_api_key_configured` | No key is present in CI, and import must not depend on one. |
 
 > 3 test functions expand to 4 cases through parametrisation.
+
+### `test_model_fallback.py`
+
+*Unit · issue #193 · 9 tests*
+
+Unit contract for the shared model fallback chain (issue #193).
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_checked_in_chain_is_bounded_groq_then_gemini` | Checked in chain is bounded groq then gemini. |
+| `test_gpt_oss_targets_request_low_reasoning_effort` | Gpt oss targets request low reasoning effort. |
+| `test_primary_success_stops_the_chain` | Primary success stops the chain. |
+| `test_primary_failure_tries_the_next_groq_model` | Primary failure tries the next groq model. |
+| `test_all_groq_models_failing_reaches_gemini` | All groq models failing reaches gemini. |
+| `test_empty_or_invalid_result_advances_the_chain` | Empty or invalid result advances the chain. |
+| `test_every_target_is_attempted_once_in_configured_order` | Every target is attempted once in configured order. |
+| `test_total_failure_raises_a_clear_error` | Total failure raises a clear error. |
+| `test_warning_names_the_failed_model_and_reason` | Warning names the failed model and reason. |
 
 ### `test_org_search_contract.py`
 

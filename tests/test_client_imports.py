@@ -21,7 +21,7 @@ REQUIRED_CLIENT_EXPORTS = [
     "GROQ_MODEL", "GROQ_TEMPERATURE", "GEMINI_MODEL", "GEMINI_TEMPERATURE",
     "client", "_gemini_client",          # raw SDK clients (classification_service)
     "groq_llm", "gemini_llm",            # LangChain models (answer generation, subject)
-    "_use_groq", "_use_gemini", "has_any_llm",
+    "_use_groq", "_use_gemini", "has_any_llm", "create_chat_model",
 ]
 
 
