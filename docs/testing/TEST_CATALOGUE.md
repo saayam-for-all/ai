@@ -29,19 +29,19 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_classification_resilience.py`](../../tests/test_classification_resilience.py) | Unit | - | `services/classification_service.py` | 10 |
 | [`tests/test_client_factory.py`](../../tests/test_client_factory.py) | Unit | #193 | `utils/client.py create_chat_model` | 7 |
 | [`tests/test_client_imports.py`](../../tests/test_client_imports.py) | Integration | #154 | `utils/client.py` | 2 |
-| [`tests/test_emergency_dataset.py`](../../tests/test_emergency_dataset.py) | Dataset | #146 | `services/emergency_numbers.json` | 15 |
-| [`tests/test_emergency_locale.py`](../../tests/test_emergency_locale.py) | Unit | #146 | `services/emergency.py` | 59 |
-| [`tests/test_emergency_s3_reader.py`](../../tests/test_emergency_s3_reader.py) | Unit | #334 | `services/emergency.py S3 reader` | 9 |
+| [`tests/test_emergency_dataset.py`](../../tests/test_emergency_dataset.py) | Dataset | #146 | `services/emergency_numbers.json` | 17 |
+| [`tests/test_emergency_locale.py`](../../tests/test_emergency_locale.py) | Unit | #146 | `services/emergency.py` | 67 |
+| [`tests/test_emergency_s3_reader.py`](../../tests/test_emergency_s3_reader.py) | Unit | #334 | `services/emergency.py S3 reader` | 18 |
 | [`tests/test_generate_answer.py`](../../tests/test_generate_answer.py) | Contract | #169 | `generate_answer_handler` | 50 |
 | [`tests/test_import_blast_radius.py`](../../tests/test_import_blast_radius.py) | Integration | #169, #171 | `module-scope imports` | 4 |
-| [`tests/test_model_fallback.py`](../../tests/test_model_fallback.py) | Unit | #193 | `utils/model_fallback.py` | 9 |
+| [`tests/test_model_fallback.py`](../../tests/test_model_fallback.py) | Unit | #193 | `utils/model_fallback.py` | 24 |
 | [`tests/test_org_search_contract.py`](../../tests/test_org_search_contract.py) | Contract | #170 | `utils/search_orgs.py` | 24 |
-| [`tests/test_request_db_schema.py`](../../tests/test_request_db_schema.py) | Unit | #169 | `utils/request_db.py` | 44 |
+| [`tests/test_request_db_schema.py`](../../tests/test_request_db_schema.py) | Unit | #169 | `utils/request_db.py` | 54 |
 | [`tests/test_response_contract.py`](../../tests/test_response_contract.py) | Contract | #146, #169, #170 | `response envelopes` | 10 |
-| [`tests/test_router.py`](../../tests/test_router.py) | Integration | #171 | `lambda_function.lambda_handler` | 31 |
+| [`tests/test_router.py`](../../tests/test_router.py) | Integration | #171 | `lambda_function.lambda_handler` | 34 |
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
 | [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 49 |
-| | | | **Total** | **357** |
+| | | | **Total** | **404** |
 
 ## Every test
 
@@ -123,12 +123,14 @@ Guard against the utils/client.py import regression that broke dev.
 
 ### `test_emergency_dataset.py`
 
-*Dataset · issue #146 · 15 tests*
+*Dataset · issue #146 · 17 tests*
 
 Integrity checks on services/emergency_numbers.json.
 
 | Test | Behaviour it protects |
 | --- | --- |
+| `test_bundled_file_is_the_s3_ground_truth` | The fallback must say exactly what S3 says. |
+| `test_the_shipped_file_passes_the_loader_shape_check` | The loader rejects a misshapen dataset; the shipped one must not be. |
 | `test_the_file_is_not_empty` | The file is not empty. |
 | `test_country_keys_are_iso_alpha2` | Country keys are iso alpha2. |
 | `test_every_number_is_dialable` | No blanks, no prose, no truncated values. |
@@ -137,11 +139,11 @@ Integrity checks on services/emergency_numbers.json.
 | `test_service_names_are_from_the_known_vocabulary` | An unmodelled service name is silently invisible to the client. |
 | `test_specific_corrected_values` | Specific corrected values. |
 
-> 7 test functions expand to 15 cases through parametrisation.
+> 9 test functions expand to 17 cases through parametrisation.
 
 ### `test_emergency_locale.py`
 
-*Unit · issue #146 · 59 tests*
+*Unit · issue #146 · 67 tests*
 
 Behaviour tests for issue #146 - Emergency Contacts must never show a user a number from another country, and must never leave a field empty for the web client to fill with a hardcoded US default (911 / 988).
 
@@ -179,12 +181,19 @@ Behaviour tests for issue #146 - Emergency Contacts must never show a user a num
 | `test_end_to_end_unknown_country_is_404_not_us_numbers` | End to end unknown country is 404 not us numbers. |
 | `test_end_to_end_with_nothing_to_go_on_is_404` | No parameters and no client IP: we say we do not know. |
 | `test_missing_language_defaults_to_english` | Missing language defaults to english. |
+| `test_ip_lookup_reads_ipinfo_and_never_assumes_a_country` | Ip lookup reads ipinfo and never assumes a country. |
+| `test_ip_lookup_failure_is_an_empty_location` | Ip lookup failure is an empty location. |
+| `test_reverse_geocode_reads_the_nominatim_address` | Reverse geocode reads the nominatim address. |
+| `test_reverse_geocode_failure_is_no_location` | Reverse geocode failure is no location. |
+| `test_place_search_encodes_the_name_then_reverse_geocodes_the_match` | A place name is user text: `&` must not split the query string. |
+| `test_place_search_without_a_match_is_no_location` | Place search without a match is no location. |
+| `test_place_search_with_nothing_to_search_makes_no_request` | Place search with nothing to search makes no request. |
 
-> 32 test functions expand to 59 cases through parametrisation.
+> 39 test functions expand to 67 cases through parametrisation.
 
 ### `test_emergency_s3_reader.py`
 
-*Unit · issue #334 · 9 tests*
+*Unit · issue #334 · 18 tests*
 
 Unit tests for issue #334 - S3 dataset loader with caching and zero-downtime fallback.
 
@@ -199,6 +208,12 @@ Unit tests for issue #334 - S3 dataset loader with caching and zero-downtime fal
 | `test_location_resolution_with_mocked_geocode_place` | Verify geocode place path when city/state/zip is provided without lat/lng. |
 | `test_location_resolution_with_mocked_ip_lookup` | Verify fallback to client IP location when coordinate/place fields are absent. |
 | `test_location_resolution_inferred_city` | Verify city inference when city exists and no country was resolved. |
+| `test_s3_client_makes_one_attempt_that_fits_the_lambda_timeout` | An unreachable S3 must fail over well inside the 3 s function timeout. |
+| `test_misshapen_s3_object_falls_back_to_the_bundled_file` | Valid JSON of the wrong shape is treated like an unreadable object. |
+| `test_s3_load_logs_its_source_and_checksum` | CloudWatch must show that S3 answered, and which upload it served. |
+| `test_fallback_logs_that_the_bundled_file_answered` | Fallback logs that the bundled file answered. |
+
+> 13 test functions expand to 18 cases through parametrisation.
 
 ### `test_generate_answer.py`
 
@@ -271,7 +286,7 @@ Cross-service blast radius at import time - issue #171.
 
 ### `test_model_fallback.py`
 
-*Unit · issue #193 · 9 tests*
+*Unit · issue #193 · 24 tests*
 
 Unit contract for the shared model fallback chain (issue #193).
 
@@ -286,6 +301,12 @@ Unit contract for the shared model fallback chain (issue #193).
 | `test_every_target_is_attempted_once_in_configured_order` | Every target is attempted once in configured order. |
 | `test_total_failure_raises_a_clear_error` | Total failure raises a clear error. |
 | `test_warning_names_the_failed_model_and_reason` | Warning names the failed model and reason. |
+| `test_an_invalid_routing_configuration_is_refused` | A bad model_routing.json fails the cold start, not a request later. |
+| `test_a_missing_routing_configuration_is_refused` | A missing routing configuration is refused. |
+| `test_a_duplicate_target_in_a_supplied_chain_is_tried_once` | The one-attempt-per-model bound also holds for a caller's own chain. |
+| `test_a_validator_that_raises_advances_the_chain` | A result that crashes validation is a failed attempt, not an outage. |
+
+> 13 test functions expand to 24 cases through parametrisation.
 
 ### `test_org_search_contract.py`
 
@@ -322,7 +343,7 @@ Tests for More Organizations / the Organizations tab - issue #170.
 
 ### `test_request_db_schema.py`
 
-*Unit · issue #169 · 44 tests*
+*Unit · issue #169 · 54 tests*
 
 The SQL this service runs must match the live database - issue #169.
 
@@ -366,8 +387,15 @@ The SQL this service runs must match the live database - issue #169.
 | `test_submission_date_is_stringified_and_a_missing_one_stays_none` | It is a timestamp on the way out of psycopg2 and JSON on the way to a client. |
 | `test_introspection_reads_tuple_rows_as_well_as_dict_rows` | The cursor factory is the caller's choice, not this function's business. |
 | `test_a_request_that_is_not_there_is_not_found_and_not_an_outage` | Zero rows after a healthy introspection means exactly one thing. |
+| `test_the_aws_region_follows_the_saayam_region` | The aws region follows the saayam region. |
+| `test_an_explicit_aws_region_wins` | An explicit aws region wins. |
+| `test_db_settings_are_read_from_the_region_and_role_parameter` | Db settings are read from the region and role parameter. |
+| `test_an_already_decoded_parameter_is_accepted` | An already decoded parameter is accepted. |
+| `test_an_ssm_failure_says_what_to_fix` | An ssm failure says what to fix. |
+| `test_an_empty_parameter_is_refused` | An empty parameter is refused. |
+| `test_connection_fills_missing_settings_from_db_environment_variables` | Connection fills missing settings from db environment variables. |
 
-> 38 test functions expand to 44 cases through parametrisation.
+> 45 test functions expand to 54 cases through parametrisation.
 
 ### `test_response_contract.py`
 
@@ -390,7 +418,7 @@ Pin the response contract the deployed web client depends on.
 
 ### `test_router.py`
 
-*Integration · issue #171 · 31 tests*
+*Integration · issue #171 · 34 tests*
 
 Router-level regression tests - issue #171.
 
@@ -409,8 +437,11 @@ Router-level regression tests - issue #171.
 | `test_non_proxy_services_keep_an_object_body` | The mirror image: these clients read response.body.<field>. |
 | `test_a_handler_raising_does_not_leak_internals` | An unexpected error must not put a stack trace or a key in the body. |
 | `test_every_advertised_service_has_a_handler` | The router's error message lists the services it supports. |
+| `test_emergency_routed_by_query_string_resolves_the_country` | `?service=emergency_contacts&country=IN` answers with India's numbers. |
+| `test_emergency_routed_by_body_resolves_the_country` | Emergency routed by body resolves the country. |
+| `test_routed_emergency_can_still_ask_for_one_service` | Routing in the query string leaves the body free to name the service. |
 
-> 13 test functions expand to 31 cases through parametrisation.
+> 16 test functions expand to 34 cases through parametrisation.
 
 ### `test_subject_generator.py`
 

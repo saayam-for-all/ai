@@ -6,6 +6,7 @@ Runs against the real services/emergency_numbers.json. No network and no keys:
 every case supplies an explicit country, which short-circuits geocoding and the
 IP lookup.
 """
+import io
 import json
 from unittest import mock
 
@@ -16,7 +17,11 @@ pytestmark = pytest.mark.unit
 
 import services.emergency as em
 
-DATA = em._load_emergency_numbers()
+# The shipped file, read directly. Going through _load_emergency_numbers()
+# would try S3 first, so on a machine with AWS credentials these tests would
+# silently run against whatever the bucket holds instead of this repository.
+with open(em.DATA_FILE, encoding="utf-8") as _f:
+    DATA = json.load(_f)
 R = em.EmergencyServiceResolver()
 
 US_NUMBERS = {"911", "988"}
@@ -418,3 +423,81 @@ def test_missing_language_defaults_to_english():
     result = em.get_emergency_services({"country": "IN", "language": None}, None)
     assert result["body"]["language"] == "en"
     assert result["body"]["services"]["police"]["display_number"] == "112"
+
+
+# -------------------------------------------------------------------------
+# Geolocation lookups, with the providers faked
+# -------------------------------------------------------------------------
+
+def _fake_urlopen(*responses):
+    """A urlopen stand-in answering each call with the next JSON payload.
+
+    Records every URL requested. An exception in `responses` is raised
+    instead, as a provider timeout or refusal would be.
+    """
+    requested = []
+    queue = list(responses)
+
+    def _open(req, timeout=None):
+        requested.append(getattr(req, "full_url", req))
+        item = queue.pop(0)
+        if isinstance(item, Exception):
+            raise item
+        return io.BytesIO(json.dumps(item).encode("utf-8"))
+
+    return _open, requested
+
+
+def test_ip_lookup_reads_ipinfo_and_never_assumes_a_country():
+    opener, requested = _fake_urlopen({"postal": "560001", "city": "Bengaluru", "region": "Karnataka"})
+    with mock.patch("urllib.request.urlopen", side_effect=opener):
+        location = em.LocationResolver("49.36.0.1")._get_location_from_ip("49.36.0.1")
+
+    assert requested == ["https://ipinfo.io/49.36.0.1/json"]
+    assert location == {"zip": "560001", "city": "Bengaluru", "state": "Karnataka", "country": None}
+
+
+def test_ip_lookup_failure_is_an_empty_location():
+    opener, _ = _fake_urlopen(OSError("timed out"))
+    with mock.patch("urllib.request.urlopen", side_effect=opener):
+        assert em.LocationResolver("8.8.8.8")._get_location_from_ip("8.8.8.8") == {}
+
+
+def test_reverse_geocode_reads_the_nominatim_address():
+    opener, requested = _fake_urlopen({"address": {
+        "postcode": "400001", "town": "Mumbai", "state": "Maharashtra", "country_code": "in"}})
+    with mock.patch("urllib.request.urlopen", side_effect=opener):
+        location = em.LocationResolver(None)._reverse_geocode("19.07", "72.87")
+
+    assert location == {"zip": "400001", "city": "Mumbai", "state": "Maharashtra", "country": "IN"}
+    assert "lat=19.07" in requested[0] and "lon=72.87" in requested[0]
+
+
+def test_reverse_geocode_failure_is_no_location():
+    opener, _ = _fake_urlopen(OSError("timed out"))
+    with mock.patch("urllib.request.urlopen", side_effect=opener):
+        assert em.LocationResolver(None)._reverse_geocode("19.07", "72.87") is None
+
+
+def test_place_search_encodes_the_name_then_reverse_geocodes_the_match():
+    """A place name is user text: `&` must not split the query string."""
+    opener, requested = _fake_urlopen(
+        [{"lat": "12.97", "lon": "77.59"}],
+        {"address": {"city": "Bengaluru", "state": "Karnataka", "country_code": "in"}},
+    )
+    with mock.patch("urllib.request.urlopen", side_effect=opener):
+        location = em.LocationResolver(None)._geocode_place(city="Tom & Jerry Nagar", country="IN")
+
+    assert "Tom+%26+Jerry+Nagar" in requested[0]
+    assert location["country"] == "IN" and location["state"] == "Karnataka"
+
+
+@pytest.mark.parametrize("answer", [[], OSError("timed out")], ids=["no-match", "provider-down"])
+def test_place_search_without_a_match_is_no_location(answer):
+    opener, _ = _fake_urlopen(answer)
+    with mock.patch("urllib.request.urlopen", side_effect=opener):
+        assert em.LocationResolver(None)._geocode_place(city="Nowhere") is None
+
+
+def test_place_search_with_nothing_to_search_makes_no_request():
+    assert em.LocationResolver(None)._geocode_place() is None
