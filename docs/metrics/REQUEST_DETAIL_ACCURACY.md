@@ -507,16 +507,47 @@ python tools/measure_prompt_accuracy.py --cross-judge 20      # once full
 Neither is fixed here - both are outside what issue #158 asked for, and the
 first one would invalidate variant A as a baseline if changed underneath it.
 
-**7.1 The answer path does not bound the reasoning budget.**
-`services/classification_service.py` passes `reasoning_effort="low"` for
-`gpt-oss` models, with a comment explaining that high effort starves the real
-output. `utils/client.py` builds the answer-generation `ChatGroq` without it.
-The result is measured in 5.1: on a prompt the model finds contradictory, it
-can spend 1453 output tokens thinking and return an empty string, which the
-service reads as a Groq failure and answers from Gemini instead - a silent
-model switch and a double bill on the most expensive service in
-`TOKEN_BASELINE.md`. A one-line change in `utils/client.py` would fix it, and
-it should be measured on its own rather than smuggled in here.
+**7.1 The answer path does not bound the reasoning budget, and now ignores a
+config that says it should.**
+
+This got sharper after merging `dev`, which landed the model-routing work from
+#193. `config/model_routing.json` now declares the right value:
+
+```json
+{"provider": "groq", "model": "openai/gpt-oss-20b", "reasoning_effort": "low"}
+```
+
+`services/classification_service.py` reads that chain through `run_model_chain`
+and gets it. The answer path does not. `utils/client.py` builds its own client:
+
+```python
+groq_llm = create_chat_model(
+    ModelTarget(provider="groq", model=GROQ_MODEL),   # no reasoning_effort
+    temperature=GROQ_TEMPERATURE,
+)
+```
+
+`create_chat_model` only passes the kwarg when the target carries one, so the
+same model is constructed twice in the same process with different reasoning
+budgets. Verified at runtime after the merge:
+
+```
+answer-path client reasoning_effort: None
+routing config target 0: groq openai/gpt-oss-20b reasoning_effort='low'
+chain-built client  reasoning_effort: 'low'
+```
+
+The consequence is measured in 6.1: on a prompt the model finds contradictory it
+can spend 1453 output tokens thinking and return an empty string, which
+`utils/__init__.py` reads as a Groq failure and answers from Gemini instead - a
+silent model switch and a double bill on the most expensive service in
+`TOKEN_BASELINE.md`.
+
+The fix is now clearer than a one-liner: route answer generation through
+`run_model_chain` like classification does, so the routing config is the single
+place model behaviour is declared. Failing that, pass `reasoning_effort="low"`
+in that `ModelTarget`. Either way it belongs in its own change with its own
+before/after, because it moves the baseline this A/B was measured against.
 
 **7.2 An empty Groq response is indistinguishable from an outage.**
 `_try_groq` returns `None` both when Groq is down and when it returned a

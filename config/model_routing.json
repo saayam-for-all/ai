@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "model_chain": [
+    {
+      "provider": "groq",
+      "model": "openai/gpt-oss-20b",
+      "reasoning_effort": "low"
+    },
+    {
+      "provider": "groq",
+      "model": "openai/gpt-oss-120b",
+      "reasoning_effort": "low"
+    },
+    {
+      "provider": "groq",
+      "model": "openai/gpt-oss-safeguard-20b",
+      "reasoning_effort": "low"
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-2.5-flash"
+    }
+  ]
+}
