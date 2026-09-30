@@ -35,12 +35,14 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_import_blast_radius.py`](../../tests/test_import_blast_radius.py) | Integration | #169, #171 | `module-scope imports` | 4 |
 | [`tests/test_model_fallback.py`](../../tests/test_model_fallback.py) | Unit | #193 | `utils/model_fallback.py` | 9 |
 | [`tests/test_org_search_contract.py`](../../tests/test_org_search_contract.py) | Contract | #170 | `utils/search_orgs.py` | 24 |
+| [`tests/test_prompt_accuracy_metrics.py`](../../tests/test_prompt_accuracy_metrics.py) | Unit | #158 | `tools/measure_prompt_accuracy.py` | 55 |
 | [`tests/test_request_db_schema.py`](../../tests/test_request_db_schema.py) | Unit | #169 | `utils/request_db.py` | 44 |
+| [`tests/test_request_detail_prompts.py`](../../tests/test_request_detail_prompts.py) | Unit | #158 | `utils/prompts.py variant selection` | 207 |
 | [`tests/test_response_contract.py`](../../tests/test_response_contract.py) | Contract | #146, #169, #170 | `response envelopes` | 10 |
 | [`tests/test_router.py`](../../tests/test_router.py) | Integration | #171 | `lambda_function.lambda_handler` | 31 |
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
 | [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 49 |
-| | | | **Total** | **348** |
+| | | | **Total** | **610** |
 
 ## Every test
 
@@ -301,6 +303,54 @@ Tests for More Organizations / the Organizations tab - issue #170.
 | `test_category_is_passed_through_to_the_search` | Category is passed through to the search. |
 | `test_unified_router_reaches_search_orgs` | Unified router reaches search orgs. |
 
+### `test_prompt_accuracy_metrics.py`
+
+*Unit · issue #158 · 55 tests*
+
+Unit tests for the request-detail accuracy metrics (issue #158).
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_a_compliant_answer_scores_one` | A compliant answer scores one. |
+| `test_word_cap_is_enforced` | Word cap is enforced. |
+| `test_lists_are_detected` | Lists are detected. |
+| `test_prose_containing_a_number_is_not_a_list` | Prose containing a number is not a list. |
+| `test_question_count_and_position` | Question count and position. |
+| `test_long_follow_up_question_fails_its_check` | Long follow up question fails its check. |
+| `test_leaked_field_names_and_category_tokens_are_caught` | Leaked field names and category tokens are caught. |
+| `test_ordinary_capitalised_words_are_not_category_tokens` | Ordinary capitalised words are not category tokens. |
+| `test_filler_opener_is_caught_only_at_the_start` | Filler opener is caught only at the start. |
+| `test_empty_answer_does_not_crash` | Empty answer does not crash. |
+| `test_forbidden_specifics_are_detected` | Forbidden specifics are detected. |
+| `test_a_clean_answer_has_no_specifics` | A clean answer has no specifics. |
+| `test_a_cost_is_left_to_the_judge_not_the_regex` | Only the judge can see whether the person supplied the figure. |
+| `test_specifics_the_person_supplied_are_not_counted_as_inventions` | Specifics the person supplied are not counted as inventions. |
+| `test_specifics_the_model_supplied_are_still_counted` | Specifics the model supplied are still counted. |
+| `test_general_kinds_of_place_are_not_flagged` | General kinds of place are not flagged. |
+| `test_provider_chain_is_read_from_the_service_log` | Provider chain is read from the service log. |
+| `test_missing_or_malformed_usage_log_yields_no_providers` | Missing or malformed usage log yields no providers. |
+| `test_repeated_samples_of_a_case_collapse_to_its_mean` | Repeated samples of a case collapse to its mean. |
+| `test_bootstrap_interval_excludes_zero_for_a_consistent_gain` | Bootstrap interval excludes zero for a consistent gain. |
+| `test_bootstrap_interval_spans_zero_for_noise` | Bootstrap interval spans zero for noise. |
+| `test_bootstrap_is_reproducible` | Bootstrap is reproducible. |
+| `test_completed_cells_round_trip_through_state` | Completed cells round trip through state. |
+| `test_errored_cells_are_not_cached_so_they_get_retried` | Errored cells are not cached so they get retried. |
+| `test_missing_or_corrupt_state_does_not_stop_a_run` | Missing or corrupt state does not stop a run. |
+| `test_retry_delay_uses_the_server_stated_wait` | Retry delay uses the server stated wait. |
+| `test_retry_delay_falls_back_to_exponential_backoff` | Retry delay falls back to exponential backoff. |
+| `test_real_escalation_is_detected` | Real escalation is detected. |
+| `test_ordinary_advice_is_not_counted_as_escalation` | Ordinary advice is not counted as escalation. |
+| `test_urgency_words_alone_are_not_escalation` | "Do it immediately" is urgency. It does not tell anyone where to go. |
+| `test_escalation_detection_on_empty_answer` | Escalation detection on empty answer. |
+| `test_an_escalation_is_not_marked_down_for_omitting_a_follow_up_question` | The correct reply to a non-blanching rash on a drowsy toddler is four words. It was scoring 0.625 for not ending conversationally. |
+| `test_the_waiver_needs_a_real_emergency_contact_not_just_urgency` | Otherwise any answer dodges the format rules by sounding urgent. |
+| `test_a_normal_answer_is_still_held_to_the_question_rules` | A normal answer is still held to the question rules. |
+| `test_rescore_recomputes_code_metrics_from_the_stored_answer` | Rescore recomputes code metrics from the stored answer. |
+| `test_rescore_keeps_judge_findings_but_recomputes_regex_ones` | Rescore keeps judge findings but recomputes regex ones. |
+| `test_rescore_dedupes_a_judge_claim_against_its_regex_hit` | Rescore dedupes a judge claim against its regex hit. |
+
+> 37 test functions expand to 55 cases through parametrisation.
+
 ### `test_request_db_schema.py`
 
 *Unit · issue #169 · 44 tests*
@@ -349,6 +399,41 @@ The SQL this service runs must match the live database - issue #169.
 | `test_a_request_that_is_not_there_is_not_found_and_not_an_outage` | Zero rows after a healthy introspection means exactly one thing. |
 
 > 38 test functions expand to 44 cases through parametrisation.
+
+### `test_request_detail_prompts.py`
+
+*Unit · issue #158 · 207 tests*
+
+Unit tests for the request-detail prompt variants (issue #158).
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_exact_taxonomy_name_wins` | Exact taxonomy name wins. |
+| `test_alias_maps_taxonomy_name_to_prompt_key` | Alias maps taxonomy name to prompt key. |
+| `test_leaf_categories_inherit_the_nearest_ancestor_prompt` | Leaf categories inherit the nearest ancestor prompt. |
+| `test_nearest_ancestor_wins_over_a_distant_one` | MATH must reach TUTORING, not skip up to EDUCATION_CAREER_SUPPORT. |
+| `test_unknown_and_empty_categories_fall_back_to_general` | Unknown and empty categories fall back to general. |
+| `test_category_with_brackets_in_its_name_resolves` | ENT(EAR_NOSE_AND_THROAT) contains characters that break naive parsing. |
+| `test_baseline_leaves_most_of_the_taxonomy_without_a_prompt` | Pins the defect so a future edit cannot quietly reintroduce it. |
+| `test_every_taxonomy_category_resolves_to_a_domain_prompt` | GENERAL_CATEGORY is the only one that should land on General. |
+| `test_every_category_builds_a_prompt_without_a_format_error` | A stray brace or an unfilled placeholder raises here, not in production. |
+| `test_missing_context_fields_do_not_leak_empty_placeholders` | Missing context fields do not leak empty placeholders. |
+| `test_unknown_variant_is_rejected` | Unknown variant is rejected. |
+| `test_variant_defaults_to_the_active_one` | Variant defaults to the active one. |
+| `test_variant_argument_overrides_the_active_one` | Variant argument overrides the active one. |
+| `test_baseline_prompt_contradicts_itself_on_contact_details` | The base rules forbid contact details; the category body demands them. |
+| `test_variant_c_never_hard_codes_a_contact_number` | Variant c never hard codes a contact number. |
+| `test_variant_c_never_demands_an_enumerated_answer` | (1)(2)(3) bodies fight the 'under 60 words, no lists' rule. |
+| `test_variant_c_still_permits_emergency_escalation_without_a_number` | Variant c still permits emergency escalation without a number. |
+| `test_variant_d_is_variant_c_plus_the_limitation_block` | Variant d is variant c plus the limitation block. |
+| `test_variant_a_matches_the_legacy_builder_exactly` | Variant a matches the legacy builder exactly. |
+| `test_every_variant_keeps_the_conversation_context_block` | Every variant keeps the conversation context block. |
+| `test_active_variant_is_a_known_variant` | Active variant is a known variant. |
+| `test_production_serves_the_variant_the_ab_selected` | F is deployed, on the evidence in docs/metrics/REQUEST_DETAIL_ACCURACY.md. |
+| `test_the_shipped_prompt_carries_the_crisis_override` | The single behaviour F was shipped for. |
+| `test_the_shipped_prompt_routes_every_category_to_a_domain_prompt` | The shipped prompt routes every category to a domain prompt. |
+
+> 24 test functions expand to 207 cases through parametrisation.
 
 ### `test_response_contract.py`
 

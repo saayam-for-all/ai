@@ -8,7 +8,6 @@ omit =
     # Counting them drags the number around without saying anything about
     # whether the code that uses them is exercised.
     utils/prompts.py
-    utils/prompts_no_hallucination_reviewed.py
     utils/categories*.py
     utils/predict_category_list.py
 

@@ -10,6 +10,137 @@ team works and reviews in.
 
 ## Unreleased
 
+### Request detail accuracy — [#158](https://github.com/saayam-for-all/ai/issues/158)
+
+Work on the LLM step that turns a help request into an answer. **Nothing about
+the deployed prompt changes in this entry**: `utils.prompts.ACTIVE_VARIANT` is
+still `"A"`, so a tester should see byte-identical answers to before. What
+lands is the evidence, the machinery to finish the decision, and three defects
+named.
+
+**Found** — three defects in `utils/prompts.py`, none of which any test could
+see, because the service returns a well-formed answer whichever prompt it built:
+
+- **62 of the 80 taxonomy categories never reached their category prompt.**
+  `category_prompts` is keyed on names the taxonomy does not use
+  (`HOUSING_SUPPORT` vs. the real `HOUSING_ASSISTANCE`), so every top-level
+  category and every deep leaf — `PLUMBING`, `MATH`,
+  `CARDIAC_OR_BLOOD_PRESSURE` — silently fell back to the generic `General`
+  prompt. The per-category prompt work from #47 was, for most requests, not
+  running.
+- **The prompt contradicts itself.** `BASE_INSTRUCTION` forbids naming
+  organizations, addresses and emergency numbers; the category bodies it is
+  interpolated into demand them ("ALWAYS include relevant emergency phone
+  numbers"). Measured consequence: on one corpus case the model spent 1453
+  output tokens failing to reconcile the two and **returned nothing 3 times out
+  of 6**, which `utils/__init__.py` reads as a Groq outage and answers from
+  Gemini instead — a silent model switch and a double bill.
+- **The length rules fight the content rules** — 2-3 sentences under 60 words,
+  against bodies demanding an enumerated `(1)(2)(3)` answer.
+
+**Added**
+
+- `utils/prompts.py` — five selectable prompt variants behind
+  `get_conversational_prompt(..., variant=)`, with `ACTIVE_VARIANT` choosing
+  what production serves. Variant A is the deployed prompt, verified
+  byte-identical, so the baseline is real. B fixes category routing; C removes
+  the contradictions; D adds an anti-invention block; E restores the
+  concreteness C and D cost. Category resolution now walks the taxonomy
+  upwards, so a new leaf inherits its parent's prompt instead of degrading to
+  `General` — coverage goes from 18 of 80 categories to 79 of 80.
+- `tools/request_detail_corpus.py` — 55 labeled help requests across 49
+  taxonomy categories, including 5 crisis cases and 24 adversarial ones (a
+  request filed under the wrong category, three needs in one request, no
+  location, a prompt-disclosure probe).
+- `tools/measure_prompt_accuracy.py` — the A/B harness. Three metrics (intent
+  fidelity, groundedness, constraint adherence), crisis escalation and false
+  escalation reported separately so a variant cannot buy a headline by being
+  unsafe, paired per-case bootstrap confidence intervals, and cross-judging by
+  two other models. Resumable, because a full run costs ~660k tokens against a
+  200k/day free-tier cap.
+- `docs/metrics/REQUEST_DETAIL_ACCURACY.md` — the defects, the method, the
+  measured results, the quota arithmetic, and what is still outstanding.
+- `tests/test_request_detail_prompts.py` and
+  `tests/test_prompt_accuracy_metrics.py` — 237 hermetic tests. They pin the
+  routing defect at its exact count so it cannot silently return, and pin
+  `ACTIVE_VARIANT == "A"` so no one ships a variant the A/B has not judged.
+
+**Removed**
+
+- `get_prompt()` in `utils/prompts.py` — 67 lines of dead code. Nothing had
+  ever called it; only `get_conversational_prompt` is on the answer path, and
+  the two had drifted apart.
+- `utils/prompts_no_hallucination_reviewed.py` — 753 lines, never imported. Its
+  anti-hallucination block is now variant D, where it can be measured.
+
+**Changed — the deployed prompt.** `utils.prompts.ACTIVE_VARIANT` moves from
+`"A"` to `"F"`. A tester will see shorter answers (mean 63 -> 52 words), far
+fewer invented organizations and phone numbers, and — the reason F ships rather
+than E — a request describing danger to life now gets told to contact emergency
+services.
+
+Measured on the 55-case corpus, paired per case against the previously deployed
+prompt, 95% percentile bootstrap:
+
+| | A (was deployed) | E | **F (shipped)** | F vs A, 95% CI | sig. |
+|---|---|---|---|---|---|
+| Intent fidelity | 0.751 | 0.780 | 0.771 | +0.020 [-0.061, +0.099] | no |
+| Groundedness | 0.681 | 0.790 | **0.846** | +0.164 [+0.066, +0.268] | **yes** |
+| Constraint adherence | 0.911 | 0.982 | 0.968 | +0.057 [+0.033, +0.081] | **yes** |
+| Composite | 0.781 | 0.851 | **0.862** | +0.081 [+0.036, +0.126] | **yes** |
+| Crisis escalation | 1/5 | 1/5 | **5/5** | | |
+| False escalation | 1/1 | 0/1 | **0/1** | | |
+
+**The substantive finding is the row that is not in the composite.** Variant E
+beat the baseline on composite by +0.070, significant, and would have shipped on
+a single score — while answering a person describing suicidal thoughts, and a
+person fleeing their home at night with a child, by suggesting they ask Saayam
+for a volunteer. Crisis escalation and false escalation were deliberately kept
+out of the composite, and they are the only reason that did not happen.
+
+Scored strictly — does the answer name a real emergency contact, rather than
+merely sound urgent — **the previously deployed prompt escalated 1 of 5
+life-threatening cases.** The regex check caught the judge scoring "look into
+local shelters... reach out to community groups or hotlines" as an escalation
+when it names nothing.
+
+**Added**
+
+- Variant F: escalation outranks the length limit, published emergency and
+  crisis numbers are permitted (a national emergency line is public
+  infrastructure, not an unverifiable third-party contact), and a Saayam
+  volunteer may never be the answer to a life-threatening situation.
+- `detect_escalation()` — a deterministic second reading of the metric that
+  gates deployment, so it never rests on one model's opinion.
+- `--rescore` — recomputes every code-side metric from stored answers with no
+  model calls, so correcting a metric does not cost another day of token quota.
+
+**Fixed — in the measurement, not the service.** `score_constraints()` was
+marking down *"Call emergency services immediately."* — the correct four-word
+reply to a toddler with a non-blanching rash — for not ending with a
+conversational question. A format metric that penalises correct safety
+behaviour is the composite's mistake one level down. The follow-up-question
+checks are now waived when an answer names a real emergency contact, and only
+then.
+
+**Known limits of the shipped result** — all three variants ran all 55 cases,
+but crisis escalation still rests on five of them, which is thin for the
+highest-stakes behaviour in the service. Intent fidelity is a tie with the
+baseline, not a gain. On the burning-socket case F escalates but drops "turn off
+the breaker", which the baseline gave; the cause is one clause in the override
+("say the urgent thing first **and stop**") and the fix is deliberately not
+applied here, because editing a prompt after measuring it means shipping
+something untested — it is variant G, in
+`docs/metrics/REQUEST_DETAIL_ACCURACY.md` section 9. B, C and D still have only
+pilot-scale evidence.
+
+**Also not done, deliberately** — `utils/client.py` builds the answer-generation
+client without `reasoning_effort`, which
+`services/classification_service.py` already sets for the same model and the
+same reason. That is the root cause of the empty responses above. Changing it
+would alter the baseline underneath the A/B, so it is documented as a separate
+defect rather than smuggled in here.
+
 ### Testing infrastructure — [#171](https://github.com/saayam-for-all/ai/issues/171)
 
 **Added**
