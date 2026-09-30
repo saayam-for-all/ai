@@ -1,4 +1,5 @@
 """Unit tests for issue #334 - S3 dataset loader with caching and zero-downtime fallback."""
+import hashlib
 import io
 import json
 import sys
@@ -159,3 +160,86 @@ def test_location_resolution_inferred_city():
         loc = resolver.resolve({"city": "Rome"}, {})
         assert loc.get("country") == "IT"
 
+
+def _local_dataset():
+    with open(em.DATA_FILE, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def test_s3_client_makes_one_attempt_that_fits_the_lambda_timeout():
+    """An unreachable S3 must fail over well inside the 3 s function timeout.
+
+    botocore's legacy `max_attempts` counts retries, not attempts, so
+    `max_attempts: 1` made two attempts; two 1.5 s connect timeouts outlasted
+    the function and the fallback never ran. `total_max_attempts` counts the
+    first call too.
+    """
+    mock_s3 = mock.MagicMock()
+    mock_s3.get_object.side_effect = Exception("unreachable")
+
+    with mock.patch("boto3.client", return_value=mock_s3) as make_client:
+        em._load_emergency_numbers()
+
+    config = make_client.call_args.kwargs["config"]
+    assert config.retries["total_max_attempts"] == 1
+    assert config.connect_timeout + config.read_timeout <= 2
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        [],
+        {},
+        "a bare string",
+        {"us": {"default": {"police": "911"}, "states": {}}},
+        {"US": "911"},
+        {"US": {"default": ["911"], "states": {}}},
+    ],
+    ids=["list", "empty-object", "string", "lowercase-code", "record-not-object", "default-not-object"],
+)
+def test_misshapen_s3_object_falls_back_to_the_bundled_file(payload):
+    """Valid JSON of the wrong shape is treated like an unreadable object.
+
+    Caching it would answer every request in the container with a 500 (`[]`)
+    or a 404 (`{}`) until the container recycled.
+    """
+    mock_s3 = mock.MagicMock()
+    mock_s3.get_object.return_value = {"Body": io.BytesIO(json.dumps(payload).encode("utf-8"))}
+
+    with mock.patch("boto3.client", return_value=mock_s3):
+        data = em._load_emergency_numbers()
+
+    assert data == _local_dataset()
+
+
+def test_s3_load_logs_its_source_and_checksum(capsys):
+    """CloudWatch must show that S3 answered, and which upload it served.
+
+    The bundled file is a byte-identical copy of the S3 object, so the numbers
+    alone cannot tell the two apart.
+    """
+    raw = json.dumps({"IN": {"default": {"police": "112"}, "states": {}}}).encode("utf-8")
+    mock_s3 = mock.MagicMock()
+    mock_s3.get_object.return_value = {"Body": io.BytesIO(raw)}
+
+    with mock.patch("boto3.client", return_value=mock_s3):
+        em._load_emergency_numbers()
+
+    logged = capsys.readouterr().out
+    assert f"INFO: Loaded emergency numbers from s3://{em.S3_BUCKET}/{em.S3_KEY}" in logged
+    assert f"sha256={hashlib.sha256(raw).hexdigest()}" in logged
+
+
+def test_fallback_logs_that_the_bundled_file_answered(capsys):
+    mock_s3 = mock.MagicMock()
+    mock_s3.get_object.side_effect = Exception("S3 down")
+
+    with mock.patch("boto3.client", return_value=mock_s3):
+        em._load_emergency_numbers()
+
+    logged = capsys.readouterr().out
+    with open(em.DATA_FILE, "rb") as f:
+        digest = hashlib.sha256(f.read()).hexdigest()
+    assert "WARN: Could not fetch emergency numbers" in logged
+    assert "INFO: Loaded emergency numbers from the bundled file (" in logged
+    assert f"sha256={digest}" in logged

@@ -11,6 +11,7 @@ Two rules govern everything in this module, both from issue #146:
    emergency line, flagged as a fallback rather than passed off as the real
    thing.
 """
+import hashlib
 import ipaddress
 import json
 import os
@@ -19,7 +20,7 @@ import urllib.request
 
 
 S3_BUCKET = os.environ.get("EMERGENCY_CONTACTS_S3_BUCKET", "saayam-virginia-public")
-S3_KEY = os.environ.get("EMERGENCY_CONTACTS_S3_KEY", "Emergency_Contact_no.json")
+S3_KEY = os.environ.get("EMERGENCY_CONTACTS_S3_KEY", "emergency_contact.json")
 AWS_REGION = os.environ.get("AWS_REGION", "us-east-1")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -27,6 +28,55 @@ DATA_FILE = os.path.join(BASE_DIR, "emergency_numbers.json")
 
 # Module-level cache: reused across Lambda invocations in the same warm container.
 _emergency_numbers_cache = None
+
+# S3 is read inside the first request a container serves, and the function's
+# timeout is 3 s. One attempt only: botocore's legacy `max_attempts` counts
+# retries rather than attempts, so `max_attempts: 1` made two, and two 1.5 s
+# connect timeouts outlasted the function before the fallback could answer.
+# With these settings an unreachable S3 costs about a second.
+_S3_CLIENT_OPTIONS = {
+    "connect_timeout": 1,
+    "read_timeout": 1,
+    "retries": {"total_max_attempts": 1, "mode": "standard"},
+}
+
+
+def _validate_dataset(data):
+    """Return data if it is shaped like the directory, else raise ValueError.
+
+    Parsing proves only that the bytes are JSON. `[]` and `{}` parse too, and
+    once cached they would answer every request in the container with a 500
+    or a 404 until it recycled. A dataset that fails here is treated exactly
+    like one that could not be read.
+    """
+    if not isinstance(data, dict) or not data:
+        raise ValueError(
+            f"expected a non-empty object keyed by country, got {type(data).__name__} "
+            f"of length {len(data) if hasattr(data, '__len__') else 'n/a'}"
+        )
+    for code, record in data.items():
+        if not (isinstance(code, str) and len(code) == 2 and code.isalpha() and code.isupper()):
+            raise ValueError(f"country key {code!r} is not an ISO-3166 alpha-2 code")
+        if not (
+            isinstance(record, dict)
+            and isinstance(record.get("default", {}), dict)
+            and isinstance(record.get("states", {}), dict)
+        ):
+            raise ValueError(f"country {code} is not a {{default, states}} object")
+    return data
+
+
+def _log_loaded(source, raw, data):
+    """One line per cold start naming where the directory came from.
+
+    The bundled file is a byte-identical copy of the S3 object, so the numbers
+    alone cannot say which one answered. The SHA-256 ties the running data to
+    a specific upload.
+    """
+    print(
+        f"INFO: Loaded emergency numbers from {source} "
+        f"({len(data)} countries, sha256={hashlib.sha256(raw).hexdigest()})"
+    )
 
 
 def _load_emergency_numbers():
@@ -43,18 +93,23 @@ def _load_emergency_numbers():
             s3_client = boto3.client(
                 "s3",
                 region_name=AWS_REGION,
-                config=Config(connect_timeout=1.5, read_timeout=1.5, retries={"max_attempts": 1}),
+                config=Config(**_S3_CLIENT_OPTIONS),
             )
             response = s3_client.get_object(Bucket=S3_BUCKET, Key=S3_KEY)
-            _emergency_numbers_cache = json.loads(response["Body"].read().decode("utf-8"))
+            raw = response["Body"].read()
+            _emergency_numbers_cache = _validate_dataset(json.loads(raw.decode("utf-8")))
+            _log_loaded(f"s3://{S3_BUCKET}/{S3_KEY}", raw, _emergency_numbers_cache)
             return _emergency_numbers_cache
         except Exception as e:
-            # Fall back to local bundled JSON on any S3 error (IAM deny, missing key, network, local dev)
+            # Fall back to local bundled JSON on any S3 error (IAM deny, missing key,
+            # network, malformed or misshapen object, local dev)
             print(f"WARN: Could not fetch emergency numbers from s3://{S3_BUCKET}/{S3_KEY} ({type(e).__name__}: {e}). Falling back to local file.")
 
     if os.path.exists(DATA_FILE):
-        with open(DATA_FILE, "r", encoding="utf-8") as f:
-            _emergency_numbers_cache = json.load(f)
+        with open(DATA_FILE, "rb") as f:
+            raw = f.read()
+        _emergency_numbers_cache = _validate_dataset(json.loads(raw.decode("utf-8")))
+        _log_loaded("the bundled file", raw, _emergency_numbers_cache)
         return _emergency_numbers_cache
 
     raise RuntimeError("Emergency numbers dataset is not available from S3 or local package.")
