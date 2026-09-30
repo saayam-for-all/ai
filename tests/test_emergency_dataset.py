@@ -7,6 +7,8 @@ record it sits in.
 
 No network and no keys required.
 """
+import hashlib
+import json
 import re
 
 import pytest
@@ -16,7 +18,17 @@ pytestmark = pytest.mark.dataset
 
 import services.emergency as em
 
-DATA = em._load_emergency_numbers()
+# The shipped file, read directly. Going through _load_emergency_numbers()
+# would try S3 first, so on a machine with AWS credentials these tests would
+# silently check whatever the bucket holds instead of this repository.
+with open(em.DATA_FILE, "rb") as _f:
+    RAW = _f.read()
+DATA = json.loads(RAW)
+
+# s3://saayam-virginia-public/emergency_contact.json is the ground truth and
+# this file is its fallback copy. This is the object's ETag, which for a
+# single-part SSE-S3 upload is the MD5 of its bytes.
+S3_GROUND_TRUTH_MD5 = "7dd6a88260658b3594f5abdd134e3426"
 
 # Numbers that are North American mental health crisis numbers (988 is legitimate
 # in US and Canada, but must not leak into any other jurisdiction).
@@ -45,6 +57,22 @@ def iter_service_maps():
 
 
 ALL_SERVICE_MAPS = list(iter_service_maps())
+
+
+def test_bundled_file_is_the_s3_ground_truth():
+    """The fallback must say exactly what S3 says.
+
+    The bundled file answers whenever S3 cannot be read. If the two drift, a
+    network blip changes the numbers a person is shown. When the S3 object is
+    updated, copy it here byte for byte and update S3_GROUND_TRUTH_MD5 to the
+    new ETag in the same change.
+    """
+    assert hashlib.md5(RAW).hexdigest() == S3_GROUND_TRUTH_MD5
+
+
+def test_the_shipped_file_passes_the_loader_shape_check():
+    """The loader rejects a misshapen dataset; the shipped one must not be."""
+    assert em._validate_dataset(DATA) is DATA
 
 
 def test_the_file_is_not_empty():
@@ -130,8 +158,11 @@ def test_service_names_are_from_the_known_vocabulary():
         # Australia's Triple Zero, previously stored as a single "0".
         ("AU", "police", "000"),
         ("AU", "general_emergency", "000"),
-        # Pakistan's Rescue 1122, previously the un-dialable "115 and 1122".
-        ("PK", "ambulance", "1122"),
+        # Pakistan: 115 (Edhi Foundation ambulance), as the S3 ground truth
+        # holds it. #146 had chosen 1122 (Rescue 1122, the government
+        # service); the data team's S3 object is now canonical, so the
+        # directory follows it. See docs/emergency_numbers_provenance.md.
+        ("PK", "ambulance", "115"),
     ],
 )
 def test_specific_corrected_values(country, service, expected):
