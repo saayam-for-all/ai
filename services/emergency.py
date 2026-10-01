@@ -79,6 +79,42 @@ def _log_loaded(source, raw, data):
     )
 
 
+def _read_bundled():
+    """(raw bytes, directory) of the copy packaged with the code, or (None, None)."""
+    if not os.path.exists(DATA_FILE):
+        return None, None
+    with open(DATA_FILE, "rb") as f:
+        raw = f.read()
+    return raw, _validate_dataset(json.loads(raw.decode("utf-8")))
+
+
+def _check_covers_bundled(data, bundled):
+    """Raise ValueError if data drops a country the bundled copy can answer for.
+
+    The shape check passes a file that is well formed but incomplete: a
+    partial export with one country, or records whose numbers are empty or
+    prose. Cached, such a file turns every missing country into a 404 for the
+    life of the container, while the bundled copy that could answer is never
+    read. So every country with a dialable general or police number in the
+    bundled copy must still have one here.
+
+    This also means S3 cannot drop a country's number on its own: the bundled
+    copy has to change in the same release, which it must anyway, since
+    test_bundled_file_is_the_s3_ground_truth pins it to the S3 object.
+    """
+    general = EmergencyServiceResolver._general_emergency_number
+    lost = sorted(
+        code for code, record in bundled.items()
+        if general(record) and not general(data.get(code) or {})
+    )
+    if lost:
+        shown = ", ".join(lost[:10]) + (", ..." if len(lost) > 10 else "")
+        raise ValueError(
+            f"no dialable general or police number for {len(lost)} "
+            f"countries the bundled copy covers: {shown}"
+        )
+
+
 def _load_emergency_numbers():
     global _emergency_numbers_cache
     if _emergency_numbers_cache is not None:
@@ -97,19 +133,36 @@ def _load_emergency_numbers():
             )
             response = s3_client.get_object(Bucket=S3_BUCKET, Key=S3_KEY)
             raw = response["Body"].read()
-            _emergency_numbers_cache = _validate_dataset(json.loads(raw.decode("utf-8")))
-            _log_loaded(f"s3://{S3_BUCKET}/{S3_KEY}", raw, _emergency_numbers_cache)
+            data = _validate_dataset(json.loads(raw.decode("utf-8")))
+
+            bundled_raw, bundled = _read_bundled()
+            if bundled is not None:
+                _check_covers_bundled(data, bundled)
+                if raw != bundled_raw:
+                    # S3 is the ground truth, so it still answers. But the
+                    # bundled copy is what a container serves when S3 cannot
+                    # be read, and it now says something different. One line
+                    # a CloudWatch metric filter can alert on.
+                    print(
+                        f"WARN: Emergency numbers in s3://{S3_BUCKET}/{S3_KEY} differ from "
+                        f"the bundled file (s3 sha256={hashlib.sha256(raw).hexdigest()}, "
+                        f"bundled sha256={hashlib.sha256(bundled_raw).hexdigest()}). "
+                        "A fallback would serve different numbers: update "
+                        "services/emergency_numbers.json to match S3."
+                    )
+
+            _emergency_numbers_cache = data
+            _log_loaded(f"s3://{S3_BUCKET}/{S3_KEY}", raw, data)
             return _emergency_numbers_cache
         except Exception as e:
             # Fall back to local bundled JSON on any S3 error (IAM deny, missing key,
-            # network, malformed or misshapen object, local dev)
+            # network, malformed, misshapen or incomplete object, local dev)
             print(f"WARN: Could not fetch emergency numbers from s3://{S3_BUCKET}/{S3_KEY} ({type(e).__name__}: {e}). Falling back to local file.")
 
-    if os.path.exists(DATA_FILE):
-        with open(DATA_FILE, "rb") as f:
-            raw = f.read()
-        _emergency_numbers_cache = _validate_dataset(json.loads(raw.decode("utf-8")))
-        _log_loaded("the bundled file", raw, _emergency_numbers_cache)
+    raw, bundled = _read_bundled()
+    if bundled is not None:
+        _emergency_numbers_cache = bundled
+        _log_loaded("the bundled file", raw, bundled)
         return _emergency_numbers_cache
 
     raise RuntimeError("Emergency numbers dataset is not available from S3 or local package.")

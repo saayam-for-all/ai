@@ -31,7 +31,7 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_client_imports.py`](../../tests/test_client_imports.py) | Integration | #154 | `utils/client.py` | 2 |
 | [`tests/test_emergency_dataset.py`](../../tests/test_emergency_dataset.py) | Dataset | #146 | `services/emergency_numbers.json` | 17 |
 | [`tests/test_emergency_locale.py`](../../tests/test_emergency_locale.py) | Unit | #146 | `services/emergency.py` | 67 |
-| [`tests/test_emergency_s3_reader.py`](../../tests/test_emergency_s3_reader.py) | Unit | #334 | `services/emergency.py S3 reader` | 18 |
+| [`tests/test_emergency_s3_reader.py`](../../tests/test_emergency_s3_reader.py) | Unit | #334 | `services/emergency.py S3 reader` | 23 |
 | [`tests/test_generate_answer.py`](../../tests/test_generate_answer.py) | Contract | #169 | `generate_answer_handler` | 50 |
 | [`tests/test_import_blast_radius.py`](../../tests/test_import_blast_radius.py) | Integration | #169, #171 | `module-scope imports` | 4 |
 | [`tests/test_model_fallback.py`](../../tests/test_model_fallback.py) | Unit | #193 | `utils/model_fallback.py` | 24 |
@@ -41,7 +41,7 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_router.py`](../../tests/test_router.py) | Integration | #171 | `lambda_function.lambda_handler` | 34 |
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
 | [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 49 |
-| | | | **Total** | **404** |
+| | | | **Total** | **409** |
 
 ## Every test
 
@@ -193,7 +193,7 @@ Behaviour tests for issue #146 - Emergency Contacts must never show a user a num
 
 ### `test_emergency_s3_reader.py`
 
-*Unit · issue #334 · 18 tests*
+*Unit · issue #334 · 23 tests*
 
 Unit tests for issue #334 - S3 dataset loader with caching and zero-downtime fallback.
 
@@ -212,8 +212,11 @@ Unit tests for issue #334 - S3 dataset loader with caching and zero-downtime fal
 | `test_misshapen_s3_object_falls_back_to_the_bundled_file` | Valid JSON of the wrong shape is treated like an unreadable object. |
 | `test_s3_load_logs_its_source_and_checksum` | CloudWatch must show that S3 answered, and which upload it served. |
 | `test_fallback_logs_that_the_bundled_file_answered` | Fallback logs that the bundled file answered. |
+| `test_incomplete_s3_object_falls_back_to_the_bundled_file` | Well formed but incomplete is treated like unreadable. |
+| `test_s3_that_differs_from_the_bundled_copy_is_served_and_flagged` | S3 is the ground truth, so it answers, but the drift is logged. |
+| `test_s3_is_used_as_is_when_no_bundled_copy_is_packaged` | Without a bundled copy there is nothing to compare against. |
 
-> 13 test functions expand to 18 cases through parametrisation.
+> 16 test functions expand to 23 cases through parametrisation.
 
 ### `test_generate_answer.py`
 
