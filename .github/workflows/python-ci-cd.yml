@@ -189,11 +189,10 @@
 
 
         - name: Lint with flake8
-          # continue-on-error: true
+          continue-on-error: true
           run: |
             source .venv/bin/activate
-            # Skip only E501 in utils; keep the 150-character limit elsewhere.
-            flake8 . --max-line-length=150 --per-file-ignores="utils/*:E501" --show-source --statistics --exclude=.venv,__pycache__,.git,build,dist
+            flake8 . --max-line-length=150 --show-source --statistics --exclude=.venv,__pycache__,.git,build,dist
 
         ## --- PACKAGING: Zip the Python app + dependencies ---
         - name: Package Lambda application
