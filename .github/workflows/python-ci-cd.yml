@@ -1,4 +1,4 @@
-  name: Python Flask CI-CD Pipeline
+  name: Python CI-CD Pipeline
 
   concurrency:
     group: ci-${{ github.ref }}
@@ -8,14 +8,15 @@
     workflow_dispatch:
 
     push:
+      # Run CI for deployment branches and this temporary feature branch.
       branches:
         - test
         - dev
         - main
+        - 'dhara0611/feature-cicd-update'
 
     pull_request:
       branches:
-        - test
         - dev
         - main
       types:
@@ -230,8 +231,10 @@
     
     deploy:
       needs: build-and-test
+      # TEMPORARY TEST: remove the feature-branch clause after AWS credential validation.
       if: >
         (github.event_name == 'push' && (github.ref_name == 'dev' || github.ref_name == 'test' || github.ref_name == 'main')) ||
+        (github.event_name == 'push' && github.ref_name == 'dhara0611/feature-cicd-update') ||
         (github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true && (github.base_ref == 'dev' || github.base_ref == 'test' || github.base_ref == 'main'))
 
       runs-on: ubuntu-latest
@@ -267,8 +270,8 @@
           uses: aws-actions/configure-aws-credentials@v4
           with:
             aws-region: ${{ env.AWS_REGION }}
-            aws-access-key-id: ${{ secrets.AWS_AI_ACCESS_KEY }}
-            aws-secret-access-key: ${{ secrets.AWS_AI_SECRET_ACCESS_KEY }}
+            aws-access-key-id: ${{ secrets.GENAI_AWS_ACCESS_KEY }}
+            aws-secret-access-key: ${{ secrets.GENAI_AWS_SECRET_ACCESS_KEY }}
         
          # --- DYNAMIC ENVIRONMENT S3 UPLOAD BLOCK ---
         - name: Upload to S3 Bucket (Environment specific)
@@ -282,8 +285,14 @@
               TARGET_BRANCH="${{ github.ref_name }}"
             fi
 
-            # Map branch name with env path and 'main' branch to 'prod' directory structure
-            ENV_PATH="$TARGET_BRANCH"
+            # TEMPORARY TEST: deploy this feature branch to the shared dev environment.
+            if [ "$TARGET_BRANCH" = "dhara0611/feature-cicd-update" ]; then
+              ENV_PATH="dev"
+            else
+              ENV_PATH="$TARGET_BRANCH"
+            fi
+
+            # Map the main branch to the prod directory structure.
             if [ "$ENV_PATH" = "main" ]; then
               ENV_PATH="prod"
             fi
@@ -358,3 +367,40 @@
               aws lambda wait function-active \
                 --function-name "$LAMBDA_FUNCTION_NAME"
             fi
+
+        # --- POST-DEPLOYMENT: Playwright E2E tests ---
+        # - name: Set up Node.js
+        #   uses: actions/setup-node@v4
+        #   with:
+        #     node-version: lts/*
+
+        # - name: Install Playwright dependencies
+        #   run: |
+        #     npm init -y
+        #     npm install @playwright/test
+        #     npx playwright install --with-deps
+
+        # - name: Run Playwright Tests against Environment
+        #   shell: bash
+        #   run: |
+        #     if [ "${{ github.event_name }}" = "pull_request" ]; then
+        #       TARGET_BRANCH="${{ github.base_ref }}"
+        #     else
+        #       TARGET_BRANCH="${{ github.ref_name }}"
+        #     fi
+
+        #     if [ "$TARGET_BRANCH" = "test" ]; then
+        #       TARGET_URL="https://test-saayam.netlify.app"
+        #     elif [ "$TARGET_BRANCH" = "dev" ]; then
+        #       TARGET_URL="https://dev-saayam.netlify.app"
+        #     else
+        #       TARGET_URL="https://test.help-for-everyone.org/"
+        #     fi
+
+        #     export TARGET_URL
+        #     set +e
+        #     npx playwright test
+        #     PLAYWRIGHT_EXIT_CODE=$?
+        #     set -e
+        #     echo "Target URL: $TARGET_URL"
+        #     exit $PLAYWRIGHT_EXIT_CODE
