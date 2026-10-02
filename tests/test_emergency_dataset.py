@@ -7,6 +7,8 @@ record it sits in.
 
 No network and no keys required.
 """
+import hashlib
+import json
 import re
 
 import pytest
@@ -16,13 +18,21 @@ pytestmark = pytest.mark.dataset
 
 import services.emergency as em
 
-DATA = em._load_emergency_numbers()
+# The shipped file, read directly. Going through _load_emergency_numbers()
+# would try S3 first, so on a machine with AWS credentials these tests would
+# silently check whatever the bucket holds instead of this repository.
+with open(em.DATA_FILE, "rb") as _f:
+    RAW = _f.read()
+DATA = json.loads(RAW)
 
-# Numbers that are unmistakably US-only. They are legitimate inside the "US"
-# record and nowhere else. 911 is deliberately absent: it is also the real
-# emergency number in Canada, Mexico, Argentina, Peru, the Philippines, Saudi
-# Arabia, Venezuela and Ethiopia, so it cannot be treated as a US marker.
-US_ONLY_NUMBERS = {"988"}
+# s3://saayam-virginia-public/emergency_contact.json is the ground truth and
+# this file is its fallback copy. This is the object's ETag, which for a
+# single-part SSE-S3 upload is the MD5 of its bytes.
+S3_GROUND_TRUTH_MD5 = "7dd6a88260658b3594f5abdd134e3426"
+
+# Numbers that are North American mental health crisis numbers (988 is legitimate
+# in US and Canada, but must not leak into any other jurisdiction).
+US_AND_CA_ONLY_NUMBERS = {"988"}
 
 
 def iter_service_maps():
@@ -47,6 +57,22 @@ def iter_service_maps():
 
 
 ALL_SERVICE_MAPS = list(iter_service_maps())
+
+
+def test_bundled_file_is_the_s3_ground_truth():
+    """The fallback must say exactly what S3 says.
+
+    The bundled file answers whenever S3 cannot be read. If the two drift, a
+    network blip changes the numbers a person is shown. When the S3 object is
+    updated, copy it here byte for byte and update S3_GROUND_TRUTH_MD5 to the
+    new ETag in the same change.
+    """
+    assert hashlib.md5(RAW).hexdigest() == S3_GROUND_TRUTH_MD5
+
+
+def test_the_shipped_file_passes_the_loader_shape_check():
+    """The loader rejects a misshapen dataset; the shipped one must not be."""
+    assert em._validate_dataset(DATA) is DATA
 
 
 def test_the_file_is_not_empty():
@@ -81,9 +107,13 @@ def test_no_us_only_number_appears_outside_the_us():
         f"{path}.{service} = {number}"
         for path, country, services in ALL_SERVICE_MAPS
         for service, number in services.items()
-        if country != "US" and str(number).strip() in US_ONLY_NUMBERS
+        if country not in ("US", "CA") and str(number).strip() in US_AND_CA_ONLY_NUMBERS
     ]
     assert not leaks, "US-only numbers outside the US record:\n  " + "\n  ".join(leaks)
+
+
+# Uninhabited or non-permanent territories where emergency services do not exist.
+UNINHABITED_TERRITORIES = {"AQ", "BV", "HM", "NF", "PN", "SJ", "TF", "UM"}
 
 
 def test_every_country_can_answer_a_general_emergency():
@@ -94,7 +124,8 @@ def test_every_country_can_answer_a_general_emergency():
     """
     without = [
         code for code, country in DATA.items()
-        if not em.EmergencyServiceResolver._general_emergency_number(country)
+        if code not in UNINHABITED_TERRITORIES
+        and not em.EmergencyServiceResolver._general_emergency_number(country)
     ]
     assert not without, f"no general emergency line resolvable for: {without}"
 
@@ -127,8 +158,11 @@ def test_service_names_are_from_the_known_vocabulary():
         # Australia's Triple Zero, previously stored as a single "0".
         ("AU", "police", "000"),
         ("AU", "general_emergency", "000"),
-        # Pakistan's Rescue 1122, previously the un-dialable "115 and 1122".
-        ("PK", "ambulance", "1122"),
+        # Pakistan: 115 (Edhi Foundation ambulance), as the S3 ground truth
+        # holds it. #146 had chosen 1122 (Rescue 1122, the government
+        # service); the data team's S3 object is now canonical, so the
+        # directory follows it. See docs/emergency_numbers_provenance.md.
+        ("PK", "ambulance", "115"),
     ],
 )
 def test_specific_corrected_values(country, service, expected):
