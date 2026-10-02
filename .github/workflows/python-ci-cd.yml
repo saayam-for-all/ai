@@ -189,10 +189,11 @@
 
 
         - name: Lint with flake8
-          continue-on-error: true
+          # continue-on-error: true
           run: |
             source .venv/bin/activate
-            flake8 . --max-line-length=150 --show-source --statistics --exclude=.venv,__pycache__,.git,build,dist
+            # Skip only E501 in utils; keep the 150-character limit elsewhere.
+            flake8 . --max-line-length=150 --per-file-ignores="utils/*:E501" --show-source --statistics --exclude=.venv,__pycache__,.git,build,dist
 
         ## --- PACKAGING: Zip the Python app + dependencies ---
         - name: Package Lambda application
@@ -368,39 +369,39 @@
                 --function-name "$LAMBDA_FUNCTION_NAME"
             fi
 
-        # --- POST-DEPLOYMENT: Playwright E2E tests ---
-        # - name: Set up Node.js
-        #   uses: actions/setup-node@v4
-        #   with:
-        #     node-version: lts/*
+    # #    --- POST-DEPLOYMENT: Playwright E2E tests ---
+    #     - name: Set up Node.js
+    #       uses: actions/setup-node@v4
+    #       with:
+    #         node-version: lts/*
 
-        # - name: Install Playwright dependencies
-        #   run: |
-        #     npm init -y
-        #     npm install @playwright/test
-        #     npx playwright install --with-deps
+    #     - name: Install Playwright dependencies
+    #       run: |
+    #         npm init -y
+    #         npm install @playwright/test
+    #         npx playwright install --with-deps
 
-        # - name: Run Playwright Tests against Environment
-        #   shell: bash
-        #   run: |
-        #     if [ "${{ github.event_name }}" = "pull_request" ]; then
-        #       TARGET_BRANCH="${{ github.base_ref }}"
-        #     else
-        #       TARGET_BRANCH="${{ github.ref_name }}"
-        #     fi
+    #     - name: Run Playwright Tests against Environment
+    #       shell: bash
+    #       run: |
+    #         if [ "${{ github.event_name }}" = "pull_request" ]; then
+    #           TARGET_BRANCH="${{ github.base_ref }}"
+    #         else
+    #           TARGET_BRANCH="${{ github.ref_name }}"
+    #         fi
 
-        #     if [ "$TARGET_BRANCH" = "test" ]; then
-        #       TARGET_URL="https://test-saayam.netlify.app"
-        #     elif [ "$TARGET_BRANCH" = "dev" ]; then
-        #       TARGET_URL="https://dev-saayam.netlify.app"
-        #     else
-        #       TARGET_URL="https://test.help-for-everyone.org/"
-        #     fi
+    #         if [ "$TARGET_BRANCH" = "test" ]; then
+    #           TARGET_URL="https://test-saayam.netlify.app"
+    #         elif [ "$TARGET_BRANCH" = "dev" ]; then
+    #           TARGET_URL="https://dev-saayam.netlify.app"
+    #         else
+    #           TARGET_URL="https://test.help-for-everyone.org/"
+    #         fi
 
-        #     export TARGET_URL
-        #     set +e
-        #     npx playwright test
-        #     PLAYWRIGHT_EXIT_CODE=$?
-        #     set -e
-        #     echo "Target URL: $TARGET_URL"
-        #     exit $PLAYWRIGHT_EXIT_CODE
+    #         export TARGET_URL
+    #         set +e
+    #         npx playwright test
+    #         PLAYWRIGHT_EXIT_CODE=$?
+    #         set -e
+    #         echo "Target URL: $TARGET_URL"
+    #         exit $PLAYWRIGHT_EXIT_CODE
