@@ -8,12 +8,10 @@
     workflow_dispatch:
 
     push:
-      # Run CI for deployment branches and this temporary feature branch.
       branches:
         - test
         - dev
         - main
-        - 'dhara0611/feature-cicd-update'
 
     pull_request:
       branches:
@@ -231,10 +229,8 @@
     
     deploy:
       needs: build-and-test
-      # TEMPORARY TEST: remove the feature-branch clause after AWS credential validation.
       if: >
         (github.event_name == 'push' && (github.ref_name == 'dev' || github.ref_name == 'test' || github.ref_name == 'main')) ||
-        (github.event_name == 'push' && github.ref_name == 'dhara0611/feature-cicd-update') ||
         (github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true && (github.base_ref == 'dev' || github.base_ref == 'test' || github.base_ref == 'main'))
 
       runs-on: ubuntu-latest
@@ -285,12 +281,8 @@
               TARGET_BRANCH="${{ github.ref_name }}"
             fi
 
-            # TEMPORARY TEST: deploy this feature branch to the shared dev environment.
-            if [ "$TARGET_BRANCH" = "dhara0611/feature-cicd-update" ]; then
-              ENV_PATH="dev"
-            else
-              ENV_PATH="$TARGET_BRANCH"
-            fi
+
+            ENV_PATH="$TARGET_BRANCH"
 
             # Map the main branch to the prod directory structure.
             if [ "$ENV_PATH" = "main" ]; then
@@ -368,39 +360,43 @@
                 --function-name "$LAMBDA_FUNCTION_NAME"
             fi
 
-    # #    --- POST-DEPLOYMENT: Playwright E2E tests ---
-    #     - name: Set up Node.js
-    #       uses: actions/setup-node@v4
-    #       with:
-    #         node-version: lts/*
+    # To activate testing in the future, uncomment the lines below:         
+    #    --- POST-DEPLOYMENT: Playwright E2E tests ---
+        # - name: Set up Node.js
+        #   uses: actions/setup-node@v4
+        #   with:
+        #     node-version: lts/*
+         
+        # - name: Install Playwright dependencies
+        #   run: |
+        #     npm init -y
+        #     npm install @playwright/test
+        #     npx playwright install --with-deps
 
-    #     - name: Install Playwright dependencies
-    #       run: |
-    #         npm init -y
-    #         npm install @playwright/test
-    #         npx playwright install --with-deps
+        # - name: Run Playwright Tests against Environment
+        #   shell: bash
+        #   run: |
+        #     if [ "${{ github.event_name }}" = "pull_request" ]; then
+        #       TARGET_BRANCH="${{ github.base_ref }}"
+        #     else
+        #       TARGET_BRANCH="${{ github.ref_name }}"
+        #     fi
 
-    #     - name: Run Playwright Tests against Environment
-    #       shell: bash
-    #       run: |
-    #         if [ "${{ github.event_name }}" = "pull_request" ]; then
-    #           TARGET_BRANCH="${{ github.base_ref }}"
-    #         else
-    #           TARGET_BRANCH="${{ github.ref_name }}"
-    #         fi
+        #     if [ "$TARGET_BRANCH" = "test" ]; then
+        #       TARGET_URL="https://test-saayam.netlify.app"
+        #     elif [ "$TARGET_BRANCH" = "dev" ]; then
+        #       TARGET_URL="https://dev-saayam.netlify.app"
+        #     else
+        #       TARGET_URL="https://test.help-for-everyone.org/"
+        #     fi
+        #     echo "✅ Target environment identified: $TARGET_URL"
+        #     echo "⚠️ PLACEHOLDER: Playwright test execution command is currently paused until test files are added to the repo."
 
-    #         if [ "$TARGET_BRANCH" = "test" ]; then
-    #           TARGET_URL="https://test-saayam.netlify.app"
-    #         elif [ "$TARGET_BRANCH" = "dev" ]; then
-    #           TARGET_URL="https://dev-saayam.netlify.app"
-    #         else
-    #           TARGET_URL="https://test.help-for-everyone.org/"
-    #         fi
-
-    #         export TARGET_URL
-    #         set +e
-    #         npx playwright test
-    #         PLAYWRIGHT_EXIT_CODE=$?
-    #         set -e
-    #         echo "Target URL: $TARGET_URL"
-    #         exit $PLAYWRIGHT_EXIT_CODE
+         
+        #     # export TARGET_URL
+        #     # set +e
+        #     # npx playwright test
+        #     # PLAYWRIGHT_EXIT_CODE=$?
+        #     # set -e
+        #     # echo "Target URL: $TARGET_URL"
+        #     # exit $PLAYWRIGHT_EXIT_CODE
