@@ -269,13 +269,13 @@ def test_s3_that_differs_from_the_bundled_copy_is_served_and_flagged(capsys):
     the difference has to be visible in CloudWatch.
     """
     drifted = _local_dataset()
-    drifted["PK"]["default"]["ambulance"] = "1122"
+    drifted["PK"]["default"]["ambulance"] = "115"  # differs from the bundled copy
     raw = json.dumps(drifted).encode("utf-8")
 
     with mock.patch("boto3.client", return_value=_s3_returning(raw)):
         data = em._load_emergency_numbers()
 
-    assert data["PK"]["default"]["ambulance"] == "1122"
+    assert data["PK"]["default"]["ambulance"] == "115"
     logged = capsys.readouterr().out
     assert "differ from the bundled file" in logged
     assert f"s3 sha256={hashlib.sha256(raw).hexdigest()}" in logged

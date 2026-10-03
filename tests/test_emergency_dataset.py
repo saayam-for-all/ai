@@ -28,7 +28,7 @@ DATA = json.loads(RAW)
 # s3://saayam-virginia-public/emergency_contact.json is the ground truth and
 # this file is its fallback copy. This is the object's ETag, which for a
 # single-part SSE-S3 upload is the MD5 of its bytes.
-S3_GROUND_TRUTH_MD5 = "7dd6a88260658b3594f5abdd134e3426"
+S3_GROUND_TRUTH_MD5 = "712452bd2f3db75e71c7300959b61f69"
 
 # Numbers that are North American mental health crisis numbers (988 is legitimate
 # in US and Canada, but must not leak into any other jurisdiction).
@@ -158,11 +158,9 @@ def test_service_names_are_from_the_known_vocabulary():
         # Australia's Triple Zero, previously stored as a single "0".
         ("AU", "police", "000"),
         ("AU", "general_emergency", "000"),
-        # Pakistan: 115 (Edhi Foundation ambulance), as the S3 ground truth
-        # holds it. #146 had chosen 1122 (Rescue 1122, the government
-        # service); the data team's S3 object is now canonical, so the
-        # directory follows it. See docs/emergency_numbers_provenance.md.
-        ("PK", "ambulance", "115"),
+        # Pakistan's Rescue 1122, previously the un-dialable "115 and 1122".
+        # The data team confirmed 1122 in the S3 ground truth (October 2026).
+        ("PK", "ambulance", "1122"),
     ],
 )
 def test_specific_corrected_values(country, service, expected):

@@ -89,48 +89,53 @@ number.
 `112` is the single emergency number across the EU and EEA by law
 (Directive 2002/22/EC, Article 26), which is the basis for every `112` above.
 
-## Directory replaced by the S3 dataset (issue #334, September 29, 2026)
+## Directory replaced by the S3 dataset (issue #334)
 
 The data team designated `s3://saayam-virginia-public/emergency_contact.json`
 as the ground truth, and `services/emergency_numbers.json` is now a
-byte-identical copy of it: MD5 `7dd6a88260658b3594f5abdd134e3426` (the S3
+byte-identical copy of it: MD5 `712452bd2f3db75e71c7300959b61f69` (the S3
 ETag), SHA-256
-`e5122abde45fd5a5a471503cfbf9d9f08cf57122dd16defd4feb5db66c66dab3`. The
+`0ed2ea18cf60fcab25a027f33b73d20943d7302bb7de96439e915ea788b750fb`. The
 bundled file is only the fallback for when S3 cannot be read, and keeping the
 two identical means a fallback never changes what a person is told.
+
+This is the data team's final version (October 2026). A first version
+(September 29, MD5 `7dd6a882…`) differed in five places that review on PR #202
+flagged; the data team corrected them in this one: PK `ambulance` back to
+`1122`, GB `general_emergency` back to `999` (with `112` as
+`general_emergency_alternate`), TR `police` `155`, UA `general_emergency`
+`112`, and CO `general_emergency` `123`.
 
 Coverage grows from 73 countries to 249. Compared with the directory the
 sections above describe, the S3 dataset changes the following. Rule 1
 applies: these values came from the data team's dataset, not from a
 per-number official source recorded here, so each is a candidate for review.
 
-**Reverses a correction from #146**
-
-| Country | Field | #146 value | S3 value |
-| --- | --- | --- | --- |
-| PK | `ambulance` | `1122` (Rescue 1122, government) | `115` (Edhi Foundation, charity) |
-
 **Changes a documented `general_emergency`**
 
 | Country | Was | Now | Effect |
 | --- | --- | --- | --- |
-| CH | `112` | absent | The general line and every fallback resolve to police, `117`. |
-| UA | `112` | absent | The general line and every fallback resolve to police, `102`. |
-| GB | `999` | `112` | `999` moves to `general_emergency_alternate`. |
+| CH | `112` | absent | The general line and every fallback resolve to police, `117`. Confirmed as intended by the data team (October 2026). |
+
+**Adds an alternate general line**
+
+| Country | `general_emergency` | `general_emergency_alternate` |
+| --- | --- | --- |
+| GB | `999` (unchanged) | `112` (new) |
 
 **Replaces other stored numbers**
 
 | Country | Changed fields |
 | --- | --- |
 | BG | police `112`→`166`, ambulance `112`→`150`, fire `112`→`160` |
-| CO | police `123`→`112`, ambulance `123`→`125`, fire `123`→`119` |
+| CO | police `123`→`112`, ambulance `123`→`125`, fire `123`→`119` (`123` kept as `general_emergency`) |
 | CZ | police `112`→`158`, ambulance `112`→`155`, fire `112`→`150` |
 | EG | police `112`→`122` |
 | FR | police `112`→`17`, ambulance `112`→`15`, fire `112`→`18` |
 | HR | police `112`→`192`, ambulance `112`→`194`, fire `112`→`193` |
 | HU | police `112`→`107`, ambulance `112`→`104`, fire `112`→`105` |
-| TR | police `112`→`153` |
-| UZ | ambulance `101`→`103`, fire `103`→`101` |
+| TR | police `112`→`155` |
+| UZ | ambulance `101`→`103`, fire `103`→`101` (a correction: they were swapped) |
 | VE | police, ambulance, fire `911`→`171` (`911` kept as `general_emergency`) |
 | ZA | spaces removed: `10 111`→`10111`, `10 177`→`10177` |
 
