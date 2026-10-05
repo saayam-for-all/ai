@@ -175,7 +175,7 @@ def match_volunteer_group(request_id, group_size=5):
         
         if best_addition is not None:
             selected.append(best_addition)
-            remaining = remaining[remaining["VOL_ID"] != best_addition["VOL_ID"]]
+            remaining = remaining.drop(best_addition.name)
         else:
             break
     
