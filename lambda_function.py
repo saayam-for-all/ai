@@ -553,6 +553,38 @@ def generate_subject_handler(event, context):
 # Unified Entry Point (Fallback routing)
 # -------------------------------------------------------------
 
+def _without_routing_key(event, service):
+    """The event minus the router's own `service` selector.
+
+    Emergency Contacts reads `service` as the emergency service to look up
+    (police, ambulance, ...). Routed through here it received the selector
+    instead, looked for a service called "emergency_contacts" and answered
+    404 to every request. The selector belongs to the router and stops here.
+    Only a `service` equal to the routed name is removed, so a caller that
+    routes in the query string can still ask for `{"service": "police"}` in
+    the body.
+    """
+    event = dict(event)
+
+    query = dict(event.get("queryStringParameters") or {})
+    if str(query.get("service", "")).lower().strip() == service:
+        del query["service"]
+        event["queryStringParameters"] = query or None
+
+    raw_body = event.get("body")
+    body = raw_body
+    if isinstance(raw_body, str):
+        try:
+            body = json.loads(raw_body)
+        except (json.JSONDecodeError, ValueError):
+            body = None
+    if isinstance(body, dict) and str(body.get("service", "")).lower().strip() == service:
+        body = {k: v for k, v in body.items() if k != "service"}
+        event["body"] = json.dumps(body) if isinstance(raw_body, str) else body
+
+    return event
+
+
 def lambda_handler(event, context):
     """
     Unified Lambda handler that routes requests to appropriate service.
@@ -589,7 +621,7 @@ def lambda_handler(event, context):
         elif service == "generate_answer":
             return generate_answer_handler(event, context)
         elif service == "emergency_contacts":
-            return emergency_contacts_handler(event, context)
+            return emergency_contacts_handler(_without_routing_key(event, service), context)
         elif service in ["search_orgs", "search_org", "find_nonprofits"]:
             return search_orgs_handler(event, context)
         else:

@@ -173,3 +173,59 @@ def test_every_advertised_service_has_a_handler():
         with mock.patch.object(LF, handler_name, return_value=sentinel) as handler:
             LF.lambda_handler({"body": json.dumps({"service": service})}, None)
         assert handler.called, f"{service} is advertised but does not route"
+
+
+# -------------------------------------------------------------------------
+# Emergency Contacts through the router, unmocked
+# -------------------------------------------------------------------------
+
+def _routed_emergency(event, directory):
+    """Route an emergency event for real, with the directory pinned.
+
+    The tests above mock the handler, so they prove only that dispatch picks
+    it. These run the lookup itself, which is where the router's `service`
+    selector used to collide with the emergency service name.
+    """
+    import services.emergency as em
+
+    event = {"requestContext": {"identity": {"sourceIp": "203.0.113.10"}}, **event}
+    with mock.patch.object(em, "_load_emergency_numbers", return_value=directory):
+        result = LF.lambda_handler(event, None)
+    return result["statusCode"], json.loads(result["body"])
+
+
+def test_emergency_routed_by_query_string_resolves_the_country(emergency_directory):
+    """`?service=emergency_contacts&country=IN` answers with India's numbers.
+
+    The selector used to reach the lookup as the emergency service to find,
+    so every request routed this way was a 404.
+    """
+    status, body = _routed_emergency(
+        {"queryStringParameters": {"service": "emergency_contacts", "country": "IN"}},
+        emergency_directory,
+    )
+    assert status == 200
+    assert body["services"]["police"]["dial_number"] == "112"
+
+
+def test_emergency_routed_by_body_resolves_the_country(emergency_directory):
+    status, body = _routed_emergency(
+        {"body": json.dumps({"service": "emergency_contacts", "country": "IN"})},
+        emergency_directory,
+    )
+    assert status == 200
+    assert body["services"]["ambulance"]["dial_number"] == "108"
+
+
+def test_routed_emergency_can_still_ask_for_one_service(emergency_directory):
+    """Routing in the query string leaves the body free to name the service."""
+    status, body = _routed_emergency(
+        {
+            "queryStringParameters": {"service": "emergency_contacts", "country": "IN"},
+            "body": json.dumps({"service": "ambulance"}),
+        },
+        emergency_directory,
+    )
+    assert status == 200
+    assert list(body["services"]) == ["ambulance"]
+    assert body["services"]["ambulance"]["dial_number"] == "108"

@@ -28,10 +28,12 @@ what `information_schema` says the store actually has, and every way that
 discovery is allowed to degrade is pinned here, because a guardrail that fails
 open without saying so is worse than no guardrail at all.
 """
+import json
 import re
 
 import psycopg2
 import pytest
+from aws_lambda_powertools.utilities.parameters.exceptions import GetParameterError
 
 from utils import request_db
 
@@ -768,3 +770,100 @@ def test_a_request_that_is_not_there_is_not_found_and_not_an_outage(monkeypatch)
 
     assert result["error_kind"] == "not_found"
     assert conn.closed is True
+
+
+# -------------------------------------------------------------------
+# Connection settings come from SSM, per Saayam region and role
+# -------------------------------------------------------------------
+
+_DB_PARAMETER = {
+    "HOST": "db.internal", "PORT": "5432", "DATABASE NAME": "saayam",
+    "USERNAME": "genai", "PASSWORD": "secret", "SSL": "require",
+}
+
+
+@pytest.fixture
+def no_aws_region(monkeypatch):
+    """Blank rather than delete, so monkeypatch restores what the loader sets."""
+    monkeypatch.setenv("AWS_REGION", "")
+    monkeypatch.setenv("AWS_DEFAULT_REGION", "")
+    monkeypatch.delenv("SAAYAM_REGION", raising=False)
+    monkeypatch.delenv("SAAYAM_ROLE", raising=False)
+
+
+@pytest.mark.parametrize(
+    "saayam_region,expected",
+    [("Virginia", "us-east-1"), ("Ireland", "eu-west-1"), ("Somewhere", "us-east-1")],
+)
+def test_the_aws_region_follows_the_saayam_region(monkeypatch, no_aws_region, saayam_region, expected):
+    monkeypatch.setenv("SAAYAM_REGION", saayam_region)
+    assert request_db._aws_region() == expected
+
+
+def test_an_explicit_aws_region_wins(monkeypatch, no_aws_region):
+    monkeypatch.setenv("AWS_REGION", "eu-central-1")
+    monkeypatch.setenv("SAAYAM_REGION", "Ireland")
+    assert request_db._aws_region() == "eu-central-1"
+
+
+def test_db_settings_are_read_from_the_region_and_role_parameter(monkeypatch, no_aws_region):
+    monkeypatch.setenv("SAAYAM_REGION", "Ireland")
+    monkeypatch.setenv("SAAYAM_ROLE", "admin")
+    seen = {}
+
+    def get_parameter(path, **kwargs):
+        seen.update(kwargs, path=path)
+        return json.dumps(_DB_PARAMETER)
+
+    monkeypatch.setattr(request_db.parameters, "get_parameter", get_parameter)
+
+    config = request_db._load_db_config()
+
+    assert seen["path"] == "/dev/saayam/db/Ireland/GenAI/admin"
+    assert seen["decrypt"] is True
+    assert config == {"host": "db.internal", "port": "5432", "dbname": "saayam",
+                      "user": "genai", "password": "secret", "sslmode": "require"}
+
+
+def test_an_already_decoded_parameter_is_accepted(monkeypatch, no_aws_region):
+    monkeypatch.setattr(request_db.parameters, "get_parameter", lambda path, **kw: dict(_DB_PARAMETER))
+    assert request_db._load_db_config()["host"] == "db.internal"
+
+
+@pytest.mark.parametrize(
+    "failure,message",
+    [
+        (GetParameterError("Unable to locate credentials"), "AWS credentials not found"),
+        (GetParameterError("AccessDenied"), "Failed to fetch SSM parameter `/dev/saayam/db/Virginia/GenAI/user`"),
+    ],
+    ids=["no-credentials", "denied"],
+)
+def test_an_ssm_failure_says_what_to_fix(monkeypatch, no_aws_region, failure, message):
+    def get_parameter(path, **kwargs):
+        raise failure
+
+    monkeypatch.setattr(request_db.parameters, "get_parameter", get_parameter)
+    with pytest.raises(ValueError, match=message):
+        request_db._load_db_config()
+
+
+def test_an_empty_parameter_is_refused(monkeypatch, no_aws_region):
+    monkeypatch.setattr(request_db.parameters, "get_parameter", lambda path, **kw: "")
+    with pytest.raises(ValueError, match="Empty SSM parameter"):
+        request_db._load_db_config()
+
+
+def test_connection_fills_missing_settings_from_db_environment_variables(monkeypatch):
+    monkeypatch.setattr(request_db, "_load_db_config", lambda: {
+        "host": None, "port": "5432", "dbname": "saayam",
+        "user": "genai", "password": None, "sslmode": None,
+    })
+    monkeypatch.setenv("DB_HOST", "env-host")
+    monkeypatch.setenv("DB_PASSWORD", "env-password")
+    monkeypatch.setenv("DB_SSLMODE", "require")
+    captured = {}
+    monkeypatch.setattr(request_db.psycopg2, "connect", lambda **kw: captured.update(kw) or "connection")
+
+    assert request_db.get_connection() == "connection"
+    assert captured == {"host": "env-host", "port": "5432", "dbname": "saayam",
+                        "user": "genai", "password": "env-password", "sslmode": "require"}
