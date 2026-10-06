@@ -94,6 +94,8 @@ The onboarding material explicitly identifies MCP as a separate evaluation area:
 
 The Mission 4 implementation was used only as an architectural reference and was not imported into the MCP evaluation branch.
 
+> **Note:** The Mission 4 onboarding material is not part of this repository's main branch. It can be found on the `NewJoineeTask` branch: [Mission 4 — Make the model call a tool](https://github.com/saayam-for-all/ai/tree/NewJoineeTask#mission-4-make-the-model-call-a-tool).
+
 ## POC Design
 
 ### POC Objective
@@ -113,6 +115,12 @@ The capability was selected because it is deterministic, has an existing in-proc
 Therefore, the POC is evaluating MCP as a mechanism for exposing and consuming AI-facing capabilities, not evaluating emergency lookup as a product requirement.
 
 The results should be interpreted as evidence about the MCP architecture and its trade-offs, rather than evidence that Saayam should introduce this particular tool.
+
+#### Note on the dataset and fidelity to production
+
+`mcp_poc/tools/emergency_lookup.py` reads `services/emergency_numbers.json` directly. [PR #202](https://github.com/saayam-for-all/ai/pull/202) has since replaced that file. The JP / fire example still returns `119`, so the POC results reproduce. Some other lookups now differ from the POC's behavior: for example, FR police changes from `112` to `17`, and CH `general_emergency` changes from `112` to `None`, because the POC skips the production resolver's fallback to the general emergency number.
+
+This is acceptable for a controlled test capability, but it means the POC tool is not a faithful copy of the production endpoint.
 
 ### POC Capability
 
@@ -204,7 +212,7 @@ This becomes more valuable when multiple independent clients, agents, or service
 
 ## Baseline vs MCP Evaluation
 
-The comparison used the same Groq model (`openai/gpt-oss-20b`), natural-language question, emergency-number capability, underlying dataset, deterministic lookup behavior, effective tool schema, two model calls, and local execution environment.
+The comparison used the same Groq model (`openai/gpt-oss-20b`), natural-language question, emergency-number capability, underlying dataset, deterministic lookup behavior, two model calls, and local execution environment. The tool schemas were functionally equivalent, with the minor differences listed under "Known differences between the two paths" below.
 
 The primary architectural variable was whether the capability was accessed directly in application code or through MCP.
 
@@ -222,6 +230,15 @@ The primary architectural variable was whether the capability was accessed direc
 | Error handling | Application-level | MCP + application-level |
 | Reusability | Application-specific | Potentially reusable by independent clients |
 | Session persistence | Not provided | Not provided by MCP itself |
+
+### Known differences between the two paths
+
+The two paths are not perfectly identical. Two differences were identified:
+
+- **Schema description for `country`:** The schema discovered through MCP has no description on `country` (`{'title': 'Country', 'type': 'string'}`), whereas the baseline (`baseline.py:30`) includes `"ISO 3166-1 alpha-2 country code"`. In the MCP path the hint is carried by the tool's docstring instead.
+- **Tool result returned to Groq:** The MCP client sends `json.dumps(structured_content)`, i.e. `{"result": "119"}` (`client.py:122`), while the baseline sends `119` (`baseline.py:127`).
+
+Neither difference changes the conclusions of this evaluation, but they may contribute to the small token gap (568.6 vs 560.2 mean total tokens/run), so that comparison should be read as approximate rather than strictly like-for-like.
 
 ## Functional Findings
 
@@ -252,6 +269,18 @@ The POC also showed that making a deterministic tool available does not by itsel
 
 MCP therefore does not remove the need for normal tool validation and response-grounding controls.
 
+**Example.** In the Japan fire lookup test, the MCP tool returned only:
+
+```json
+{"result": "119"}
+```
+
+The final model response was:
+
+> "In Japan, the emergency number for fire (as well as ambulance and police) is 119."
+
+The `119` value was grounded in the tool result. However, the additional claim that the same number applies to ambulance and police was not returned by the tool. This demonstrates that tool use alone does not guarantee that the final natural-language response remains fully grounded in the retrieved result.
+
 ## Performance and Cost
 
 The POC was intentionally small and was not intended to be a statistically rigorous benchmark. Five repeated runs were used to identify meaningful overhead.
@@ -268,6 +297,15 @@ The MCP path was approximately 2.47× the baseline mean in this specific POC.
 This should not be interpreted as intrinsic MCP protocol overhead. The POC starts a Python MCP server process for each run and performs MCP initialization and tool discovery before the model call. The result therefore represents the cost of this cold-start stdio architecture, including process startup and initialization.
 
 A persistent MCP server could reduce this startup component, but that was outside the scope of this spike.
+
+#### Reproducibility
+
+The reported figures cannot yet be re-run from the repository. The PR contains no benchmark script or raw per-run numbers, and `client.py` / `baseline.py` only print `usage`. To make the 2.024 s / 4.996 s figures reproducible, a follow-up could:
+
+- Add a small `mcp_poc/benchmark.py`, or publish a table of the five raw runs with date, machine, and network details.
+- Optionally, time repeated `call_tool` calls inside one already-open MCP session. This would separate MCP's own per-call overhead from server start-up, which this document suspects accounts for most of the latency gap.
+
+This is optional: the recommendation does not depend on it.
 
 ### Token usage
 
@@ -299,7 +337,7 @@ The MCP POC required:
 - Conversion of MCP tool definitions into Groq tool definitions;
 - Additional client/server error boundaries.
 
-The experimental source footprint was approximately 360 lines across the POC files. This is a measurement of the small evaluation implementation only and should not be treated as an estimate of production implementation effort.
+The experimental source footprint was approximately 412 lines across the POC files (`wc -l mcp_poc/**/*.py`). This is a measurement of the small evaluation implementation only and should not be treated as an estimate of production implementation effort.
 
 Productionizing the architecture would additionally require decisions around:
 
@@ -340,7 +378,7 @@ MCP could potentially expose context-related capabilities in a future architectu
 
 - **Additional technical boundary:** MCP introduces a client/server boundary where the baseline has a direct function call. This adds lifecycle, transport, initialization, and failure modes.
 - **Schema and argument risk:** The POC showed that tool schema quality affects whether the model generates valid arguments. MCP makes the schema discoverable, but does not eliminate the need to validate model-generated arguments.
-- **Latency risk:** The current cold-start stdio POC approximately doubled mean end-to-end latency relative to the in-process baseline. The exact production impact would depend on deployment and server lifecycle.
+- **Latency risk:** The current cold-start stdio POC increased mean end-to-end latency to approximately 2.47× the in-process baseline. The exact production impact would depend on deployment and server lifecycle.
 - **Operational risk:** A production MCP architecture would require additional ownership for deployment, monitoring, security, availability, and versioning of MCP server(s).
 - **Privacy risk for sessions:** MCP does not solve the privacy implications of introducing conversation persistence. Any future session store would need an explicit decision about retention, access, and handling of beneficiary conversation data.
 
@@ -401,7 +439,7 @@ The spike remained isolated from production.
 
 The MCP experiment was contained within the dedicated POC area and its experimental dependency file.
 
-The production test suite was not changed as part of the spike; the existing test baseline was 278 passed.
+The production test suite was not changed as part of the spike; CI on the spike's own commit ran 348 tests, and the `dev` branch currently runs 409. (An earlier draft of this document recorded a baseline of 278 passed, which was out of date.)
 
 ## Final Acceptance Criteria
 
