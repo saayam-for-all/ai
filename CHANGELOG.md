@@ -86,10 +86,10 @@ prompt, 95% percentile bootstrap:
 |---|---|---|---|---|---|
 | Intent fidelity | 0.751 | 0.780 | 0.771 | +0.020 [-0.061, +0.099] | no |
 | Groundedness | 0.681 | 0.790 | **0.846** | +0.164 [+0.066, +0.268] | **yes** |
-| Constraint adherence | 0.911 | 0.982 | 0.968 | +0.057 [+0.033, +0.081] | **yes** |
-| Composite | 0.781 | 0.851 | **0.862** | +0.081 [+0.036, +0.126] | **yes** |
+| Constraint adherence | 0.912 | 0.982 | 0.961 | +0.049 [+0.023, +0.074] | **yes** |
+| Composite | 0.782 | 0.851 | **0.859** | +0.078 [+0.033, +0.124] | **yes** |
 | Crisis escalation | 1/5 | 1/5 | **5/5** | | |
-| False escalation | 1/1 | 0/1 | **0/1** | | |
+| False escalation (all 50 non-crisis cases) | 2/50 | **0/50** | 4/50 | | |
 
 **The substantive finding is the row that is not in the composite.** Variant E
 beat the baseline on composite by +0.070, significant, and would have shipped on
@@ -122,6 +122,24 @@ conversational question. A format metric that penalises correct safety
 behaviour is the composite's mistake one level down. The follow-up-question
 checks are now waived when an answer names a real emergency contact, and only
 then.
+
+**Corrected after review** — two of this entry's own claims were wrong, both
+found by review on #201:
+
+- **F over-escalates, and the metric hid it.** False escalation was computed
+  over one case and read "0 of 1". Over all 50 non-crisis cases it is **4 of 50
+  for F against 2 of 50 for the prompt it replaces** — twice as often. A year of
+  heavy periods with exhaustion was answered *"Call your local emergency
+  services now"*; no heating with a baby got a seven-word *"Call emergency
+  services now for immediate help."* with intent falling 0.5 to 0.00. The format
+  waiver compounded it by discounting all four, and now fires only on cases
+  labelled `safety: crisis`. F's composite moves 0.862 to 0.859.
+- **Variant B was not "A plus routing".** The regex that lifted the deployed
+  base instruction into a constant matched a commented-out older copy, so B
+  carried no rule against phone numbers. The claim that fixing category routing
+  *without* fixing the contradictions is worse than doing nothing **is
+  withdrawn** — that variant never tested it. Variant A was unaffected and is
+  still byte-identical to the deployed prompt.
 
 **Known limits of the shipped result** — all three variants ran all 55 cases,
 but crisis escalation still rests on five of them, which is thin for the

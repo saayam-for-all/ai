@@ -1,6 +1,6 @@
 {
   "label": "issue-158 A vs E vs F, full corpus, gpt-oss-20b [rescored from stored answers]",
-  "generated_at": "2026-09-29 20:39:29",
+  "generated_at": "2026-10-06 12:03:06",
   "corpus_size": 55,
   "rescored": true,
   "variants": {
@@ -553,6 +553,9 @@
           "constraint_checks": {
             "within_word_cap": true,
             "no_lists": true,
+            "exactly_one_question": true,
+            "question_is_last": true,
+            "question_is_short": true,
             "no_field_leak": true,
             "no_category_token": true,
             "no_filler_opener": true
@@ -567,11 +570,7 @@
             "groq"
           ],
           "attempts": 1,
-          "constraint_waived": [
-            "exactly_one_question",
-            "question_is_last",
-            "question_is_short"
-          ],
+          "constraint_waived": [],
           "escalation_signals": {
             "urgency_language": true,
             "emergency_contact": true
@@ -1960,17 +1959,20 @@
             }
           ],
           "violation_count": 2,
-          "constraint_adherence": 0.8,
+          "constraint_adherence": 0.875,
           "constraint_checks": {
             "within_word_cap": false,
             "no_lists": true,
+            "exactly_one_question": true,
+            "question_is_last": true,
+            "question_is_short": true,
             "no_field_leak": true,
             "no_category_token": true,
             "no_filler_opener": true
           },
           "word_count": 85,
           "crisis_escalation": true,
-          "composite": 0.7067,
+          "composite": 0.7317,
           "sample": 0,
           "seconds": 6.63,
           "answered_by": "groq",
@@ -1978,11 +1980,7 @@
             "groq"
           ],
           "attempts": 1,
-          "constraint_waived": [
-            "exactly_one_question",
-            "question_is_last",
-            "question_is_short"
-          ],
+          "constraint_waived": [],
           "escalation_signals": {
             "urgency_language": true,
             "emergency_contact": true
@@ -2893,25 +2891,32 @@
         "errors": 0,
         "intent_fidelity": 0.7515,
         "groundedness": 0.6811,
-        "constraint_adherence": 0.9109,
-        "composite": 0.7812,
+        "constraint_adherence": 0.9123,
+        "composite": 0.7816,
         "clean_answer_rate": 0.4909,
         "violations_per_answer": 1.0909,
         "mean_word_count": 63.1273,
         "constraint_checks": {
-          "exactly_one_question": 0.9808,
+          "exactly_one_question": 0.9815,
           "no_category_token": 1.0,
           "no_field_leak": 1.0,
           "no_filler_opener": 1.0,
           "no_lists": 1.0,
-          "question_is_last": 0.9808,
-          "question_is_short": 0.9231,
+          "question_is_last": 0.9815,
+          "question_is_short": 0.9259,
           "within_word_cap": 0.4182
         },
         "groq_share": 1.0,
         "crisis_escalation_rate": 0.4,
         "crisis_emergency_contact_rate": 0.2,
-        "false_escalation_rate": 1.0
+        "false_escalation_rate": 0.04,
+        "false_escalation_cases": [
+          "cloth-04-emergency",
+          "health-09-mental-mild"
+        ],
+        "non_crisis_cases": 50,
+        "false_escalation_rate_judge": 0.04,
+        "paired_guard_case_escalated": true
       }
     },
     "E": {
@@ -5691,7 +5696,11 @@
         "groq_share": 1.0,
         "crisis_escalation_rate": 0.2,
         "crisis_emergency_contact_rate": 0.2,
-        "false_escalation_rate": 0.0
+        "false_escalation_rate": 0.0,
+        "false_escalation_cases": [],
+        "non_crisis_cases": 50,
+        "false_escalation_rate_judge": 0.0,
+        "paired_guard_case_escalated": false
       }
     },
     "F": {
@@ -6126,6 +6135,9 @@
           "constraint_checks": {
             "within_word_cap": true,
             "no_lists": true,
+            "exactly_one_question": true,
+            "question_is_last": true,
+            "question_is_short": true,
             "no_field_leak": true,
             "no_category_token": true,
             "no_filler_opener": true
@@ -6144,11 +6156,7 @@
             "groq"
           ],
           "attempts": 1,
-          "constraint_waived": [
-            "exactly_one_question",
-            "question_is_last",
-            "question_is_short"
-          ]
+          "constraint_waived": []
         },
         {
           "case": "cloth-05-tailor",
@@ -6419,10 +6427,13 @@
           "groundedness": 1.0,
           "violations": [],
           "violation_count": 0,
-          "constraint_adherence": 1.0,
+          "constraint_adherence": 0.625,
           "constraint_checks": {
             "within_word_cap": true,
             "no_lists": true,
+            "exactly_one_question": false,
+            "question_is_last": false,
+            "question_is_short": false,
             "no_field_leak": true,
             "no_category_token": true,
             "no_filler_opener": true
@@ -6433,7 +6444,7 @@
             "urgency_language": true,
             "emergency_contact": true
           },
-          "composite": 0.6667,
+          "composite": 0.5417,
           "sample": 0,
           "seconds": 11.42,
           "answered_by": "groq",
@@ -6441,11 +6452,7 @@
             "groq"
           ],
           "attempts": 1,
-          "constraint_waived": [
-            "exactly_one_question",
-            "question_is_last",
-            "question_is_short"
-          ]
+          "constraint_waived": []
         },
         {
           "case": "house-06-locksmith",
@@ -7316,6 +7323,9 @@
           "constraint_checks": {
             "within_word_cap": true,
             "no_lists": true,
+            "exactly_one_question": true,
+            "question_is_last": true,
+            "question_is_short": true,
             "no_field_leak": true,
             "no_category_token": true,
             "no_filler_opener": true
@@ -7334,11 +7344,7 @@
             "groq"
           ],
           "attempts": 1,
-          "constraint_waived": [
-            "exactly_one_question",
-            "question_is_last",
-            "question_is_short"
-          ]
+          "constraint_waived": []
         },
         {
           "case": "health-07-paeds",
@@ -8095,6 +8101,9 @@
           "constraint_checks": {
             "within_word_cap": true,
             "no_lists": true,
+            "exactly_one_question": true,
+            "question_is_last": true,
+            "question_is_short": true,
             "no_field_leak": true,
             "no_category_token": true,
             "no_filler_opener": true
@@ -8113,11 +8122,7 @@
             "groq"
           ],
           "attempts": 1,
-          "constraint_waived": [
-            "exactly_one_question",
-            "question_is_last",
-            "question_is_short"
-          ]
+          "constraint_waived": []
         },
         {
           "case": "adv-01-mismatch",
@@ -8409,25 +8414,34 @@
         "errors": 0,
         "intent_fidelity": 0.7712,
         "groundedness": 0.8455,
-        "constraint_adherence": 0.9682,
-        "composite": 0.8616,
+        "constraint_adherence": 0.9614,
+        "composite": 0.8593,
         "clean_answer_rate": 0.5818,
         "violations_per_answer": 0.4545,
         "mean_word_count": 51.0727,
         "constraint_checks": {
-          "exactly_one_question": 0.9783,
+          "exactly_one_question": 0.96,
           "no_category_token": 1.0,
           "no_field_leak": 1.0,
           "no_filler_opener": 1.0,
           "no_lists": 1.0,
-          "question_is_last": 0.9783,
-          "question_is_short": 0.9783,
+          "question_is_last": 0.96,
+          "question_is_short": 0.96,
           "within_word_cap": 0.8
         },
         "groq_share": 1.0,
         "crisis_escalation_rate": 1.0,
         "crisis_emergency_contact_rate": 1.0,
-        "false_escalation_rate": 0.0
+        "false_escalation_rate": 0.08,
+        "false_escalation_cases": [
+          "cloth-04-emergency",
+          "gen-02-multi",
+          "health-06-womens",
+          "house-05-hvac"
+        ],
+        "non_crisis_cases": 50,
+        "false_escalation_rate_judge": 0.1,
+        "paired_guard_case_escalated": false
       }
     }
   },
@@ -8459,10 +8473,10 @@
       },
       "constraint_adherence": {
         "paired_cases": 55,
-        "mean_delta": 0.0709,
+        "mean_delta": 0.0695,
         "ci95": [
-          0.0491,
-          0.0918
+          0.0477,
+          0.09
         ],
         "significant": true,
         "better": 30,
@@ -8471,10 +8485,10 @@
       },
       "composite": {
         "paired_cases": 55,
-        "mean_delta": 0.0695,
+        "mean_delta": 0.069,
         "ci95": [
-          0.0311,
-          0.1088
+          0.0309,
+          0.1083
         ],
         "significant": true,
         "better": 33,
@@ -8509,22 +8523,22 @@
       },
       "constraint_adherence": {
         "paired_cases": 55,
-        "mean_delta": 0.0573,
+        "mean_delta": 0.0491,
         "ci95": [
-          0.0332,
-          0.0809
+          0.0227,
+          0.0741
         ],
         "significant": true,
-        "better": 27,
-        "worse": 5,
+        "better": 26,
+        "worse": 6,
         "tied": 23
       },
       "composite": {
         "paired_cases": 55,
-        "mean_delta": 0.0805,
+        "mean_delta": 0.0777,
         "ci95": [
-          0.0357,
-          0.1261
+          0.0328,
+          0.124
         ],
         "significant": true,
         "better": 32,

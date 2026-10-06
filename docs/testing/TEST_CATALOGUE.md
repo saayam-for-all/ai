@@ -35,14 +35,14 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_import_blast_radius.py`](../../tests/test_import_blast_radius.py) | Integration | #169, #171 | `module-scope imports` | 4 |
 | [`tests/test_model_fallback.py`](../../tests/test_model_fallback.py) | Unit | #193 | `utils/model_fallback.py` | 9 |
 | [`tests/test_org_search_contract.py`](../../tests/test_org_search_contract.py) | Contract | #170 | `utils/search_orgs.py` | 24 |
-| [`tests/test_prompt_accuracy_metrics.py`](../../tests/test_prompt_accuracy_metrics.py) | Unit | #158 | `tools/measure_prompt_accuracy.py` | 55 |
+| [`tests/test_prompt_accuracy_metrics.py`](../../tests/test_prompt_accuracy_metrics.py) | Unit | #158 | `tools/measure_prompt_accuracy.py` | 58 |
 | [`tests/test_request_db_schema.py`](../../tests/test_request_db_schema.py) | Unit | #169 | `utils/request_db.py` | 44 |
-| [`tests/test_request_detail_prompts.py`](../../tests/test_request_detail_prompts.py) | Unit | #158 | `utils/prompts.py variant selection` | 207 |
+| [`tests/test_request_detail_prompts.py`](../../tests/test_request_detail_prompts.py) | Unit | #158 | `utils/prompts.py variant selection` | 228 |
 | [`tests/test_response_contract.py`](../../tests/test_response_contract.py) | Contract | #146, #169, #170 | `response envelopes` | 10 |
 | [`tests/test_router.py`](../../tests/test_router.py) | Integration | #171 | `lambda_function.lambda_handler` | 31 |
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
 | [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 49 |
-| | | | **Total** | **610** |
+| | | | **Total** | **634** |
 
 ## Every test
 
@@ -305,7 +305,7 @@ Tests for More Organizations / the Organizations tab - issue #170.
 
 ### `test_prompt_accuracy_metrics.py`
 
-*Unit · issue #158 · 55 tests*
+*Unit · issue #158 · 58 tests*
 
 Unit tests for the request-detail accuracy metrics (issue #158).
 
@@ -342,14 +342,17 @@ Unit tests for the request-detail accuracy metrics (issue #158).
 | `test_ordinary_advice_is_not_counted_as_escalation` | Ordinary advice is not counted as escalation. |
 | `test_urgency_words_alone_are_not_escalation` | "Do it immediately" is urgency. It does not tell anyone where to go. |
 | `test_escalation_detection_on_empty_answer` | Escalation detection on empty answer. |
-| `test_an_escalation_is_not_marked_down_for_omitting_a_follow_up_question` | The correct reply to a non-blanching rash on a drowsy toddler is four words. It was scoring 0.625 for not ending conversationally. |
+| `test_an_escalation_on_a_crisis_case_is_not_marked_down_for_omitting_a_question` | The correct reply to a non-blanching rash on a drowsy toddler is four words. It was scoring 0.625 for not ending conversationally. |
+| `test_an_escalation_on_a_non_crisis_case_gets_no_format_discount` | The waiver used to apply wherever an emergency contact appeared. |
 | `test_the_waiver_needs_a_real_emergency_contact_not_just_urgency` | Otherwise any answer dodges the format rules by sounding urgent. |
 | `test_a_normal_answer_is_still_held_to_the_question_rules` | A normal answer is still held to the question rules. |
 | `test_rescore_recomputes_code_metrics_from_the_stored_answer` | Rescore recomputes code metrics from the stored answer. |
+| `test_rescore_applies_the_waiver_only_on_crisis_cases` | Rescore applies the waiver only on crisis cases. |
 | `test_rescore_keeps_judge_findings_but_recomputes_regex_ones` | Rescore keeps judge findings but recomputes regex ones. |
 | `test_rescore_dedupes_a_judge_claim_against_its_regex_hit` | Rescore dedupes a judge claim against its regex hit. |
+| `test_false_escalation_is_measured_over_all_non_crisis_cases` | It used to be computed over exactly one case. |
 
-> 37 test functions expand to 55 cases through parametrisation.
+> 40 test functions expand to 58 cases through parametrisation.
 
 ### `test_request_db_schema.py`
 
@@ -402,7 +405,7 @@ The SQL this service runs must match the live database - issue #169.
 
 ### `test_request_detail_prompts.py`
 
-*Unit · issue #158 · 207 tests*
+*Unit · issue #158 · 228 tests*
 
 Unit tests for the request-detail prompt variants (issue #158).
 
@@ -432,8 +435,12 @@ Unit tests for the request-detail prompt variants (issue #158).
 | `test_production_serves_the_variant_the_ab_selected` | F is deployed, on the evidence in docs/metrics/REQUEST_DETAIL_ACCURACY.md. |
 | `test_the_shipped_prompt_carries_the_crisis_override` | The single behaviour F was shipped for. |
 | `test_the_shipped_prompt_routes_every_category_to_a_domain_prompt` | The shipped prompt routes every category to a domain prompt. |
+| `test_variant_a_constant_holds_the_live_instruction_not_the_commented_one` | CONVERSATIONAL_BASE_INSTRUCTION_A was extracted with a regex anchored on ` conversational_base_instruction = ...`. The file also contained a commented-out older version of the same assignment, and `# conversa...` contains four spaces before the name, so the pattern matched the dead text first. The constant ended up holding the superseded prompt - literal `# 1.` line prefixes and all - and variant B, which reads it, silently lost the rule forbidding phone numbers. |
+| `test_variant_b_is_variant_a_plus_routing_and_nothing_else` | Where routing is a no-op, B must be byte-identical to A. |
+| `test_variant_b_differs_from_a_where_routing_changes_the_body` | The other half: B must actually do something on an unmatched category. |
+| `test_the_no_numbers_rule_survives_into_variant_b` | The specific regression: B had no prohibition on phone numbers at all. |
 
-> 24 test functions expand to 207 cases through parametrisation.
+> 28 test functions expand to 228 cases through parametrisation.
 
 ### `test_response_contract.py`
 

@@ -250,3 +250,62 @@ def test_the_shipped_prompt_routes_every_category_to_a_domain_prompt():
     on_general = [n for n in ALL_CATEGORY_NAMES
                   if prompts.resolve_prompt_key(n, prompts.CATEGORY_PROMPTS_C) == "General"]
     assert on_general == ["GENERAL_CATEGORY"]
+
+
+# ---------------------------------------------------------------------------
+# The base-instruction constant, and the bug that hid in it
+# ---------------------------------------------------------------------------
+
+def test_variant_a_constant_holds_the_live_instruction_not_the_commented_one():
+    """CONVERSATIONAL_BASE_INSTRUCTION_A was extracted with a regex anchored on
+    `    conversational_base_instruction = ...`. The file also contained a
+    commented-out older version of the same assignment, and `#     conversa...`
+    contains four spaces before the name, so the pattern matched the dead text
+    first. The constant ended up holding the superseded prompt - literal `# 1.`
+    line prefixes and all - and variant B, which reads it, silently lost the
+    rule forbidding phone numbers.
+
+    Variant A was unaffected, because the live inline block was left in place,
+    which is exactly why comparing A against the legacy builder could not see
+    the problem.
+    """
+    text = prompts.CONVERSATIONAL_BASE_INSTRUCTION_A
+    assert "# 1." not in text, "constant holds commented-out text"
+    assert "Do NOT provide emergency numbers" in text
+    assert "Do NOT mention organization names" in text
+
+
+@pytest.mark.parametrize(
+    "category",
+    [n for n in ALL_CATEGORY_NAMES
+     if n in prompts.category_prompts
+     and prompts.resolve_prompt_key(n, prompts.category_prompts) == n],
+)
+def test_variant_b_is_variant_a_plus_routing_and_nothing_else(category):
+    """Where routing is a no-op, B must be byte-identical to A.
+
+    B exists to isolate one change: which prompt body gets selected. If B also
+    differs in its instructions then any result attributed to routing is
+    measuring two things at once - which is what happened, and what invalidated
+    the claim that fixing routing alone is worse than doing nothing.
+    """
+    assert prompts.get_conversational_prompt(
+        category, "Subject", "Leeds", "female", "42", variant="A"
+    ) == prompts.get_conversational_prompt(
+        category, "Subject", "Leeds", "female", "42", variant="B"
+    )
+
+
+def test_variant_b_differs_from_a_where_routing_changes_the_body():
+    """The other half: B must actually do something on an unmatched category."""
+    for category in ("CARDIAC_OR_BLOOD_PRESSURE", "PLUMBING", "HOUSING_ASSISTANCE"):
+        assert prompts.get_conversational_prompt(category, "S", "Leeds", variant="A") \
+            != prompts.get_conversational_prompt(category, "S", "Leeds", variant="B")
+
+
+def test_the_no_numbers_rule_survives_into_variant_b():
+    """The specific regression: B had no prohibition on phone numbers at all."""
+    text = prompts.get_conversational_prompt(
+        "CARDIAC_OR_BLOOD_PRESSURE", "s", location="Memphis, TN", variant="B"
+    )
+    assert "Do NOT provide emergency numbers" in text
