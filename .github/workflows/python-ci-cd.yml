@@ -112,12 +112,11 @@
             fi
 
         # --- TESTS [SAST]: Static Application Security Testing ---
-        # FIX - changed -lll to -ll for broader security coverage
-        - name: SAST with Bandit 
+        - name: SAST with Bandit
           run: |
             echo "=== SAST with Bandit (output below) ==="
             source .venv/bin/activate
-            bandit lambda_function.py services utils -ll -f screen
+            python -m bandit lambda_function.py services utils -ll -f screen
 
         # --- CODE COVERAGE: Run tests with coverage ---
         - name: Verify app import (quick check before tests)
@@ -191,7 +190,7 @@
           continue-on-error: true
           run: |
             source .venv/bin/activate
-            flake8 . --max-line-length=150 --show-source --statistics --exclude=.venv,__pycache__,.git,build,dist
+            python -m flake8 . --max-line-length=150 --show-source --statistics --exclude=.venv,__pycache__,.git,build,dist
 
         ## --- PACKAGING: Zip the Python app + dependencies ---
         - name: Package Lambda application
