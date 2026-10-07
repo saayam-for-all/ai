@@ -12,13 +12,11 @@
         - test
         - dev
         - main
-        - dhara0611/feature-cicd-update  # TEST ONLY: temporary validation branch; keep existing logic intact
 
     pull_request:
       branches:
         - dev
         - main
-        - dhara0611/feature-cicd-update  # TEST ONLY: temporary validation branch; keep existing logic intact
       types:
         - opened
         - synchronize
@@ -230,8 +228,8 @@
     deploy:
       needs: build-and-test
       if: >
-        (github.event_name == 'push' && (github.ref_name == 'dev' || github.ref_name == 'test' || github.ref_name == 'main' || github.ref_name == 'dhara0611/feature-cicd-update')) ||
-        (github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true && (github.base_ref == 'dev' || github.base_ref == 'test' || github.base_ref == 'main' || github.base_ref == 'dhara0611/feature-cicd-update'))
+        (github.event_name == 'push' && (github.ref_name == 'dev' || github.ref_name == 'test' || github.ref_name == 'main')) ||
+        (github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true && (github.base_ref == 'dev' || github.base_ref == 'test' || github.base_ref == 'main'))
 
       runs-on: ubuntu-latest
       
@@ -279,11 +277,6 @@
             TARGET_BRANCH="${{ github.base_ref }}"
             if [ -z "$TARGET_BRANCH" ]; then
               TARGET_BRANCH="${{ github.ref_name }}"
-            fi
-
-            # TEST ONLY: treat the feature branch like dev so we can validate changes without creating a new S3 path.
-            if [ "$TARGET_BRANCH" = "dhara0611/feature-cicd-update" ]; then
-              TARGET_BRANCH="dev"
             fi
 
             ENV_PATH="$TARGET_BRANCH"
