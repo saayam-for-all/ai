@@ -116,7 +116,7 @@
           run: |
             echo "=== SAST with Bandit (output below) ==="
             source .venv/bin/activate
-            python -m bandit lambda_function.py services utils -ll -f screen
+            .venv/bin/python -m bandit lambda_function.py services utils -ll -f screen
 
         # --- CODE COVERAGE: Run tests with coverage ---
         - name: Verify app import (quick check before tests)
