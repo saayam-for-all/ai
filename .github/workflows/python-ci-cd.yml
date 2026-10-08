@@ -1,4 +1,4 @@
-  name: Python Flask CI-CD Pipeline
+  name: Python CI-CD Pipeline
 
   concurrency:
     group: ci-${{ github.ref }}
@@ -15,7 +15,6 @@
 
     pull_request:
       branches:
-        - test
         - dev
         - main
       types:
@@ -111,13 +110,11 @@
             fi
 
         # --- TESTS [SAST]: Static Application Security Testing ---
-        # FIX - changed -lll to -ll for broader security coverage
         - name: SAST with Bandit
-          continue-on-error: true 
           run: |
             echo "=== SAST with Bandit (output below) ==="
             source .venv/bin/activate
-            bandit lambda_function.py services utils -ll -f screen
+            .venv/bin/python -m bandit lambda_function.py services utils -ll -f screen
 
         # --- CODE COVERAGE: Run tests with coverage ---
         - name: Verify app import (quick check before tests)
@@ -191,7 +188,7 @@
           continue-on-error: true
           run: |
             source .venv/bin/activate
-            flake8 . --max-line-length=150 --exclude=.venv,__pycache__,.git,build,dist
+            python -m flake8 . --max-line-length=150 --show-source --statistics --exclude=.venv,__pycache__,.git,build,dist
 
         ## --- PACKAGING: Zip the Python app + dependencies ---
         - name: Package Lambda application
@@ -267,8 +264,8 @@
           uses: aws-actions/configure-aws-credentials@v4
           with:
             aws-region: ${{ env.AWS_REGION }}
-            aws-access-key-id: ${{ secrets.AWS_AI_ACCESS_KEY }}
-            aws-secret-access-key: ${{ secrets.AWS_AI_SECRET_ACCESS_KEY }}
+            aws-access-key-id: ${{ secrets.GENAI_AWS_ACCESS_KEY }}
+            aws-secret-access-key: ${{ secrets.GENAI_AWS_SECRET_ACCESS_KEY }}
         
          # --- DYNAMIC ENVIRONMENT S3 UPLOAD BLOCK ---
         - name: Upload to S3 Bucket (Environment specific)
@@ -282,8 +279,9 @@
               TARGET_BRANCH="${{ github.ref_name }}"
             fi
 
-            # Map branch name with env path and 'main' branch to 'prod' directory structure
             ENV_PATH="$TARGET_BRANCH"
+
+            # Map the main branch to the prod directory structure.
             if [ "$ENV_PATH" = "main" ]; then
               ENV_PATH="prod"
             fi
@@ -358,3 +356,44 @@
               aws lambda wait function-active \
                 --function-name "$LAMBDA_FUNCTION_NAME"
             fi
+
+    # To activate testing in the future, uncomment the lines below:         
+    #    --- POST-DEPLOYMENT: Playwright E2E tests ---
+        # - name: Set up Node.js
+        #   uses: actions/setup-node@v4
+        #   with:
+        #     node-version: lts/*
+         
+        # - name: Install Playwright dependencies
+        #   run: |
+        #     npm init -y
+        #     npm install @playwright/test
+        #     npx playwright install --with-deps
+
+        # - name: Run Playwright Tests against Environment
+        #   shell: bash
+        #   run: |
+        #     if [ "${{ github.event_name }}" = "pull_request" ]; then
+        #       TARGET_BRANCH="${{ github.base_ref }}"
+        #     else
+        #       TARGET_BRANCH="${{ github.ref_name }}"
+        #     fi
+
+        #     if [ "$TARGET_BRANCH" = "test" ]; then
+        #       TARGET_URL="https://test-saayam.netlify.app"
+        #     elif [ "$TARGET_BRANCH" = "dev" ]; then
+        #       TARGET_URL="https://dev-saayam.netlify.app"
+        #     else
+        #       TARGET_URL="https://test.help-for-everyone.org/"
+        #     fi
+        #     echo "✅ Target environment identified: $TARGET_URL"
+        #     echo "⚠️ PLACEHOLDER: Playwright test execution command is currently paused until test files are added to the repo."
+
+         
+        #     # export TARGET_URL
+        #     # set +e
+        #     # npx playwright test
+        #     # PLAYWRIGHT_EXIT_CODE=$?
+        #     # set -e
+        #     # echo "Target URL: $TARGET_URL"
+        #     # exit $PLAYWRIGHT_EXIT_CODE
