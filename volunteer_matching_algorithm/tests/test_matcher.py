@@ -12,12 +12,14 @@ fake_embeddings.cosine_similarity = lambda a, b: 0.0
 
 sys.modules["app.embeddings"] = fake_embeddings
 
-from app import matcher
+from app import crud_volunteers
 from app import crud_requests
 
 
 
-def test_match_volunteers_returns_ranked_results(monkeypatch):
+
+def test_match_volunteers_returns_ranked_results(monkeypatch, fake_embeddings):
+    matcher = fake_embeddings
     volunteers = pd.DataFrame([
         {
             "VolunteerId": "V2",
@@ -121,7 +123,8 @@ def test_match_volunteers_returns_ranked_results(monkeypatch):
     assert result.iloc[0]["VolunteerName"] == "Best Volunteer"
     assert result.iloc[0]["FinalScore"] > result.iloc[1]["FinalScore"]
 
-def test_match_volunteer_group_with_blank_vol_ids(monkeypatch):
+def test_match_volunteer_group_with_blank_vol_ids(monkeypatch, fake_embeddings):
+    matcher = fake_embeddings
     requests = pd.DataFrame([
         {
             "RequestId": "REQ_GROUP",
@@ -235,4 +238,35 @@ def test_add_request_populates_request_id(monkeypatch, tmp_path):
     assert saved_requests.iloc[0]["RequestId"] == result["request_id"]
     assert saved_requests.iloc[0]["REQ_ID"] == result["request_id"]
     assert saved_requests.iloc[0]["RequestId"] == saved_requests.iloc[0]["REQ_ID"]
-    
+
+
+def test_add_volunteer_populates_volunteer_id(monkeypatch, tmp_path):
+    temp_csv = tmp_path / "volunteers.csv"
+
+    monkeypatch.setattr(
+        crud_volunteers,
+        "CSV_PATH",
+        str(temp_csv)
+    )
+
+    volunteer = SimpleNamespace(
+        VolunteerName="Test Volunteer",
+        ContactInformation="test@example.com",
+        Location="Remote",
+        Skills="First Aid",
+        LanguagesSpoken="English",
+        PreferredServiceAreas="Healthcare",
+        Rating=5.0,
+        Status="Active",
+        TransportationAvailability="Yes",
+        WillingnessToTravel="High",
+    )
+
+    result = crud_volunteers.add_volunteer(volunteer)
+
+    saved_volunteers = pd.read_csv(temp_csv)
+
+    assert len(saved_volunteers) == 1
+    assert saved_volunteers.iloc[0]["VolunteerId"] == result["volunteer_id"]
+    assert saved_volunteers.iloc[0]["VOL_ID"] == result["volunteer_id"]
+    assert saved_volunteers.iloc[0]["VolunteerId"] == saved_volunteers.iloc[0]["VOL_ID"]
