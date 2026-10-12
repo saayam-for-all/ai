@@ -4,11 +4,17 @@ branch = True
 omit =
     tests/*
     */__pycache__/*
-    # Prompt libraries are data - long string constants with no branches.
-    # Counting them drags the number around without saying anything about
-    # whether the code that uses them is exercised.
-    utils/prompts.py
-    utils/prompts_no_hallucination_reviewed.py
+    # Taxonomy and category text: data, no logic, nothing to exercise.
+    #
+    # utils/prompts.py used to be listed here on the same grounds. It is not
+    # data any more - it carries resolve_prompt_key, the alias table and the
+    # variant dispatch in get_conversational_prompt, which decide which prompt
+    # every request gets. Omitting it meant none of that counted.
+    #
+    # The original worry, that long string constants would drag the number
+    # around, does not hold either: a module-level assignment runs at import,
+    # so each constant counts as a covered statement. Measuring the file takes
+    # the total from 91% to 92% and puts prompts.py itself at 99%.
     utils/categories*.py
     utils/predict_category_list.py
 
