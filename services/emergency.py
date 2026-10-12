@@ -11,6 +11,7 @@ Two rules govern everything in this module, both from issue #146:
    emergency line, flagged as a fallback rather than passed off as the real
    thing.
 """
+import hashlib
 import ipaddress
 import json
 import os
@@ -18,19 +19,153 @@ import urllib.parse
 import urllib.request
 
 
+S3_BUCKET = os.environ.get("EMERGENCY_CONTACTS_S3_BUCKET", "saayam-virginia-public")
+S3_KEY = os.environ.get("EMERGENCY_CONTACTS_S3_KEY", "emergency_contact.json")
+AWS_REGION = os.environ.get("AWS_REGION", "us-east-1")
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_FILE = os.path.join(BASE_DIR, "emergency_numbers.json")
 
-# Module-level cache: reused across Lambda invocations in the same warm container (same as pre-refactor).
+# Module-level cache: reused across Lambda invocations in the same warm container.
 _emergency_numbers_cache = None
+
+# S3 is read inside the first request a container serves, and the function's
+# timeout is 3 s. One attempt only: botocore's legacy `max_attempts` counts
+# retries rather than attempts, so `max_attempts: 1` made two, and two 1.5 s
+# connect timeouts outlasted the function before the fallback could answer.
+# With these settings an unreachable S3 costs about a second.
+_S3_CLIENT_OPTIONS = {
+    "connect_timeout": 1,
+    "read_timeout": 1,
+    "retries": {"total_max_attempts": 1, "mode": "standard"},
+}
+
+
+def _validate_dataset(data):
+    """Return data if it is shaped like the directory, else raise ValueError.
+
+    Parsing proves only that the bytes are JSON. `[]` and `{}` parse too, and
+    once cached they would answer every request in the container with a 500
+    or a 404 until it recycled. A dataset that fails here is treated exactly
+    like one that could not be read.
+    """
+    if not isinstance(data, dict) or not data:
+        raise ValueError(
+            f"expected a non-empty object keyed by country, got {type(data).__name__} "
+            f"of length {len(data) if hasattr(data, '__len__') else 'n/a'}"
+        )
+    for code, record in data.items():
+        if not (isinstance(code, str) and len(code) == 2 and code.isalpha() and code.isupper()):
+            raise ValueError(f"country key {code!r} is not an ISO-3166 alpha-2 code")
+        if not (
+            isinstance(record, dict)
+            and isinstance(record.get("default", {}), dict)
+            and isinstance(record.get("states", {}), dict)
+        ):
+            raise ValueError(f"country {code} is not a {{default, states}} object")
+    return data
+
+
+def _log_loaded(source, raw, data):
+    """One line per cold start naming where the directory came from.
+
+    The bundled file is a byte-identical copy of the S3 object, so the numbers
+    alone cannot say which one answered. The SHA-256 ties the running data to
+    a specific upload.
+    """
+    print(
+        f"INFO: Loaded emergency numbers from {source} "
+        f"({len(data)} countries, sha256={hashlib.sha256(raw).hexdigest()})"
+    )
+
+
+def _read_bundled():
+    """(raw bytes, directory) of the copy packaged with the code, or (None, None)."""
+    if not os.path.exists(DATA_FILE):
+        return None, None
+    with open(DATA_FILE, "rb") as f:
+        raw = f.read()
+    return raw, _validate_dataset(json.loads(raw.decode("utf-8")))
+
+
+def _check_covers_bundled(data, bundled):
+    """Raise ValueError if data drops a country the bundled copy can answer for.
+
+    The shape check passes a file that is well formed but incomplete: a
+    partial export with one country, or records whose numbers are empty or
+    prose. Cached, such a file turns every missing country into a 404 for the
+    life of the container, while the bundled copy that could answer is never
+    read. So every country with a dialable general or police number in the
+    bundled copy must still have one here.
+
+    This also means S3 cannot drop a country's number on its own: the bundled
+    copy has to change in the same release, which it must anyway, since
+    test_bundled_file_is_the_s3_ground_truth pins it to the S3 object.
+    """
+    general = EmergencyServiceResolver._general_emergency_number
+    lost = sorted(
+        code for code, record in bundled.items()
+        if general(record) and not general(data.get(code) or {})
+    )
+    if lost:
+        shown = ", ".join(lost[:10]) + (", ..." if len(lost) > 10 else "")
+        raise ValueError(
+            f"no dialable general or police number for {len(lost)} "
+            f"countries the bundled copy covers: {shown}"
+        )
 
 
 def _load_emergency_numbers():
     global _emergency_numbers_cache
-    if _emergency_numbers_cache is None:
-        with open(DATA_FILE, "r", encoding="utf-8") as f:
-            _emergency_numbers_cache = json.load(f)
-    return _emergency_numbers_cache
+    if _emergency_numbers_cache is not None:
+        return _emergency_numbers_cache
+
+    # Attempt to load from S3 if configured
+    if S3_BUCKET and S3_KEY:
+        try:
+            import boto3
+            from botocore.config import Config
+
+            s3_client = boto3.client(
+                "s3",
+                region_name=AWS_REGION,
+                config=Config(**_S3_CLIENT_OPTIONS),
+            )
+            response = s3_client.get_object(Bucket=S3_BUCKET, Key=S3_KEY)
+            raw = response["Body"].read()
+            data = _validate_dataset(json.loads(raw.decode("utf-8")))
+
+            bundled_raw, bundled = _read_bundled()
+            if bundled is not None:
+                _check_covers_bundled(data, bundled)
+                if raw != bundled_raw:
+                    # S3 is the ground truth, so it still answers. But the
+                    # bundled copy is what a container serves when S3 cannot
+                    # be read, and it now says something different. One line
+                    # a CloudWatch metric filter can alert on.
+                    print(
+                        f"WARN: Emergency numbers in s3://{S3_BUCKET}/{S3_KEY} differ from "
+                        f"the bundled file (s3 sha256={hashlib.sha256(raw).hexdigest()}, "
+                        f"bundled sha256={hashlib.sha256(bundled_raw).hexdigest()}). "
+                        "A fallback would serve different numbers: update "
+                        "services/emergency_numbers.json to match S3."
+                    )
+
+            _emergency_numbers_cache = data
+            _log_loaded(f"s3://{S3_BUCKET}/{S3_KEY}", raw, data)
+            return _emergency_numbers_cache
+        except Exception as e:
+            # Fall back to local bundled JSON on any S3 error (IAM deny, missing key,
+            # network, malformed, misshapen or incomplete object, local dev)
+            print(f"WARN: Could not fetch emergency numbers from s3://{S3_BUCKET}/{S3_KEY} ({type(e).__name__}: {e}). Falling back to local file.")
+
+    raw, bundled = _read_bundled()
+    if bundled is not None:
+        _emergency_numbers_cache = bundled
+        _log_loaded("the bundled file", raw, bundled)
+        return _emergency_numbers_cache
+
+    raise RuntimeError("Emergency numbers dataset is not available from S3 or local package.")
 
 
 # -------------------------------------------------------------------------
@@ -50,6 +185,12 @@ KNOWN_SERVICES = (
     "disaster_management",
     "women_helpline",
     "suicide_helpline",
+    "child_helpline",
+    "coastguard",
+    "traffic_police",
+    "gendarmerie",
+    "gas_leak",
+    "general_emergency_alternate",
 )
 
 # How a returned number was arrived at. The client can label a fallback

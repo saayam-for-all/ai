@@ -244,3 +244,99 @@ def test_warning_names_the_failed_model_and_reason(
 
     assert "groq-primary" in caplog.text
     assert "model_not_found" in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# The routing configuration is validated before any request is served
+# ---------------------------------------------------------------------------
+
+import json  # noqa: E402
+
+from utils.model_fallback import ModelRoutingConfigError, _load_model_chain  # noqa: E402
+
+_GROQ = {"provider": "groq", "model": "g1"}
+_GEMINI = {"provider": "gemini", "model": "m1"}
+
+
+def _routing_file(tmp_path, payload):
+    path = tmp_path / "model_routing.json"
+    path.write_text(payload if isinstance(payload, str) else json.dumps(payload), encoding="utf-8")
+    return path
+
+
+@pytest.mark.parametrize(
+    "payload,message",
+    [
+        ("{not json", "not valid JSON"),
+        ([], "configuration must be an object"),
+        ({"schema_version": 2, "model_chain": [_GEMINI]}, "schema_version"),
+        ({"schema_version": 1, "model_chain": []}, "non-empty list"),
+        ({"schema_version": 1, "model_chain": ["groq"]}, r"model_chain\[0\] must be an object"),
+        ({"schema_version": 1, "model_chain": [{"provider": " ", "model": "m"}]},
+         r"provider must be a non-empty string"),
+        ({"schema_version": 1, "model_chain": [{"provider": "openai", "model": "m"}]},
+         "provider is unsupported"),
+        ({"schema_version": 1, "model_chain": [{**_GROQ, "reasoning_effort": "max"}, _GEMINI]},
+         "reasoning_effort is unsupported"),
+        ({"schema_version": 1, "model_chain": [{**_GEMINI, "reasoning_effort": "low"}]},
+         "only valid for Groq"),
+        ({"schema_version": 1, "model_chain": [_GROQ, _GROQ, _GEMINI]}, "duplicate target"),
+        ({"schema_version": 1, "model_chain": [_GROQ]}, "final model_chain target must be Gemini"),
+        ({"schema_version": 1, "model_chain": [_GEMINI, {**_GEMINI, "model": "m2"}]},
+         "before the final Gemini fallback must be Groq"),
+    ],
+    ids=["not-json", "not-object", "schema-version", "empty-chain", "entry-not-object",
+         "blank-provider", "unknown-provider", "unknown-effort", "effort-on-gemini",
+         "duplicate", "gemini-not-last", "gemini-before-last"],
+)
+def test_an_invalid_routing_configuration_is_refused(tmp_path, payload, message):
+    """A bad model_routing.json fails the cold start, not a request later.
+
+    The chain is loaded once at import, so each of these would otherwise
+    surface as a confusing provider error on the first request.
+    """
+    with pytest.raises(ModelRoutingConfigError, match=message):
+        _load_model_chain(_routing_file(tmp_path, payload))
+
+
+def test_a_missing_routing_configuration_is_refused(tmp_path):
+    with pytest.raises(ModelRoutingConfigError, match="not found"):
+        _load_model_chain(tmp_path / "absent.json")
+
+
+def test_a_duplicate_target_in_a_supplied_chain_is_tried_once(caplog):
+    """The one-attempt-per-model bound also holds for a caller's own chain."""
+    target = ModelTarget(provider="groq", model="g1")
+    attempts = []
+
+    with pytest.raises(ModelChainExhausted):
+        run_model_chain(
+            invoke=attempts.append,
+            is_valid=bool,
+            operation="op",
+            targets=[target, target],
+        )
+
+    assert attempts == [target]
+    assert "duplicate_target_skipped" in caplog.text
+
+
+def test_a_validator_that_raises_advances_the_chain(caplog):
+    """A result that crashes validation is a failed attempt, not an outage."""
+    first = ModelTarget(provider="groq", model="g1")
+    second = ModelTarget(provider="gemini", model="m1")
+
+    def is_valid(result):
+        if result == "unparseable":
+            raise ValueError("cannot read result")
+        return True
+
+    result = run_model_chain(
+        invoke=lambda target: "unparseable" if target == first else "answer",
+        is_valid=is_valid,
+        operation="op",
+        targets=[first, second],
+    )
+
+    assert result == "answer"
+    assert "result_validation_failed" in caplog.text
