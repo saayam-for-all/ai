@@ -77,5 +77,5 @@ def test_the_module_imports_without_any_api_key_configured():
         module = importlib.import_module("lambda_function")
     for handler in ("predict_category_handler", "generate_subject_handler",
                     "generate_answer_handler", "emergency_contacts_handler",
-                    "search_orgs_handler", "lambda_handler"):
+                    "search_orgs_handler", "disaster_check_handler", "lambda_handler"):
         assert callable(getattr(module, handler)), f"{handler} missing after a keyless import"
