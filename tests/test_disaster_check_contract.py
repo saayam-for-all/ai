@@ -187,8 +187,10 @@ def test_an_outage_does_not_leak_the_feed_error():
     assert "10.0.0.7" not in json.dumps(res["body"])
 
 
-def test_an_unexpected_failure_is_a_500_without_internals():
-    with mock.patch.object(LF, "check_location", side_effect=RuntimeError("boom at line 42")):
+@pytest.mark.parametrize("broken", ["check_location", "parse_query"])
+def test_an_unexpected_failure_is_a_500_without_internals(broken):
+    """Nothing escapes the handler: a direct invoke has no router to catch it."""
+    with mock.patch.object(LF, broken, side_effect=RuntimeError("boom at line 42")):
         res = _call(GAZIANTEP)
     assert res["statusCode"] == 500
     assert res["body"] == {"error": "Disaster check failed"}
@@ -215,6 +217,7 @@ def test_a_news_snippet_is_refused_by_name_without_touching_the_feed():
     ({"latitude": 91, "longitude": 37.0}, "latitude must be between"),
     ({"latitude": 37.0, "longitude": 37.0, "radius_km": 5000}, "radius_km must be"),
     ({"latitude": 37.0, "longitude": 37.0, "window_hours": 0}, "window_hours must be"),
+    ({"latitude": 10 ** 400, "longitude": 37.0}, "latitude must be between"),
 ])
 def test_an_unusable_query_is_a_400_that_says_why(payload, fragment):
     with _feed_answers("no_events.geojson") as urlopen:

@@ -29,8 +29,8 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_classification_resilience.py`](../../tests/test_classification_resilience.py) | Unit | - | `services/classification_service.py` | 10 |
 | [`tests/test_client_factory.py`](../../tests/test_client_factory.py) | Unit | #193 | `utils/client.py create_chat_model` | 7 |
 | [`tests/test_client_imports.py`](../../tests/test_client_imports.py) | Integration | #154 | `utils/client.py` | 2 |
-| [`tests/test_disaster_check.py`](../../tests/test_disaster_check.py) | Unit | #191 | `services/disaster_check.py` | 37 |
-| [`tests/test_disaster_check_contract.py`](../../tests/test_disaster_check_contract.py) | Contract | #191 | `disaster_check_handler` | 24 |
+| [`tests/test_disaster_check.py`](../../tests/test_disaster_check.py) | Unit | #191 | `services/disaster_check.py` | 52 |
+| [`tests/test_disaster_check_contract.py`](../../tests/test_disaster_check_contract.py) | Contract | #191 | `disaster_check_handler` | 26 |
 | [`tests/test_emergency_dataset.py`](../../tests/test_emergency_dataset.py) | Dataset | #146 | `services/emergency_numbers.json` | 17 |
 | [`tests/test_emergency_locale.py`](../../tests/test_emergency_locale.py) | Unit | #146 | `services/emergency.py` | 67 |
 | [`tests/test_emergency_s3_reader.py`](../../tests/test_emergency_s3_reader.py) | Unit | #334 | `services/emergency.py S3 reader` | 23 |
@@ -43,8 +43,8 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_router.py`](../../tests/test_router.py) | Integration | #171 | `lambda_function.lambda_handler` | 36 |
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
 | [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 49 |
-| [`tests/test_usgs_earthquakes.py`](../../tests/test_usgs_earthquakes.py) | Unit | #191 | `services/usgs_earthquakes.py` | 26 |
-| | | | **Total** | **498** |
+| [`tests/test_usgs_earthquakes.py`](../../tests/test_usgs_earthquakes.py) | Unit | #191 | `services/usgs_earthquakes.py` | 49 |
+| | | | **Total** | **538** |
 
 ## Every test
 
@@ -126,7 +126,7 @@ Guard against the utils/client.py import regression that broke dev.
 
 ### `test_disaster_check.py`
 
-*Unit · issue #191 · 37 tests*
+*Unit · issue #191 · 52 tests*
 
 Which events reach a location, and the zone drawn around each - issue #191.
 
@@ -138,25 +138,28 @@ Which events reach a location, and the zone drawn around each - issue #191.
 | `test_an_event_whose_zone_stops_short_is_not_detected` | An event whose zone stops short is not detected. |
 | `test_distance_is_measured_across_the_antimeridian` | Fiji sits on it: 179.9 and -179.9 are about 22 km apart, not a world. |
 | `test_the_most_severe_event_comes_first` | The most severe event comes first. |
-| `test_confidence_is_that_of_the_best_attested_event` | One reviewed event is enough to be sure a disaster is there. |
+| `test_confidence_is_that_of_the_most_severe_event` | A reviewed aftershock must not vouch for an unreviewed mainshock. |
 | `test_a_negative_answer_says_what_it_covers` | `false` from an earthquake feed says nothing about floods. |
 | `test_no_feed_answering_is_an_error_not_an_all_clear` | No feed answering is an error not an all clear. |
 | `test_a_bug_in_an_adapter_also_fails_closed` | Any exception from a feed is an unanswered question. |
-| `test_one_feed_down_is_named_while_the_other_still_answers` | One feed down is named while the other still answers. |
+| `test_one_feed_down_does_not_hide_what_another_feed_found` | A detection stands on the feed that made it; the dead feed is named. |
+| `test_one_feed_down_is_never_a_negative_answer` | `false` needs every feed to have answered. |
 | `test_the_rendered_event_carries_its_evidence_and_its_zone` | The rendered event carries its evidence and its zone. |
 | `test_one_degree_of_latitude_is_about_111_km` | One degree of latitude is about 111 km. |
 | `test_distance_to_the_same_point_is_zero` | Distance to the same point is zero. |
-| `test_the_zone_is_a_closed_ring_at_the_modelled_radius` | The zone is a closed ring at the modelled radius. |
+| `test_the_zone_is_a_closed_counterclockwise_ring` | The zone is a closed counterclockwise ring. |
+| `test_the_zone_covers_the_whole_modelled_circle` | Nobody the radius includes may fall outside the polygon. |
+| `test_a_zone_reaching_a_pole_still_returns_a_ring` | Rounding at the pole must not turn a finding into a 500. |
 | `test_a_zone_across_the_antimeridian_does_not_jump_to_the_far_side` | Wrapping longitudes into +/-180 would draw the ring around the world. |
 | `test_defaults_are_applied` | Defaults are applied. |
 | `test_numeric_strings_and_zero_coordinates_are_accepted` | 0, 0 is a real place; a falsy check would reject it as missing. |
 | `test_an_unusable_query_is_refused_with_a_reason` | An unusable query is refused with a reason. |
 
-> 19 test functions expand to 37 cases through parametrisation.
+> 22 test functions expand to 52 cases through parametrisation.
 
 ### `test_disaster_check_contract.py`
 
-*Contract · issue #191 · 24 tests*
+*Contract · issue #191 · 26 tests*
 
 The disaster_check contract: the Lambda event in, the envelope out - issue #191.
 
@@ -173,14 +176,14 @@ The disaster_check contract: the Lambda event in, the envelope out - issue #191.
 | `test_a_feed_outage_is_an_explicit_error_never_an_all_clear` | A feed outage is an explicit error never an all clear. |
 | `test_an_unreadable_feed_answer_is_an_outage_too` | An unreadable feed answer is an outage too. |
 | `test_an_outage_does_not_leak_the_feed_error` | An outage does not leak the feed error. |
-| `test_an_unexpected_failure_is_a_500_without_internals` | An unexpected failure is a 500 without internals. |
+| `test_an_unexpected_failure_is_a_500_without_internals` | Nothing escapes the handler: a direct invoke has no router to catch it. |
 | `test_a_news_snippet_is_refused_by_name_without_touching_the_feed` | The snippet path is not built; ignoring the snippet would be a guess. |
 | `test_an_unusable_query_is_a_400_that_says_why` | An unusable query is a 400 that says why. |
 | `test_a_body_that_is_not_an_object_is_a_400` | A body that is not an object is a 400. |
 | `test_the_router_reaches_the_real_handler` | `"service": "disaster_check"` in the body, as the issue specifies. |
 | `test_a_direct_invoke_where_the_event_is_the_payload` | Another Lambda invoking this one sends no `body` wrapper. |
 
-> 17 test functions expand to 24 cases through parametrisation.
+> 17 test functions expand to 26 cases through parametrisation.
 
 ### `test_emergency_dataset.py`
 
@@ -584,7 +587,7 @@ The shared token counter (issue #159).
 
 ### `test_usgs_earthquakes.py`
 
-*Unit · issue #191 · 26 tests*
+*Unit · issue #191 · 49 tests*
 
 The USGS earthquake adapter, replayed from recorded responses - issue #191.
 
@@ -593,11 +596,13 @@ The USGS earthquake adapter, replayed from recorded responses - issue #191.
 | `test_the_query_asks_usgs_for_what_was_requested` | The parameters reach the feed, over https, with a caller identified. |
 | `test_a_recorded_earthquake_becomes_a_feed_neutral_event` | A recorded earthquake becomes a feed neutral event. |
 | `test_no_events_is_an_empty_list` | No events is an empty list. |
-| `test_an_automatic_solution_is_graded_below_a_reviewed_one` | USGS publishes automatic solutions within minutes and revises them. |
+| `test_the_start_of_the_window_is_sent_in_utc` | USGS reads `starttime` as UTC, whatever zone the clock here is in. |
+| `test_only_a_reviewed_solution_is_graded_high` | USGS publishes automatic solutions within minutes and revises them. |
 | `test_impact_radius_follows_the_documented_model` | Impact radius follows the documented model. |
 | `test_impact_radius_is_capped` | The cap is also the search margin, so no event may exceed it. |
 | `test_severity_bands` | Severity bands. |
 | `test_an_unreachable_feed_raises_rather_than_reporting_nothing` | An unreachable feed raises rather than reporting nothing. |
-| `test_an_unreadable_answer_raises_rather_than_reporting_nothing` | A feature that cannot be read is not skipped. |
+| `test_an_unreadable_answer_raises_rather_than_reporting_nothing` | An unreadable answer raises rather than reporting nothing. |
+| `test_an_event_that_cannot_be_trusted_fails_the_whole_answer` | A feature that cannot be read is not skipped. |
 
-> 9 test functions expand to 26 cases through parametrisation.
+> 11 test functions expand to 49 cases through parametrisation.

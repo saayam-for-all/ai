@@ -491,7 +491,7 @@ It has no dedicated Lambda function or API Gateway route yet.
 | `latitude` | yes | | `-90` to `90` |
 | `longitude` | yes | | `-180` to `180` |
 | `radius_km` | no | `50` | greater than `0`, at most `500` |
-| `window_hours` | no | `72` | greater than `0`, at most `168` |
+| `window_hours` | no | `72` | `1` to `168` |
 
 `radius_km` is the area the caller is asking about, not a limit on how far
 away an epicentre may be. An event is returned when its **impact zone reaches
@@ -516,7 +516,7 @@ The Gaziantep query above, replayed against the feed's record of 6 February
       "expires_at": "2023-02-09T01:17:34Z",
       "impact_zone": {
         "type": "Polygon",
-        "coordinates": [[[37.0143, 39.4846], [36.4438, 39.4398], "...", [37.0143, 39.4846]]]
+        "coordinates": [[[37.0143, 39.4955], [36.4409, 39.4505], "...", [37.0143, 39.4955]]]
       },
       "impact_zone_fallback": { "center": [37.2256, 37.0143], "radius_km": 251.2 },
       "boundary_source": "modelled",
@@ -559,16 +559,21 @@ Reading the fields:
 - **`events`** are ordered most severe first. `severity` uses the CAP
   vocabulary (`moderate`, `severe`, `extreme`) so that every event type can
   share one scale.
-- **`confidence`** grades the detection: `high` when USGS has reviewed the
-  solution, `medium` while it is still automatic. It is `null` when nothing is
-  detected.
+- **`confidence`** grades the first event, the most severe one: `high` when
+  USGS has reviewed its solution, `medium` while it is still automatic. A
+  reviewed aftershock does not raise the grade of an unreviewed mainshock. It
+  is `null` when nothing is detected.
 - **`impact_zone`** is GeoJSON, so positions are `[longitude, latitude]` and
-  the ring is counterclockwise. **`impact_zone_fallback.center` is
-  `[latitude, longitude]`**, as in the issue's contract. The two orders differ.
+  the ring is counterclockwise. It is a 32-sided polygon drawn just outside
+  the circle, so it covers everyone the radius includes.
+  **`impact_zone_fallback.center` is `[latitude, longitude]`**, as in the
+  issue's contract. The two orders differ.
 - **`llm_cross_check`** is `null`: no model runs on the coordinate path.
 - **`sources_checked`** is an addition to the issue's contract. It is what
-  makes a negative answer traceable, and it is where a feed that could not be
-  reached is named once there is more than one feed.
+  makes a negative answer traceable. Once there is more than one feed, a
+  detection can come back while another feed is down, and that feed is named
+  here as `unavailable`. A `false` is only ever returned when every feed
+  answered.
 
 #### Status codes
 
@@ -577,11 +582,13 @@ Reading the fields:
 | 200 | The feed answered. Read `disaster_detected`. |
 | 400 | `latitude` or `longitude` missing, or a value out of range. `error` says which. |
 | 501 | `NEWS_SNIPPET_NOT_SUPPORTED` — the request carried a `news_snippet`. |
-| 502 | `DISASTER_CHECK_UNAVAILABLE` — no feed could be reached. Retryable. |
+| 502 | `DISASTER_CHECK_UNAVAILABLE` — a feed could not be reached or its answer could not be read, and nothing was detected. Retryable. |
+| 500 | An unexpected failure. The body is `{"error": "Disaster check failed"}`. |
 
-**A `502` body carries no `disaster_detected` field at all.** An outage is
-never reported as an all-clear, and one unreadable event in the feed's answer
-fails the whole answer rather than being skipped. The body is an object on
+**A `502` or `500` body carries no `disaster_detected` field at all.** An
+outage is never reported as an all-clear. One event in the feed's answer that
+cannot be read, or that carries a magnitude or position that is not a finite
+number in range, fails the whole answer rather than being skipped. The body is an object on
 every path, as [#170](https://github.com/saayam-for-all/ai/issues/170)
 requires.
 
@@ -640,8 +647,8 @@ empty list means the feed was asked and listed nothing.
 | File | Proves |
 | --- | --- |
 | `test_disaster_check_contract.py` | Against two responses recorded from USGS: a location inside a known earthquake is detected with a USGS record in `verified_by`; a quiet location is a `false` from one feed call; an outage is `502` `DISASTER_CHECK_UNAVAILABLE` with no `disaster_detected` field; a `news_snippet` is a `501`; the body is an object on every path. |
-| `test_disaster_check.py` | An epicentre beyond the caller's radius is still found when its zone reaches them; no feed answering is an error; the zone is a closed counterclockwise ring at the modelled radius, including across the antimeridian; query validation. |
-| `test_usgs_earthquakes.py` | The query sent to USGS; the recorded payload becomes events with latitude and longitude the right way round; an unreachable feed or an unreadable answer raises rather than returning an empty list. |
+| `test_disaster_check.py` | An epicentre beyond the caller's radius is still found when its zone reaches them; a feed that did not answer is never a `false`; `confidence` is that of the most severe event; the zone is a closed counterclockwise ring that covers the modelled circle, including across the antimeridian and at a pole; query validation. |
+| `test_usgs_earthquakes.py` | The query sent to USGS; the recorded payload becomes events with latitude and longitude the right way round; an unreachable feed, an unreadable answer, or an event with a NaN or out-of-range magnitude or position raises rather than returning an empty list. |
 
 The fixtures are in `tests/fixtures/usgs/`. No test in the default run calls
 USGS.

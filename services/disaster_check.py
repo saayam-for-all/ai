@@ -19,12 +19,14 @@ FEEDS = (usgs_earthquakes,)
 DEFAULT_RADIUS_KM = 50.0
 MAX_RADIUS_KM = 500.0
 DEFAULT_WINDOW_HOURS = 72.0
+# A feed takes minutes to publish an event, so a window much shorter than
+# this could only ever answer "nothing".
+MIN_WINDOW_HOURS = 1.0
 MAX_WINDOW_HOURS = 168.0
 
 EARTH_RADIUS_KM = 6371.0088
 _CIRCLE_POINTS = 32
 _SEVERITY_RANK = {"minor": 0, "moderate": 1, "severe": 2, "extreme": 3}
-_CONFIDENCE_RANK = {"medium": 0, "high": 1}
 
 
 class InvalidQuery(ValueError):
@@ -32,7 +34,7 @@ class InvalidQuery(ValueError):
 
 
 class DisasterCheckUnavailable(Exception):
-    """No feed answered, so there is no finding to report - in either direction."""
+    """A feed did not answer, so there is no negative finding to report."""
 
 
 def parse_query(body):
@@ -42,12 +44,12 @@ def parse_query(body):
     return {
         "latitude": _number(body, "latitude", -90, 90),
         "longitude": _number(body, "longitude", -180, 180),
-        "radius_km": _number(body, "radius_km", 0, MAX_RADIUS_KM, DEFAULT_RADIUS_KM, positive=True),
-        "window_hours": _number(body, "window_hours", 0, MAX_WINDOW_HOURS, DEFAULT_WINDOW_HOURS, positive=True),
+        "radius_km": _number(body, "radius_km", 0, MAX_RADIUS_KM, DEFAULT_RADIUS_KM, above_low=True),
+        "window_hours": _number(body, "window_hours", MIN_WINDOW_HOURS, MAX_WINDOW_HOURS, DEFAULT_WINDOW_HOURS),
     }
 
 
-def _number(body, key, low, high, default=None, positive=False):
+def _number(body, key, low, high, default=None, above_low=False):
     value = body.get(key)
     if value in (None, ""):
         value = default
@@ -58,9 +60,12 @@ def _number(body, key, low, high, default=None, positive=False):
         value = float(value)
     except (TypeError, ValueError):
         raise InvalidQuery(f"{key} must be a number") from None
+    except OverflowError:
+        # An integer too large for a float is out of range, not unreadable.
+        value = math.inf
     # NaN fails every comparison, so it is caught by the range check too.
-    if not (low <= value <= high) or (positive and value == 0):
-        bounds = f"greater than {low:g} and at most {high:g}" if positive else f"between {low:g} and {high:g}"
+    if not (low <= value <= high) or (above_low and value == low):
+        bounds = f"greater than {low:g} and at most {high:g}" if above_low else f"between {low:g} and {high:g}"
         raise InvalidQuery(f"{key} must be {bounds}")
     return value
 
@@ -68,9 +73,10 @@ def _number(body, key, low, high, default=None, positive=False):
 def check_location(latitude, longitude, radius_km, window_hours, now=None):
     """Events whose impact zone reaches the circle around a point.
 
-    Raises DisasterCheckUnavailable when no feed answered. A caller must never
-    be handed ``disaster_detected: false`` on the strength of a feed that was
-    not actually consulted.
+    A detection stands on the feed that made it. A negative answer needs
+    every feed to have answered: if any did not and nothing was found, this
+    raises DisasterCheckUnavailable rather than hand the caller
+    ``disaster_detected: false`` for an event type nobody was asked about.
     """
     now = now or datetime.now(timezone.utc)
     since = now - timedelta(hours=window_hours)
@@ -98,19 +104,21 @@ def check_location(latitude, longitude, radius_km, window_hours, now=None):
             if distance <= radius_km + event["radius_km"]:
                 events.append((event, feed.SOURCE))
 
-    if not any(source["status"] == "ok" for source in sources_checked):
-        raise DisasterCheckUnavailable("no authoritative feed could be reached")
+    unavailable = [source["source"] for source in sources_checked if source["status"] != "ok"]
+    if unavailable and not events:
+        raise DisasterCheckUnavailable(f"no answer from: {', '.join(unavailable)}")
 
     events.sort(
         key=lambda found: (_SEVERITY_RANK[found[0]["severity"]], found[0]["radius_km"]),
         reverse=True,
     )
-    confidences = [event["confidence"] for event, _ in events]
     return {
         "disaster_detected": bool(events),
-        # Grades the detection. With nothing detected there is nothing to
+        # The grade of the first event, the one a caller acts on - not the
+        # best grade in the list, or a reviewed aftershock would vouch for an
+        # unreviewed mainshock. With nothing detected there is nothing to
         # grade; sources_checked says what the negative answer covers.
-        "confidence": max(confidences, key=_CONFIDENCE_RANK.get) if confidences else None,
+        "confidence": events[0][0]["confidence"] if events else None,
         "events": [_render(event, source, retrieved_at) for event, source in events],
         "sources_checked": sources_checked,
     }
@@ -167,15 +175,20 @@ def circle_polygon(latitude, longitude, radius_km):
     """
     phi1 = math.radians(latitude)
     lambda1 = math.radians(longitude)
-    delta = radius_km / EARTH_RADIUS_KM
+    # The vertices sit just outside the circle so that the edges touch it. A
+    # ring through points on the circle would cut inside it between them and
+    # leave out people the radius includes.
+    delta = radius_km / EARTH_RADIUS_KM / math.cos(math.pi / _CIRCLE_POINTS)
 
     ring = []
     for i in range(_CIRCLE_POINTS):
         bearing = -2 * math.pi * i / _CIRCLE_POINTS
-        phi2 = math.asin(
+        # Clamped because a vertex landing on a pole can come out one rounding
+        # step past 1, which asin refuses.
+        phi2 = math.asin(max(-1.0, min(1.0, (
             math.sin(phi1) * math.cos(delta)
             + math.cos(phi1) * math.sin(delta) * math.cos(bearing)
-        )
+        ))))
         lambda2 = lambda1 + math.atan2(
             math.sin(bearing) * math.sin(delta) * math.cos(phi1),
             math.cos(delta) - math.sin(phi1) * math.sin(phi2),

@@ -24,7 +24,8 @@ cross-check, floods, wildfires, caching, and a deployed route.
   "longitude": 37.38}` used to answer `400 Unknown service` and now answers
   `200` with `disaster_detected`.
 - An explicit outage. With USGS unreachable, or answering with something
-  unreadable, the response is `502` `DISASTER_CHECK_UNAVAILABLE` and the body
+  unreadable (including an event whose magnitude or position is NaN or out of
+  range), the response is `502` `DISASTER_CHECK_UNAVAILABLE` and the body
   has **no** `disaster_detected` field.
   *Observable difference:* an outage can be told apart from "nothing is
   happening" without reading a log.
@@ -36,8 +37,8 @@ cross-check, floods, wildfires, caching, and a deployed route.
   centre-and-radius fallback, and `boundary_source: "modelled"`. The radius
   model and three other first-pass values are listed in the README as awaiting
   review.
-- `tests/fixtures/usgs/` — two responses recorded from the live feed, and 87
-  tests that replay them.
+- `tests/fixtures/usgs/` — two responses recorded from the live feed, and 127
+  tests, most of which replay them.
 - A request carrying `news_snippet` is answered `501`
   `NEWS_SNIPPET_NOT_SUPPORTED` rather than being answered from its
   coordinates with the snippet ignored.

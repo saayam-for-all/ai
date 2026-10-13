@@ -96,19 +96,41 @@ def fetch_events(latitude, longitude, search_radius_km, since):
     except (OSError, ValueError, http.client.HTTPException) as e:
         raise FeedError(f"USGS query failed: {type(e).__name__}: {e}") from e
 
+    # Anything other than a list here would iterate as "no events": an empty
+    # object or string yields nothing, and nothing is an all-clear.
+    features = payload.get("features") if isinstance(payload, dict) else None
+    if not isinstance(features, list):
+        raise FeedError("USGS payload has no list of features")
+
     # One unreadable feature fails the whole answer. Skipping it instead could
     # drop the only event in the response and turn it into an all-clear.
     try:
-        return [_to_event(feature) for feature in payload["features"]]
-    except (KeyError, TypeError, ValueError, IndexError, OverflowError) as e:
+        return [_to_event(feature) for feature in features]
+    except (KeyError, TypeError, ValueError) as e:
         raise FeedError(f"USGS payload was not in the expected shape: {type(e).__name__}: {e}") from e
+
+
+def _real(value, low, high):
+    """A finite number within bounds, or ValueError.
+
+    The JSON parser accepts NaN and Infinity. A NaN magnitude or coordinate
+    makes every comparison downstream false, so the event would not be
+    rejected - it would quietly never match any caller.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not low <= value <= high:
+        raise ValueError(f"{value!r} is not a number between {low} and {high}")
+    return float(value)
 
 
 def _to_event(feature):
     properties = feature["properties"]
     longitude, latitude = feature["geometry"]["coordinates"][:2]
-    magnitude = float(properties["mag"])
-    started_at = datetime.fromtimestamp(properties["time"] / 1000, tz=timezone.utc)
+    latitude = _real(latitude, -90, 90)
+    longitude = _real(longitude, -180, 180)
+    magnitude = _real(properties["mag"], 0, 10)
+    # Milliseconds since 1970, bounded at the year 2100 so the conversion
+    # cannot overflow on any platform.
+    started_at = datetime.fromtimestamp(_real(properties["time"], 0, 4_102_444_800_000) / 1000, tz=timezone.utc)
     return {
         "event_id": f"usgs-{feature['id']}",
         "event_type": "earthquake",
@@ -116,8 +138,8 @@ def _to_event(feature):
         "headline": str(properties["title"]),
         "started_at": started_at,
         "expires_at": started_at + timedelta(hours=ALERT_LIFETIME_HOURS),
-        "latitude": float(latitude),
-        "longitude": float(longitude),
+        "latitude": latitude,
+        "longitude": longitude,
         "radius_km": impact_radius_km(magnitude),
         "volunteer_band_km": VOLUNTEER_BAND_KM,
         # A seismologist has reviewed the solution. Automatic solutions are

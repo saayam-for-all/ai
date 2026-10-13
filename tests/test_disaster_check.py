@@ -113,13 +113,23 @@ def test_the_most_severe_event_comes_first():
     assert [e["event_id"] for e in result["events"]] == ["mainshock", "stronger", "strong", "aftershock"]
 
 
-@pytest.mark.parametrize("confidences,expected", [
-    (["high"], "high"), (["medium"], "medium"), (["medium", "high"], "high"),
+@pytest.mark.parametrize("mainshock,aftershock,expected", [
+    ("high", "medium", "high"), ("medium", "high", "medium"), ("medium", "medium", "medium"),
 ])
-def test_confidence_is_that_of_the_best_attested_event(confidences, expected):
-    """One reviewed event is enough to be sure a disaster is there."""
-    events = [_event(f"e{i}", confidence=c) for i, c in enumerate(confidences)]
-    assert _check(_Feed(events))["confidence"] == expected
+def test_confidence_is_that_of_the_most_severe_event(mainshock, aftershock, expected):
+    """A reviewed aftershock must not vouch for an unreviewed mainshock.
+
+    The first event is the one a caller acts on. Grading the response by its
+    best-attested event would report `high` over a headline nobody has
+    reviewed.
+    """
+    events = [
+        _event("aftershock", radius_km=10.0, severity="moderate", confidence=aftershock),
+        _event("mainshock", radius_km=250.0, severity="extreme", confidence=mainshock),
+    ]
+    result = _check(_Feed(events))
+    assert result["events"][0]["event_id"] == "mainshock"
+    assert result["confidence"] == expected
 
 
 # -------------------------------------------------------------------------
@@ -149,7 +159,8 @@ def test_a_bug_in_an_adapter_also_fails_closed():
         _check(_Feed(raises=KeyError("properties")))
 
 
-def test_one_feed_down_is_named_while_the_other_still_answers():
+def test_one_feed_down_does_not_hide_what_another_feed_found():
+    """A detection stands on the feed that made it; the dead feed is named."""
     down = _Feed(raises=RuntimeError("feed down"), source="FLOODS", event_types=("flood",))
     up = _Feed([_event()], source="USGS")
     result = _check(down, up)
@@ -158,6 +169,20 @@ def test_one_feed_down_is_named_while_the_other_still_answers():
         ("FLOODS", "unavailable"), ("USGS", "ok"),
     ]
     assert "retrieved_at" not in result["sources_checked"][0]
+
+
+def test_one_feed_down_is_never_a_negative_answer():
+    """`false` needs every feed to have answered.
+
+    With the flood feed down and the earthquake feed quiet, nobody has been
+    asked about floods, so there is no `false` to give.
+    """
+    down = _Feed(raises=RuntimeError("feed down"), source="FLOODS", event_types=("flood",))
+    quiet = _Feed(source="USGS")
+    with pytest.raises(dc.DisasterCheckUnavailable):
+        _check(down, quiet)
+    with pytest.raises(dc.DisasterCheckUnavailable):
+        _check(quiet, down)
 
 
 # -------------------------------------------------------------------------
@@ -197,22 +222,57 @@ def _signed_area(ring):
     return sum(x1 * y2 - x2 * y1 for (x1, y1), (x2, y2) in zip(ring, ring[1:])) / 2
 
 
-@pytest.mark.parametrize("latitude,longitude,radius_km", [
+ZONES = [
     (37.2256, 37.0143, 251.2),   # the recorded mainshock
     (-18.0, 179.5, 300.0),       # across the antimeridian
     (64.0, -150.0, 10.0),        # high latitude, small zone
-])
-def test_the_zone_is_a_closed_ring_at_the_modelled_radius(latitude, longitude, radius_km):
+    (0.0, 0.0, 1000.0),          # the largest zone the model produces
+]
+
+
+@pytest.mark.parametrize("latitude,longitude,radius_km", ZONES)
+def test_the_zone_is_a_closed_counterclockwise_ring(latitude, longitude, radius_km):
     polygon = dc.circle_polygon(latitude, longitude, radius_km)
     (ring,) = polygon["coordinates"]
 
     assert polygon["type"] == "Polygon"
     assert len(ring) == 33 and ring[0] == ring[-1]
-    for vertex_longitude, vertex_latitude in ring:
-        distance = dc.distance_km(latitude, longitude, vertex_latitude, vertex_longitude)
-        assert distance == pytest.approx(radius_km, rel=0.005)
     # RFC 7946: an exterior ring is counterclockwise.
     assert _signed_area(ring) > 0
+
+
+@pytest.mark.parametrize("latitude,longitude,radius_km", ZONES)
+def test_the_zone_covers_the_whole_modelled_circle(latitude, longitude, radius_km):
+    """Nobody the radius includes may fall outside the polygon.
+
+    A ring drawn through 32 points on the circle cuts inside it between them,
+    by about 5 km on the largest zone. The vertices sit just outside instead,
+    so the closest the boundary comes to the centre - the middle of an edge -
+    is the radius itself.
+    """
+    (ring,) = dc.circle_polygon(latitude, longitude, radius_km)["coordinates"]
+    for (lon1, lat1), (lon2, lat2) in zip(ring, ring[1:]):
+        vertex = dc.distance_km(latitude, longitude, lat1, lon1)
+        midpoint = dc.distance_km(latitude, longitude, (lat1 + lat2) / 2, (lon1 + lon2) / 2)
+        assert vertex == pytest.approx(radius_km * 1.0048, rel=0.002)
+        assert radius_km * 0.998 <= midpoint <= radius_km * 1.006
+
+
+@pytest.mark.parametrize("latitude,radius_km", [
+    (87.1423389, 10 ** 2.5),   # an M8.0 here raised `math domain error` before the clamp
+    (90.0, 251.2), (-90.0, 251.2), (89.9999999, 10.0), (88.0, 1000.0),
+])
+def test_a_zone_reaching_a_pole_still_returns_a_ring(latitude, radius_km):
+    """Rounding at the pole must not turn a finding into a 500.
+
+    When the edge of a zone lands on a pole the sine of the vertex latitude
+    can come out one rounding step above 1, which `asin` refuses. The ring is
+    not a valid polygon there - the fallback is the exact form - but the
+    response has to be produced.
+    """
+    (ring,) = dc.circle_polygon(latitude, 10.0, radius_km)["coordinates"]
+    assert len(ring) == 33
+    assert all(-90 <= vertex_latitude <= 90 for _, vertex_latitude in ring)
 
 
 def test_a_zone_across_the_antimeridian_does_not_jump_to_the_far_side():
@@ -253,8 +313,14 @@ def test_numeric_strings_and_zero_coordinates_are_accepted():
     ({"latitude": 10, "longitude": 10, "radius_km": 0}, "radius_km must be greater than 0 and at most 500"),
     ({"latitude": 10, "longitude": 10, "radius_km": -5}, "radius_km must be greater than 0 and at most 500"),
     ({"latitude": 10, "longitude": 10, "radius_km": 501}, "radius_km must be greater than 0 and at most 500"),
-    ({"latitude": 10, "longitude": 10, "window_hours": 169}, "window_hours must be greater than 0 and at most 168"),
+    ({"latitude": 10, "longitude": 10, "window_hours": 169}, "window_hours must be between 1 and 168"),
     ({"latitude": 10, "longitude": 10, "window_hours": "soon"}, "window_hours must be a number"),
+    # A window shorter than the feed takes to publish can only ever say no.
+    ({"latitude": 10, "longitude": 10, "window_hours": 0.0001}, "window_hours must be between 1 and 168"),
+    ({"latitude": 10, "longitude": 10, "window_hours": 0}, "window_hours must be between 1 and 168"),
+    # Too large for a float: out of range, not a crash.
+    ({"latitude": 10 ** 400, "longitude": 10}, "latitude must be between -90 and 90"),
+    ({"latitude": 10, "longitude": 10, "radius_km": 10 ** 400}, "radius_km must be greater than 0 and at most 500"),
 ])
 def test_an_unusable_query_is_refused_with_a_reason(body, message):
     with pytest.raises(dc.InvalidQuery, match=message):

@@ -581,16 +581,14 @@ def disaster_check_handler(event, context):
         )
 
     try:
-        query = parse_query(body)
+        return _response(200, check_location(**parse_query(body)))
     except InvalidQuery as e:
         return _response(400, {"error": str(e)})
-
-    try:
-        return _response(200, check_location(**query))
     except DisasterCheckUnavailable as e:
-        # No feed answered. The body deliberately carries no disaster_detected
-        # field: an outage must never be readable as an all-clear.
-        print(f"ERROR: disaster_check has no feed to answer from: {e}")
+        # A feed did not answer. The body deliberately carries no
+        # disaster_detected field: an outage must never be readable as an
+        # all-clear.
+        print(f"ERROR: disaster_check could not be answered: {e}")
         return _response(
             502,
             {
