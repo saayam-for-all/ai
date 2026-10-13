@@ -231,7 +231,7 @@ Apartment Search
 Moving Assistance
 ```
 
-This does not mean Saayam currently needs a graph database. A simple in-memory adjacency structure is enough for the demonstrated use case.
+This does not mean we currently needs a graph database. A simple in-memory adjacency structure is enough for the demonstrated use case.
 
 The most relevant areas for future work are:
 
@@ -242,4 +242,4 @@ utils/predict_category_list.py
 
 Future implementation can be considered alongside **issue #160**, which focuses on making the classifier taxonomy configuration-driven.
 
-**Conclusion:** an explicit graph is not currently necessary for Saayam's 717-node hierarchy, but it becomes useful when hierarchy lookups are frequent, the taxonomy grows, or Saayam needs to represent cross-category and non-hierarchical relationships.
+**Conclusion:** an explicit graph is not currently necessary for the current 717-node hierarchy, but it becomes useful when hierarchy lookups are frequent, the taxonomy grows, or Saayam needs to represent cross-category and non-hierarchical relationships.
