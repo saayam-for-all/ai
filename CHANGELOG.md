@@ -10,6 +10,28 @@ team works and reviews in.
 
 ## Unreleased
 
+### Token usage tracking & reasoning effort — [#194](https://github.com/saayam-for-all/ai/issues/194)
+
+**Fixed**
+
+- **LangChain reasoning token double counting in telemetry.** In standard LangChain
+  (`ChatGroq`, `ChatGoogleGenerativeAI`), `output_tokens` already includes
+  reasoning/thinking tokens, and `output_token_details.reasoning` is an itemized
+  breakdown. Telemetry previously added reasoning tokens a second time unless reasoning
+  strictly equaled completion tokens. `utils/token_usage.py` now avoids double-counting
+  reasoning tokens while still adding reasoning if output tokens omit it.
+- **Unbounded reasoning tokens in subject and answer generation.** The shared `groq_llm`
+  model target in `utils/client.py` did not specify `reasoning_effort`, causing completion
+  tokens on Groq's `gpt-oss-20b` (which defaults to medium reasoning effort) to spend
+  hundreds of tokens on invisible reasoning. `utils/client.py` now explicitly pins
+  `reasoning_effort="low"` on `ModelTarget`.
+
+**Changed**
+
+- `tools/measure_token_baseline.py` updated to build `groq_llm` via `client.create_chat_model`
+  with `ModelTarget(reasoning_effort=GROQ_REASONING_EFFORT)`, ensuring measurement runs
+  accurately reflect production model settings.
+
 ### Testing infrastructure — [#171](https://github.com/saayam-for-all/ai/issues/171)
 
 **Added**

@@ -145,18 +145,23 @@ def install_clients(groq_key: str, gemini_key: str) -> list[str]:
     """
     from groq import Groq
     from google import genai
-    from langchain_groq import ChatGroq
     from langchain_google_genai import ChatGoogleGenerativeAI
 
     import utils.client as C
+    from utils.model_fallback import ModelTarget
 
     installed = []
 
     if groq_key:
         C.GROQ_API_KEY = groq_key
         C.client = Groq(api_key=groq_key)
-        C.groq_llm = ChatGroq(
-            api_key=groq_key, model=C.GROQ_MODEL, temperature=C.GROQ_TEMPERATURE
+        C.groq_llm = C.create_chat_model(
+            ModelTarget(
+                provider="groq",
+                model=C.GROQ_MODEL,
+                reasoning_effort=C.GROQ_REASONING_EFFORT,
+            ),
+            temperature=C.GROQ_TEMPERATURE,
         )
         C._use_groq = True
         installed.append("groq")

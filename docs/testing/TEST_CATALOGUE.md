@@ -27,7 +27,7 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | --- | --- | --- | --- | ---: |
 | [`tests/test_answer_conversation.py`](../../tests/test_answer_conversation.py) | Unit | #183 | `utils/__init__.py prompt assembly` | 21 |
 | [`tests/test_classification_resilience.py`](../../tests/test_classification_resilience.py) | Unit | - | `services/classification_service.py` | 10 |
-| [`tests/test_client_factory.py`](../../tests/test_client_factory.py) | Unit | #193 | `utils/client.py create_chat_model` | 15 |
+| [`tests/test_client_factory.py`](../../tests/test_client_factory.py) | Unit | #193 | `utils/client.py create_chat_model` | 17 |
 | [`tests/test_client_imports.py`](../../tests/test_client_imports.py) | Integration | #154 | `utils/client.py` | 2 |
 | [`tests/test_emergency_dataset.py`](../../tests/test_emergency_dataset.py) | Dataset | #146 | `services/emergency_numbers.json` | 17 |
 | [`tests/test_emergency_locale.py`](../../tests/test_emergency_locale.py) | Unit | #146 | `services/emergency.py` | 67 |
@@ -40,8 +40,8 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_response_contract.py`](../../tests/test_response_contract.py) | Contract | #146, #169, #170 | `response envelopes` | 10 |
 | [`tests/test_router.py`](../../tests/test_router.py) | Integration | #171 | `lambda_function.lambda_handler` | 34 |
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
-| [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 49 |
-| | | | **Total** | **417** |
+| [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 57 |
+| | | | **Total** | **427** |
 
 ## Every test
 
@@ -95,7 +95,7 @@ Guards the two failure modes behind "every request lands in General".
 
 ### `test_client_factory.py`
 
-*Unit · issue #193 · 15 tests*
+*Unit · issue #193 · 17 tests*
 
 Unit tests for target-aware LangChain client construction.
 
@@ -108,8 +108,10 @@ Unit tests for target-aware LangChain client construction.
 | `test_factory_rejects_an_unsupported_provider` | Factory rejects an unsupported provider. |
 | `test_constructor_failure_can_fall_through_to_another_provider` | Constructor failure can fall through to another provider. |
 | `test_clients_send_one_bounded_request` | Exercise real SDK retry logic with a fake transport, without API keys/I/O. |
+| `test_legacy_groq_defaults_include_low_reasoning_effort` | Legacy groq defaults include low reasoning effort. |
+| `test_shared_groq_model_is_built_with_low_reasoning_effort` | groq_llm serves subject and answer generation; it must request low effort. |
 
-> 7 test functions expand to 15 cases through parametrisation.
+> 9 test functions expand to 17 cases through parametrisation.
 
 ### `test_client_imports.py`
 
@@ -471,7 +473,7 @@ Unit tests for the Generate Subject service.
 
 ### `test_token_usage.py`
 
-*- · issue #159 · 49 tests*
+*- · issue #159 · 57 tests*
 
 The shared token counter (issue #159).
 
@@ -484,6 +486,8 @@ The shared token counter (issue #159).
 | `test_the_two_usage_metadata_shapes_do_not_collide` | A raw Gemini response and an AIMessage both have `.usage_metadata`. |
 | `test_gemini_thinking_tokens_count_as_completion` | Gemini 2.5 bills thoughts as output but reports them apart. |
 | `test_langchain_reasoning_tokens_count_as_completion` | Langchain reasoning tokens count as completion. |
+| `test_langchain_reasoning_already_included_in_output_tokens_is_not_double_counted` | In standard LangChain, output_tokens already includes reasoning tokens. |
+| `test_langchain_reasoning_edge_case_shapes` | Exercise LangChain reasoning token shapes and boundary conditions. |
 | `test_unknown_shapes_return_zeros_rather_than_raising` | Unknown shapes return zeros rather than raising. |
 | `test_a_provider_that_raises_on_attribute_access_returns_zeros` | A provider that raises on attribute access returns zeros. |
 | `test_none_counts_do_not_poison_the_accumulator` | A provider that reports None used to raise TypeError inside `+=`. |
@@ -520,4 +524,4 @@ The shared token counter (issue #159).
 | `test_recording_into_a_broken_accumulator_is_logged` | Recording into a broken accumulator is logged. |
 | `test_an_unserialisable_record_degrades_to_totals_rather_than_vanishing` | Losing the labels is acceptable; losing the whole request is not. |
 
-> 42 test functions expand to 49 cases through parametrisation.
+> 44 test functions expand to 57 cases through parametrisation.
