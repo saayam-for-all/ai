@@ -406,12 +406,21 @@ def test_subject_generation_reports_its_usage(monkeypatch, capsys):
 def test_answer_generation_reports_its_usage(monkeypatch, capsys):
     import utils
 
-    monkeypatch.setattr(utils, "groq_llm", _FakeChatModel(
-        content="Here is some help.", input_tokens=900, output_tokens=150))
-    monkeypatch.setattr(utils, "gemini_llm", None)
+    fake_model = _FakeChatModel(
+        content="Here is some help.",
+        input_tokens=900,
+        output_tokens=150,
+    )
+
+    def fake_create_chat_model(target, *, temperature):
+        return fake_model
+
+    monkeypatch.setattr(utils, "create_chat_model", fake_create_chat_model)
 
     utils.GroqAnswerGenerationService().generate_answer(
-        category="Housing", subject="Rent", description="I am behind on rent",
+        category="Housing",
+        subject="Rent",
+        description="I am behind on rent",
     )
 
     (record,) = _usage_lines(capsys)
@@ -422,28 +431,35 @@ def test_answer_generation_reports_its_usage(monkeypatch, capsys):
 
 @pytest.mark.integration
 def test_a_groq_failure_still_bills_the_gemini_retry(monkeypatch, capsys):
-    """The fallback path spends twice on one request.
-
-    A total that reports only the provider that answered understates the cost
-    of exactly the requests that cost the most.
-    """
+    """Only successful model responses contribute recorded token usage."""
     import utils
 
     class _Down:
-        model_name = "groq-down"
         def invoke(self, _messages):
             raise RuntimeError("groq is down")
 
-    monkeypatch.setattr(utils, "groq_llm", _Down())
-    monkeypatch.setattr(utils, "gemini_llm", _FakeChatModel(
-        content="Fallback answer.", input_tokens=900, output_tokens=200))
+    gemini = _FakeChatModel(
+        content="Fallback answer.",
+        input_tokens=900,
+        output_tokens=200,
+    )
+
+    def fake_create_chat_model(target, *, temperature):
+        if target.provider == "groq":
+            return _Down()
+        if target.provider == "gemini":
+            return gemini
+        raise ValueError(f"Unexpected provider: {target.provider}")
+
+    monkeypatch.setattr(utils, "create_chat_model", fake_create_chat_model)
 
     utils.GroqAnswerGenerationService().generate_answer(
-        category="Housing", subject="Rent", description="I am behind on rent",
+        category="Housing",
+        subject="Rent",
+        description="I am behind on rent",
     )
 
     (record,) = _usage_lines(capsys)
-    # Groq raised before returning a message, so only Gemini's spend is real.
     assert record["total_tokens"] == 1100
     assert [c["provider"] for c in record["calls"]] == ["gemini"]
 
@@ -778,18 +794,23 @@ def test_log_usage_never_raises_on_a_hostile_accumulator(capsys):
 
 @pytest.mark.integration
 def test_answer_generation_with_no_provider_at_all(monkeypatch, capsys):
-    """No keys configured: Gemini raises, and the spend log is still emitted."""
+    """No configured provider succeeds, but the spend log is still emitted."""
     import utils
+    from utils.model_fallback import ModelChainExhausted
 
-    monkeypatch.setattr(utils, "groq_llm", None)
-    monkeypatch.setattr(utils, "gemini_llm", None)
+    def fake_create_chat_model(target, *, temperature):
+        raise ValueError(f"{target.provider} API key is not configured")
 
-    with pytest.raises(ValueError):
+    monkeypatch.setattr(utils, "create_chat_model", fake_create_chat_model)
+
+    with pytest.raises(ModelChainExhausted):
         utils.GroqAnswerGenerationService().generate_answer(
-            category="Housing", subject="Rent", description="behind on rent",
+            category="Housing",
+            subject="Rent",
+            description="behind on rent",
         )
 
-    # The finally: block reports even when the call failed.
+    # The finally block reports usage even when every model attempt fails.
     (record,) = _usage_lines(capsys)
     assert record["total_calls"] == 0
 

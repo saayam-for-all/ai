@@ -16,10 +16,12 @@ from utils.client import (
     GEMINI_TEMPERATURE,
     GROQ_MODEL,
     GROQ_TEMPERATURE,
+    create_chat_model,
     gemini_llm,
     groq_llm,
 )
 from utils.prompts import get_conversational_prompt
+from utils.model_fallback import ModelTarget, run_model_chain
 
 
 class ChatMessage(TypedDict):
@@ -136,36 +138,32 @@ class GroqAnswerGenerationService(AnswerGenerationServiceInterface):
         if messages and isinstance(messages[-1], HumanMessage):
             return messages[:-1], messages[-1]
         return messages, None
-
-    def _generate_with_gemini(
-        self, messages: list[BaseMessage], accumulator: dict | None = None
+    def _invoke_answer_target(
+            self,
+            target: ModelTarget,
+            messages: list[BaseMessage],
+            accumulator: dict,
     ) -> str:
-        """Fallback to Gemini API if Groq fails."""
-        if not gemini_llm:
-            raise ValueError("Gemini client not initialized")
-        resp = gemini_llm.invoke(messages)
-        token_usage.record(
-            accumulator, resp, provider="gemini", model=self.gemini_model
+        """Invoke one configured answer model and record its token usage."""
+        temperature = (
+            self.gemini_temperature
+            if target.provider == "gemini"
+            else self.temperature
         )
-        content = resp.content if hasattr(resp, "content") else str(resp)
-        return (content or "").strip()
-
-    def _try_groq(
-        self, messages: list[BaseMessage], accumulator: dict | None = None
-    ) -> str | None:
-        if not groq_llm:
-            return None
-        try:
-            resp = groq_llm.invoke(messages)
-        except Exception:
-            return None
-        # Recorded outside the try: a Groq call that succeeded and then failed
-        # to parse still cost tokens, and a fallback to Gemini bills the same
-        # request twice. Both halves have to show up in the total.
-        token_usage.record(accumulator, resp, provider="groq", model=self.model)
-        content = resp.content if hasattr(resp, "content") else str(resp)
-        return (content or "").strip() or None
-
+        model = create_chat_model(target, temperature=temperature)
+        # Reuse the same messages for every fallback attempt.
+        response = model.invoke(messages)
+        token_usage.record(
+            accumulator,
+            response,
+            provider=target.provider,
+            model=target.model,
+        )
+        content = response.content if hasattr(response, "content") else str(response)
+        answer = (content or "").strip()
+        if not answer:
+            raise ValueError(f"{target.provider} response content is empty")
+        return answer
     def generate_answer(
         self,
         category: str,
@@ -218,16 +216,17 @@ class GroqAnswerGenerationService(AnswerGenerationServiceInterface):
 
         usage = token_usage.new_accumulator()
         try:
-            return (
-                self._try_groq(messages, usage)
-                or self._generate_with_gemini(messages, usage)
+            return run_model_chain(
+                invoke=lambda target: self._invoke_answer_target(
+                    target, messages, usage
+                ),
+                is_valid=lambda answer: bool(answer and answer.strip()),
+                operation="generate_answer",
             )
         finally:
-            # In a finally so a Gemini failure still reports what Groq already
-            # spent on the way there.
             token_usage.log_usage(
                 "generate_answer",
                 usage,
                 category=category,
                 history_turns=len(prior) + (1 if question else 0),
-            )
+    )
