@@ -22,6 +22,11 @@ GROQ_TEMPERATURE = 0.3
 GEMINI_MODEL = "gemini-2.5-flash"
 GEMINI_TEMPERATURE = 0.3
 
+# Keep slow providers from consuming the request budget before fallback runs.
+# Four configured targets have a nominal 16 s timeout budget, leaving headroom
+# for application work. Transport timeouts are not an endpoint-wide deadline.
+MODEL_CALL_TIMEOUT_SECONDS = 4.0
+
 GROQ_API_KEY = None
 GEMINI_API_KEY = None
 
@@ -41,6 +46,8 @@ def create_chat_model(target: ModelTarget, *, temperature: float):
             "api_key": GROQ_API_KEY,
             "model": target.model,
             "temperature": temperature,
+            "timeout": MODEL_CALL_TIMEOUT_SECONDS,
+            "max_retries": 0,
         }
         if target.reasoning_effort:
             kwargs["reasoning_effort"] = target.reasoning_effort
@@ -54,6 +61,9 @@ def create_chat_model(target: ModelTarget, *, temperature: float):
             google_api_key=GEMINI_API_KEY,
             model=target.model,
             temperature=temperature,
+            timeout=MODEL_CALL_TIMEOUT_SECONDS,
+            # Google counts total attempts rather than retries: 1 = no retry.
+            max_retries=1,
         )
 
     raise ValueError(f"Unsupported model provider: {target.provider}")
@@ -101,7 +111,11 @@ _use_gemini = False
 
 if GROQ_API_KEY:
     try:
-        client = Groq(api_key=GROQ_API_KEY)
+        client = Groq(
+            api_key=GROQ_API_KEY,
+            timeout=MODEL_CALL_TIMEOUT_SECONDS,
+            max_retries=0,
+        )
         groq_llm = create_chat_model(
             ModelTarget(provider="groq", model=GROQ_MODEL),
             temperature=GROQ_TEMPERATURE,
@@ -118,7 +132,14 @@ else:
 
 if GEMINI_API_KEY:
     try:
-        _gemini_client = genai.Client(api_key=GEMINI_API_KEY)
+        _gemini_client = genai.Client(
+            api_key=GEMINI_API_KEY,
+            http_options={
+                # The raw Google SDK takes milliseconds, unlike LangChain.
+                "timeout": int(MODEL_CALL_TIMEOUT_SECONDS * 1000),
+                "retry_options": {"attempts": 1},
+            },
+        )
         gemini_llm = create_chat_model(
             ModelTarget(provider="gemini", model=GEMINI_MODEL),
             temperature=GEMINI_TEMPERATURE,
