@@ -15,11 +15,14 @@ def fake_embeddings(monkeypatch):
     # Temporarily replace the embeddings module.
     monkeypatch.setitem(sys.modules, "app.embeddings", module)
 
-    # Import matcher only while fake embeddings are active.
+    # Force a fresh import using the fake embeddings.
+    sys.modules.pop("app.matcher", None)
     matcher = importlib.import_module("app.matcher")
 
     yield matcher
 
-    # Remove the matcher loaded for this test.
-    monkeypatch.delitem(sys.modules, "app.matcher", raising=False)
-    monkeypatch.delattr("app.matcher", raising=False)
+    # Remove the fake matcher after the test.
+    sys.modules.pop("app.matcher", None)
+    app = sys.modules.get("app")
+    if getattr(app, "matcher", None) is matcher:
+        delattr(app, "matcher")

@@ -9,7 +9,7 @@ def add_volunteer(volunteer):
         df = pd.read_csv(CSV_PATH)
     else:
         df = pd.DataFrame(columns=[
-            "VolunteerId","VOL_ID", "VolunteerName", "ContactInformation", "Location",
+            "VolunteerId", "VOL_ID", "VolunteerName", "ContactInformation", "Location",
             "Skills", "LanguagesSpoken", "PreferredServiceAreas",
             "Rating", "Status", "TransportationAvailability", "WillingnessToTravel"
         ])

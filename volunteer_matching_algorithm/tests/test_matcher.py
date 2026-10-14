@@ -1,16 +1,9 @@
-import sys
-import types
+
 import numpy as np
 import pandas as pd
 from types import SimpleNamespace
 # Mock app.embeddings before importing matcher.
 # This prevents the unit test from loading SentenceTransformer/PyTorch.
-fake_embeddings = types.ModuleType("app.embeddings")
-
-fake_embeddings.get_embedding = lambda text: np.array([1.0])
-fake_embeddings.cosine_similarity = lambda a, b: 0.0
-
-sys.modules["app.embeddings"] = fake_embeddings
 
 from app import crud_volunteers
 from app import crud_requests
