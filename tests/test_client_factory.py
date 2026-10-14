@@ -1,7 +1,9 @@
 """Unit tests for target-aware LangChain client construction."""
 
 from types import SimpleNamespace
+import runpy
 
+import httpx
 import pytest
 
 import utils.client as client_module
@@ -43,6 +45,8 @@ def test_groq_factory_uses_the_target_model_temperature_and_credentials(monkeypa
             "model": "groq-secondary",
             "temperature": 0.17,
             "reasoning_effort": "low",
+            "timeout": 4.0,
+            "max_retries": 0,
         }
     ]
 
@@ -83,6 +87,8 @@ def test_gemini_factory_uses_the_target_model_temperature_and_credentials(monkey
             "google_api_key": "test-gemini-key",
             "model": "gemini-final",
             "temperature": 0.42,
+            "timeout": 4.0,
+            "max_retries": 1,
         }
     ]
 
@@ -158,6 +164,67 @@ def test_constructor_failure_can_fall_through_to_another_provider(monkeypatch):
     ]
 
 
+@pytest.mark.integration
+@pytest.mark.parametrize("provider", ["groq", "gemini"])
+@pytest.mark.parametrize("client_kind", ["raw", "langchain"])
+@pytest.mark.parametrize("failure", ["rate_limit", "timeout"])
+def test_clients_send_one_bounded_request(monkeypatch, provider, client_kind, failure):
+    """Exercise real SDK retry logic with a fake transport, without API keys/I/O."""
+    monkeypatch.setattr(
+        client_module.boto3,
+        "client",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            get_parameters=lambda **_kwargs: {
+                "Parameters": [
+                    {"Name": client_module.GROQ_PARAM, "Value": "test-groq-key"},
+                    {"Name": client_module.GEMINI_PARAM, "Value": "test-gemini-key"},
+                ]
+            }
+        ),
+    )
+    # Isolate bootstrap from the already-imported module used by other tests.
+    clients = runpy.run_path(client_module.__file__)
+    requests = []
+
+    def send(_self, request, **_kwargs):
+        requests.append(request)
+        if failure == "timeout":
+            raise httpx.ReadTimeout("provider timed out", request=request)
+        return httpx.Response(
+            429,
+            request=request,
+            headers={"retry-after": "60"},
+            json={"error": {"code": 429, "message": "rate limited"}},
+        )
+
+    monkeypatch.setattr(httpx.Client, "send", send)
+    if client_kind == "langchain":
+        llm = clients["create_chat_model"](
+            ModelTarget(provider=provider, model=(
+                "openai/gpt-oss-20b" if provider == "groq" else "gemini-2.5-flash"
+            )),
+            temperature=0.3,
+        )
+        invoke = lambda: llm.invoke("test prompt")
+    elif provider == "groq":
+        invoke = lambda: clients["client"].chat.completions.create(
+            model="openai/gpt-oss-20b",
+            messages=[{"role": "user", "content": "test prompt"}],
+        )
+    else:
+        invoke = lambda: clients["_gemini_client"].models.generate_content(
+            model="gemini-2.5-flash", contents="test prompt"
+        )
+
+    with pytest.raises(Exception):
+        invoke()
+
+    assert len(requests) == 1, "the SDK must leave retrying to the fallback chain"
+    assert requests[0].extensions["timeout"] == {
+        "connect": 4.0, "read": 4.0, "write": 4.0, "pool": 4.0,
+    }
+
+
 def test_legacy_groq_defaults_include_low_reasoning_effort():
     assert client_module.GROQ_REASONING_EFFORT == "low"
 
@@ -189,5 +256,3 @@ def test_shared_groq_model_is_built_with_low_reasoning_effort(monkeypatch):
     finally:
         monkeypatch.undo()
         importlib.reload(client_module)
-
-

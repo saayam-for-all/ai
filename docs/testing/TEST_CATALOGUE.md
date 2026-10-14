@@ -27,7 +27,7 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | --- | --- | --- | --- | ---: |
 | [`tests/test_answer_conversation.py`](../../tests/test_answer_conversation.py) | Unit | #183 | `utils/__init__.py prompt assembly` | 21 |
 | [`tests/test_classification_resilience.py`](../../tests/test_classification_resilience.py) | Unit | - | `services/classification_service.py` | 10 |
-| [`tests/test_client_factory.py`](../../tests/test_client_factory.py) | Unit | #193 | `utils/client.py create_chat_model` | 9 |
+| [`tests/test_client_factory.py`](../../tests/test_client_factory.py) | Unit | #193 | `utils/client.py create_chat_model` | 17 |
 | [`tests/test_client_imports.py`](../../tests/test_client_imports.py) | Integration | #154 | `utils/client.py` | 2 |
 | [`tests/test_emergency_dataset.py`](../../tests/test_emergency_dataset.py) | Dataset | #146 | `services/emergency_numbers.json` | 17 |
 | [`tests/test_emergency_locale.py`](../../tests/test_emergency_locale.py) | Unit | #146 | `services/emergency.py` | 67 |
@@ -41,7 +41,7 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_router.py`](../../tests/test_router.py) | Integration | #171 | `lambda_function.lambda_handler` | 34 |
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
 | [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 57 |
-| | | | **Total** | **419** |
+| | | | **Total** | **427** |
 
 ## Every test
 
@@ -95,7 +95,7 @@ Guards the two failure modes behind "every request lands in General".
 
 ### `test_client_factory.py`
 
-*Unit · issue #193 · 9 tests*
+*Unit · issue #193 · 17 tests*
 
 Unit tests for target-aware LangChain client construction.
 
@@ -107,10 +107,11 @@ Unit tests for target-aware LangChain client construction.
 | `test_factory_rejects_a_target_whose_provider_has_no_key` | Factory rejects a target whose provider has no key. |
 | `test_factory_rejects_an_unsupported_provider` | Factory rejects an unsupported provider. |
 | `test_constructor_failure_can_fall_through_to_another_provider` | Constructor failure can fall through to another provider. |
+| `test_clients_send_one_bounded_request` | Exercise real SDK retry logic with a fake transport, without API keys/I/O. |
 | `test_legacy_groq_defaults_include_low_reasoning_effort` | Legacy groq defaults include low reasoning effort. |
 | `test_shared_groq_model_is_built_with_low_reasoning_effort` | groq_llm serves subject and answer generation; it must request low effort. |
 
-> 8 test functions expand to 9 cases through parametrisation.
+> 9 test functions expand to 17 cases through parametrisation.
 
 ### `test_client_imports.py`
 
