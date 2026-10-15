@@ -25,7 +25,7 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 
 | File | Kind | Issue | Covers | Tests |
 | --- | --- | --- | --- | ---: |
-| [`tests/test_answer_conversation.py`](../../tests/test_answer_conversation.py) | Unit | #183 | `utils/__init__.py prompt assembly` | 21 |
+| [`tests/test_answer_conversation.py`](../../tests/test_answer_conversation.py) | Unit | #183 | `utils/__init__.py prompt assembly` | 24 |
 | [`tests/test_classification_resilience.py`](../../tests/test_classification_resilience.py) | Unit | - | `services/classification_service.py` | 10 |
 | [`tests/test_client_factory.py`](../../tests/test_client_factory.py) | Unit | #193 | `utils/client.py create_chat_model` | 9 |
 | [`tests/test_client_imports.py`](../../tests/test_client_imports.py) | Integration | #154 | `utils/client.py` | 2 |
@@ -41,13 +41,13 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_router.py`](../../tests/test_router.py) | Integration | #171 | `lambda_function.lambda_handler` | 34 |
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
 | [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 57 |
-| | | | **Total** | **419** |
+| | | | **Total** | **422** |
 
 ## Every test
 
 ### `test_answer_conversation.py`
 
-*Unit · issue #183 · 21 tests*
+*Unit · issue #183 · 24 tests*
 
 What the model is actually asked, turn by turn - issue #183.
 
@@ -66,12 +66,15 @@ What the model is actually asked, turn by turn - issue #183.
 | `test_only_the_most_recent_turns_are_forwarded` | An unbounded transcript is an unbounded prompt and an unbounded bill. |
 | `test_the_question_survives_the_cap` | Trimming the oldest turns must never trim the thing being asked. |
 | `test_an_oversized_message_is_truncated_rather_than_forwarded_whole` | The 250-character limit is enforced in the browser, which is not a limit. |
-| `test_a_follow_up_still_falls_back_to_gemini_when_groq_is_down` | The provider fallback added in #150 must survive this change. |
+| `test_a_follow_up_still_falls_back_to_gemini_when_groq_is_down` | Fallback works and every model receives the same conversation history. |
+| `test_primary_success_does_not_invoke_fallback` | A valid primary answer returns without trying another model. |
+| `test_empty_primary_answers_fall_back_to_gemini` | An empty primary answer should trigger fallback. |
+| `test_all_answer_models_failing_raises_model_chain_exhausted` | Raise the chain exhaustion error when every answer model fails. |
 | `test_a_missing_subject_or_description_does_not_break_the_context_block` | The degraded path in #169 answers with neither, and must still work. |
 | `test_the_answer_is_returned_stripped` | The answer is returned stripped. |
 | `test_location_gender_and_age_still_reach_the_system_prompt` | Location gender and age still reach the system prompt. |
 
-> 17 test functions expand to 21 cases through parametrisation.
+> 20 test functions expand to 24 cases through parametrisation.
 
 ### `test_classification_resilience.py`
 
@@ -502,7 +505,7 @@ The shared token counter (issue #159).
 | `test_log_usage_survives_an_unserialisable_label` | Log usage survives an unserialisable label. |
 | `test_subject_generation_reports_its_usage` | Subject generation reports its usage. |
 | `test_answer_generation_reports_its_usage` | Answer generation reports its usage. |
-| `test_a_groq_failure_still_bills_the_gemini_retry` | The fallback path spends twice on one request. |
+| `test_a_groq_failure_still_bills_the_gemini_retry` | Only successful model responses contribute recorded token usage. |
 | `test_organization_search_reports_its_usage` | The service that could not report usage at all before #159. |
 | `test_classification_counts_every_call_in_its_walk` | Classification is a loop, and the loop is the cost. |
 | `test_classification_usage_survives_having_no_provider` | No key configured must still return the published (results, usage) pair. |
@@ -516,7 +519,7 @@ The shared token counter (issue #159).
 | `test_subject_with_no_provider_logs_nothing_spent` | Subject with no provider logs nothing spent. |
 | `test_output_token_details_without_reasoning_changes_nothing` | The details dict is present on plenty of non-reasoning responses. |
 | `test_log_usage_never_raises_on_a_hostile_accumulator` | Telemetry failing must not take down the request that succeeded. |
-| `test_answer_generation_with_no_provider_at_all` | No keys configured: Gemini raises, and the spend log is still emitted. |
+| `test_answer_generation_with_no_provider_at_all` | No configured provider succeeds, but the spend log is still emitted. |
 | `test_both_providers_failing_on_a_long_description_still_reports` | The long-description branch has its own fallback pair. |
 | `test_a_broken_extractor_is_logged_not_hidden` | A broken extractor is logged not hidden. |
 | `test_an_unrecognised_response_warns` | A provider that stops reporting usage bills us exactly the same. |
