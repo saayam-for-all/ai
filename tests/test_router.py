@@ -26,6 +26,7 @@ SERVICES = [
     ("generate_answer", "generate_answer_handler"),
     ("emergency_contacts", "emergency_contacts_handler"),
     ("search_orgs", "search_orgs_handler"),
+    ("disaster_check", "disaster_check_handler"),
     # The aggregator may address organization search under any of these.
     ("search_org", "search_orgs_handler"),
     ("find_nonprofits", "search_orgs_handler"),
@@ -84,7 +85,7 @@ def test_unknown_service_returns_the_documented_shape():
     assert "does_not_exist" in body["error"]
     # The message has to name the alternatives, or a caller cannot self-correct.
     for service in ("predict_category", "generate_subject", "generate_answer",
-                    "emergency_contacts", "search_orgs"):
+                    "emergency_contacts", "search_orgs", "disaster_check"):
         assert service in body["error"]
 
 
@@ -169,6 +170,7 @@ def test_every_advertised_service_has_a_handler():
             "generate_answer": "generate_answer_handler",
             "emergency_contacts": "emergency_contacts_handler",
             "search_orgs": "search_orgs_handler",
+            "disaster_check": "disaster_check_handler",
         }[service]
         with mock.patch.object(LF, handler_name, return_value=sentinel) as handler:
             LF.lambda_handler({"body": json.dumps({"service": service})}, None)

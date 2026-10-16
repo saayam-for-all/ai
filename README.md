@@ -31,6 +31,8 @@ ai/
 ├── .github/workflows/
 │   └── deploy_aws_lambda.yml      # CI/CD pipeline deploying all 5 functions in parallel
 ├── services/
+│   ├── disaster_check.py          # Disaster check: which events reach a location, and their impact zones
+│   ├── usgs_earthquakes.py        # USGS earthquake feed adapter for disaster_check
 │   ├── emergency.py               # Emergency contact geolocation and lookup logic
 │   ├── emergency_numbers.json     # Global emergency numbers database by country/state/city
 │   └── classification_service.py  # Category prediction algorithms
@@ -455,6 +457,212 @@ curl -X POST https://<api-gateway-url>/more-organizations \
     "subject": "shelter",
     "description": "i am on the streets now i dont have a place to stay please help",
     "location": "San Jose, CA"
+  }'
+```
+
+---
+
+### 6. Disaster Check
+Answers whether a natural disaster is affecting a location, from authoritative
+feeds, and returns the impact zone of each event
+([issue #191](https://github.com/saayam-for-all/ai/issues/191)).
+
+**What is built so far is one slice of that issue:** the latitude/longitude
+query, for **earthquakes only**, from the USGS feed. The feed is public, so
+this service needs no API key. The news-snippet query, the LLM cross-check,
+floods and wildfires are not built yet.
+
+It is reachable through the unified router as `"service": "disaster_check"`.
+It has no dedicated Lambda function or API Gateway route yet.
+
+#### request Payload
+```json
+{
+  "service": "disaster_check",
+  "latitude": 37.0662,
+  "longitude": 37.3833,
+  "radius_km": 50,
+  "window_hours": 72
+}
+```
+
+| Field | Required | Default | Accepted |
+| --- | --- | --- | --- |
+| `latitude` | yes | | `-90` to `90` |
+| `longitude` | yes | | `-180` to `180` |
+| `radius_km` | no | `50` | greater than `0`, at most `500` |
+| `window_hours` | no | `72` | `1` to `168` |
+
+`radius_km` is the area the caller is asking about, not a limit on how far
+away an epicentre may be. An event is returned when its **impact zone reaches
+that area**, so a large earthquake 150 km away is reported to a caller who
+asked about 50 km.
+
+#### Response
+The Gaziantep query above, replayed against the feed's record of 6 February
+2023 (first of six events shown, ring shortened):
+
+```json
+{
+  "disaster_detected": true,
+  "confidence": "high",
+  "events": [
+    {
+      "event_id": "usgs-us6000jllz",
+      "event_type": "earthquake",
+      "severity": "extreme",
+      "headline": "M 7.8 - Pazarcik earthquake, Kahramanmaras earthquake sequence",
+      "started_at": "2023-02-06T01:17:34Z",
+      "expires_at": "2023-02-09T01:17:34Z",
+      "impact_zone": {
+        "type": "Polygon",
+        "coordinates": [[[37.0143, 39.4955], [36.4409, 39.4505], "...", [37.0143, 39.4955]]]
+      },
+      "impact_zone_fallback": { "center": [37.2256, 37.0143], "radius_km": 251.2 },
+      "boundary_source": "modelled",
+      "verified_by": [
+        {
+          "source": "USGS",
+          "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000jllz",
+          "retrieved_at": "2023-02-06T12:00:00Z"
+        }
+      ],
+      "llm_cross_check": null,
+      "volunteer_band_km": 50,
+      "advisory": "M 7.8 - Pazarcik earthquake, Kahramanmaras earthquake sequence, reported by USGS. The impact zone is a modelled circle of about 251.2 km, not an observed boundary."
+    }
+  ],
+  "sources_checked": [
+    { "source": "USGS", "event_types": ["earthquake"], "status": "ok", "retrieved_at": "2023-02-06T12:00:00Z" }
+  ]
+}
+```
+
+With nothing happening:
+
+```json
+{
+  "disaster_detected": false,
+  "confidence": null,
+  "events": [],
+  "sources_checked": [
+    { "source": "USGS", "event_types": ["earthquake"], "status": "ok", "retrieved_at": "2023-02-06T12:00:00Z" }
+  ]
+}
+```
+
+Reading the fields:
+
+- **`disaster_detected: false` covers only what `sources_checked` lists.**
+  Today that is earthquakes. It is not an all-clear for a flood or a wildfire,
+  and a caller must not present it as one.
+- **`events`** are ordered most severe first. `severity` uses the CAP
+  vocabulary (`moderate`, `severe`, `extreme`) so that every event type can
+  share one scale.
+- **`confidence`** grades the first event, the most severe one: `high` when
+  USGS has reviewed its solution, `medium` while it is still automatic. A
+  reviewed aftershock does not raise the grade of an unreviewed mainshock. It
+  is `null` when nothing is detected.
+- **`impact_zone`** is GeoJSON, so positions are `[longitude, latitude]` and
+  the ring is counterclockwise. It is a 32-sided polygon drawn just outside
+  the circle, so it covers everyone the radius includes.
+  **`impact_zone_fallback.center` is `[latitude, longitude]`**, as in the
+  issue's contract. The two orders differ.
+- **`llm_cross_check`** is `null`: no model runs on the coordinate path.
+- **`sources_checked`** is an addition to the issue's contract. It is what
+  makes a negative answer traceable. Once there is more than one feed, a
+  detection can come back while another feed is down, and that feed is named
+  here as `unavailable`. A `false` is only ever returned when every feed
+  answered.
+
+#### Status codes
+
+| Status | Meaning |
+|---|---|
+| 200 | The feed answered. Read `disaster_detected`. |
+| 400 | `latitude` or `longitude` missing, or a value out of range. `error` says which. |
+| 501 | `NEWS_SNIPPET_NOT_SUPPORTED` — the request carried a `news_snippet`. |
+| 502 | `DISASTER_CHECK_UNAVAILABLE` — a feed could not be reached or its answer could not be read, and nothing was detected. Retryable. |
+| 500 | An unexpected failure. The body is `{"error": "Disaster check failed"}`. |
+
+**A `502` or `500` body carries no `disaster_detected` field at all.** An
+outage is never reported as an all-clear. One event in the feed's answer that
+cannot be read, or that carries a magnitude or position that is not a finite
+number in range, fails the whole answer rather than being skipped. The body is an object on
+every path, as [#170](https://github.com/saayam-for-all/ai/issues/170)
+requires.
+
+#### The impact zone is modelled, and the model is a first pass
+
+USGS publishes an epicentre and a magnitude, not a boundary, so the zone is a
+circle whose radius comes from magnitude alone:
+
+`radius_km = 10 ^ (0.5 * magnitude - 1.5)`, capped at 1000 km.
+
+| Magnitude | Radius | `severity` |
+| --- | ---: | --- |
+| 5.0 | 10 km | `moderate` |
+| 6.0 | 32 km | `severe` |
+| 7.0 | 100 km | `extreme` |
+| 7.8 | 251 km | `extreme` |
+| 8.0 | 316 km | `extreme` |
+| 9.0 and above | 1000 km | `extreme` |
+
+This is a heuristic chosen to be easy to check, not a shaking model. It
+ignores depth, fault geometry, soil and building stock. Every zone built from
+it says `boundary_source: "modelled"`, and it should be replaced by observed
+shaking where a feed publishes it.
+
+These values decide who is warned, and all four are **awaiting review**:
+
+| Constant | Value | Where |
+| --- | --- | --- |
+| Smallest earthquake reported | magnitude 5.0 | `services/usgs_earthquakes.py` `MIN_MAGNITUDE` |
+| Radius model | above | `services/usgs_earthquakes.py` `impact_radius_km` |
+| How long an earthquake stays live (`expires_at`) | 72 hours | `services/usgs_earthquakes.py` `ALERT_LIFETIME_HOURS` |
+| Volunteer band outside the zone | 50 km | `services/usgs_earthquakes.py` `VOLUNTEER_BAND_KM` |
+
+#### Known limitations
+
+- `disaster_detected` answers for the window asked. A caller who sets
+  `window_hours` above 72 can be handed an earthquake that is past its own
+  `expires_at`.
+- A zone that crosses the antimeridian has longitudes beyond +/-180 in
+  `impact_zone` rather than a ring that jumps to the far side of the map. A
+  zone that covers a pole is not a valid ring. `impact_zone_fallback` is exact
+  in both cases.
+- An aftershock sequence is returned as separate events. Nothing merges them.
+- There is no caching or rate limiting yet. Each call is one request to USGS.
+
+#### Adding a feed
+
+A feed is one module exposing `SOURCE`, `EVENT_TYPES`, `MAX_IMPACT_RADIUS_KM`
+and `fetch_events(latitude, longitude, search_radius_km, since)`, added to
+`FEEDS` in `services/disaster_check.py`. `services/usgs_earthquakes.py` is the
+example to copy. `fetch_events` must raise when the feed cannot be read; an
+empty list means the feed was asked and listed nothing.
+
+#### Regression tests covering this service
+
+| File | Proves |
+| --- | --- |
+| `test_disaster_check_contract.py` | Against two responses recorded from USGS: a location inside a known earthquake is detected with a USGS record in `verified_by`; a quiet location is a `false` from one feed call; an outage is `502` `DISASTER_CHECK_UNAVAILABLE` with no `disaster_detected` field; a `news_snippet` is a `501`; the body is an object on every path. |
+| `test_disaster_check.py` | An epicentre beyond the caller's radius is still found when its zone reaches them; a feed that did not answer is never a `false`; `confidence` is that of the most severe event; the zone is a closed counterclockwise ring that covers the modelled circle, including across the antimeridian and at a pole; query validation. |
+| `test_usgs_earthquakes.py` | The query sent to USGS; the recorded payload becomes events with latitude and longitude the right way round; an unreachable feed, an unreadable answer, or an event with a NaN or out-of-range magnitude or position raises rather than returning an empty list. |
+
+The fixtures are in `tests/fixtures/usgs/`. No test in the default run calls
+USGS.
+
+#### curl Command
+```bash
+curl -X POST https://<api-gateway-url>/<unified-router-route> \
+  -H "Content-Type: application/json" \
+  -d '{
+    "service": "disaster_check",
+    "latitude": 37.0662,
+    "longitude": 37.3833,
+    "radius_km": 50,
+    "window_hours": 72
   }'
 ```
 

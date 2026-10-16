@@ -10,6 +10,43 @@ team works and reviews in.
 
 ## Unreleased
 
+### Disaster Check — coordinate query for earthquakes — [#191](https://github.com/saayam-for-all/ai/issues/191)
+
+The first slice of #191. Not yet built: the news-snippet query, the LLM
+cross-check, floods, wildfires, caching, and a deployed route.
+
+**Added**
+
+- `disaster_check`, a sixth service on the unified router. It takes a
+  latitude and longitude and reports the earthquakes whose impact zone
+  reaches that location, from the USGS feed. No API key is involved.
+  *Observable difference:* `{"service": "disaster_check", "latitude": 37.07,
+  "longitude": 37.38}` used to answer `400 Unknown service` and now answers
+  `200` with `disaster_detected`.
+- An explicit outage. With USGS unreachable, or answering with something
+  unreadable (including an event whose magnitude or position is NaN or out of
+  range), the response is `502` `DISASTER_CHECK_UNAVAILABLE` and the body
+  has **no** `disaster_detected` field.
+  *Observable difference:* an outage can be told apart from "nothing is
+  happening" without reading a log.
+- `sources_checked` on every `200`, naming the feeds consulted and the event
+  types they cover. This is an addition to the contract in the issue: without
+  it, `disaster_detected: false` from an earthquake feed reads as an all-clear
+  for floods.
+- A modelled impact zone for each event: a GeoJSON polygon, the
+  centre-and-radius fallback, and `boundary_source: "modelled"`. The radius
+  model and three other first-pass values are listed in the README as awaiting
+  review.
+- `tests/fixtures/usgs/` — two responses recorded from the live feed, and 127
+  tests, most of which replay them.
+- A request carrying `news_snippet` is answered `501`
+  `NEWS_SNIPPET_NOT_SUPPORTED` rather than being answered from its
+  coordinates with the snippet ignored.
+
+**Changed**
+
+- The router's `Unknown service` message now lists `disaster_check`.
+
 ### Token usage tracking & reasoning effort — [#194](https://github.com/saayam-for-all/ai/issues/194)
 
 **Fixed**

@@ -1,0 +1,1 @@
+{"type":"FeatureCollection","metadata":{"generated":1791926421000,"url":"https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&eventtype=earthquake&latitude=20&longitude=10&maxradiuskm=1050&minmagnitude=5&starttime=2023-02-06T00:00:00&endtime=2023-02-09T00:00:00&orderby=magnitude","title":"USGS Earthquakes","status":200,"api":"2.8.1","count":0},"features":[]}

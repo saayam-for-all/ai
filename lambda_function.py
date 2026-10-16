@@ -6,6 +6,12 @@ from utils.generate_answer_service import generate_ai_answer
 from utils.model_fallback import ModelChainExhausted
 from services.emergency import get_emergency_services
 from utils.search_orgs import OrganizationSearchError, find_organizations
+from services.disaster_check import (
+    DisasterCheckUnavailable,
+    InvalidQuery,
+    check_location,
+    parse_query,
+)
 
 # -------------------------------------------------------------
 # Common Utility Helpers
@@ -549,6 +555,53 @@ def generate_subject_handler(event, context):
         return _response(500, {"error": str(e)})
 
 
+# 6. Disaster Check
+def disaster_check_handler(event, context):
+    """AWS Lambda entry point for disaster_check service - issue #191.
+
+    Answers a latitude/longitude query from authoritative feeds. The
+    news-snippet query is part of the same contract and is not built yet, so
+    it is refused with its own code rather than silently ignored.
+    """
+    try:
+        body = _parse_event_body(event)
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return _response(400, {"error": "Request body is not valid JSON"})
+
+    if not isinstance(body, dict):
+        return _response(400, {"error": "Request body must be a JSON object"})
+
+    if str(body.get("news_snippet") or "").strip():
+        return _response(
+            501,
+            {
+                "error": "news_snippet queries are not supported yet; send latitude and longitude",
+                "code": "NEWS_SNIPPET_NOT_SUPPORTED",
+            },
+        )
+
+    try:
+        return _response(200, check_location(**parse_query(body)))
+    except InvalidQuery as e:
+        return _response(400, {"error": str(e)})
+    except DisasterCheckUnavailable as e:
+        # A feed did not answer. The body deliberately carries no
+        # disaster_detected field: an outage must never be readable as an
+        # all-clear.
+        print(f"ERROR: disaster_check could not be answered: {e}")
+        return _response(
+            502,
+            {
+                "error": "Disaster check failed",
+                "code": "DISASTER_CHECK_UNAVAILABLE",
+                "retryable": True,
+            },
+        )
+    except Exception as e:
+        print(f"ERROR: disaster_check failed: {type(e).__name__}: {e}")
+        return _response(500, {"error": "Disaster check failed"})
+
+
 # -------------------------------------------------------------
 # Unified Entry Point (Fallback routing)
 # -------------------------------------------------------------
@@ -588,7 +641,8 @@ def _without_routing_key(event, service):
 def lambda_handler(event, context):
     """
     Unified Lambda handler that routes requests to appropriate service.
-    Supports: predict_category, generate_subject, generate_answer, emergency_contacts, search_orgs
+    Supports: predict_category, generate_subject, generate_answer, emergency_contacts, search_orgs,
+    disaster_check
     """
     service = None
     try:
@@ -624,8 +678,10 @@ def lambda_handler(event, context):
             return emergency_contacts_handler(_without_routing_key(event, service), context)
         elif service in ["search_orgs", "search_org", "find_nonprofits"]:
             return search_orgs_handler(event, context)
+        elif service == "disaster_check":
+            return disaster_check_handler(event, context)
         else:
-            return _response(400, {"error": f"Unknown service: {service}. Supported: predict_category, generate_subject, generate_answer, emergency_contacts, search_orgs"})
+            return _response(400, {"error": f"Unknown service: {service}. Supported: predict_category, generate_subject, generate_answer, emergency_contacts, search_orgs, disaster_check"})
 
     except Exception as e:
         # str(e) put the raw exception text in the response. Provider and driver
