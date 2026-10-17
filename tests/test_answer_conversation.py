@@ -15,6 +15,7 @@ from unittest import mock
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from utils.model_fallback import ModelChainExhausted
 
 import utils
 from utils import (
@@ -50,10 +51,15 @@ class _Recorder:
 
 @pytest.fixture
 def groq(monkeypatch):
-    """A recording Groq client, with Gemini removed so nothing falls through."""
+    """A recording model factory for answer-generation tests."""
     recorder = _Recorder()
-    monkeypatch.setattr(utils, "groq_llm", recorder)
-    monkeypatch.setattr(utils, "gemini_llm", None)
+
+    def fake_create_chat_model(target, *, temperature):
+        if target.provider == "groq":
+            return recorder
+        raise ValueError("Unexpected fallback to Gemini")
+
+    monkeypatch.setattr(utils, "create_chat_model", fake_create_chat_model)
     return recorder
 
 
@@ -248,20 +254,85 @@ def test_an_oversized_message_is_truncated_rather_than_forwarded_whole(groq):
 # -------------------------------------------------------------------
 
 def test_a_follow_up_still_falls_back_to_gemini_when_groq_is_down(monkeypatch):
-    """The provider fallback added in #150 must survive this change."""
+    """Fallback works and every model receives the same conversation history."""
+
+    groq_attempts = []
+    groq_messages = []
+    gemini = _Recorder(reply="Bring photo ID.")
+
     class _Down:
-        def invoke(self, _messages):
+        def invoke(self, messages):
+            groq_messages.append(list(messages))
             raise RuntimeError("groq is unavailable")
 
-    gemini = _Recorder(reply="Bring photo ID.")
-    monkeypatch.setattr(utils, "groq_llm", _Down())
-    monkeypatch.setattr(utils, "gemini_llm", gemini)
+    def fake_create_chat_model(target, *, temperature):
+        if target.provider == "groq":
+            groq_attempts.append(target.model)
+            return _Down()
+        if target.provider == "gemini":
+            return gemini
+        raise ValueError(f"Unexpected provider: {target.provider}")
+
+    monkeypatch.setattr(utils, "create_chat_model", fake_create_chat_model)
 
     answer = _answer(FOLLOW_UP)
 
     assert answer == "Bring photo ID."
+    assert len(groq_attempts) == 3
+    assert len(groq_messages) == 3
     assert gemini.messages[-1].content == QUESTION
 
+    # Every Groq attempt should receive the same complete message history
+    # that Gemini receives.
+    assert all(messages == gemini.messages for messages in groq_messages)
+
+
+def test_primary_success_does_not_invoke_fallback(groq):
+    """A valid primary answer returns without trying another model."""
+    answer = _answer(FOLLOW_UP)
+
+    assert answer == "Bring photo ID and a utility bill."
+    assert len(groq.calls) == 1
+
+
+
+def test_empty_primary_answers_fall_back_to_gemini(monkeypatch):
+    """An empty primary answer should trigger fallback."""
+    groq = _Recorder(reply="")
+    gemini = _Recorder(reply="A valid fallback answer.")
+
+    def fake_create_chat_model(target, *, temperature):
+        if target.provider == "groq":
+            return groq
+        if target.provider == "gemini":
+            return gemini
+        raise ValueError(f"Unexpected provider: {target.provider}")
+
+    monkeypatch.setattr(utils, "create_chat_model", fake_create_chat_model)
+
+    answer = _answer(FOLLOW_UP)
+
+    assert answer == "A valid fallback answer."
+    assert len(groq.calls) == 3
+    assert len(gemini.calls) == 1
+
+
+
+def test_all_answer_models_failing_raises_model_chain_exhausted(monkeypatch):
+    """Raise the chain exhaustion error when every answer model fails."""
+
+    attempted_targets = []
+
+    def fake_create_chat_model(target, *, temperature):
+        attempted_targets.append(target)
+        raise RuntimeError(f"{target.provider} is unavailable")
+
+    monkeypatch.setattr(utils, "create_chat_model", fake_create_chat_model)
+
+    with pytest.raises(ModelChainExhausted):
+        _answer(FOLLOW_UP)
+
+    assert len(attempted_targets) == 4
 
 def test_a_missing_subject_or_description_does_not_break_the_context_block(groq):
     """The degraded path in #169 answers with neither, and must still work."""
