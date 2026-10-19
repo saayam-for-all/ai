@@ -1,0 +1,913 @@
+{
+  "measured_at": "2026-10-19T20:59:35+00:00",
+  "fingerprint": "5170ad9c60ac",
+  "pass_mark": 0.9,
+  "passed": false,
+  "scored_cases": 41,
+  "top_level_accuracy": 0.8537,
+  "path_accuracy": 0.8049,
+  "errors": 0,
+  "total_tokens": 54999,
+  "models": {
+    "groq/openai/gpt-oss-20b": 89
+  },
+  "results": [
+    {
+      "id": "food-01",
+      "description": "I lost my job and need food for my family this week.",
+      "expected": "FOOD_ASSISTANCE",
+      "scored": true,
+      "predicted": [
+        "1.1",
+        "1.2",
+        "1.3"
+      ],
+      "top_level_ok": true,
+      "path_ok": true,
+      "elderly_routed": false,
+      "error": null,
+      "models": [
+        "groq/openai/gpt-oss-20b",
+        "groq/openai/gpt-oss-20b"
+      ],
+      "total_tokens": 1128
+    },
+    {
+      "id": "food-02",
+      "description": "I work double shifts and need someone to pick up and deliver my groceries on Saturday.",
+      "expected": "GROCERY_SHOPPING_AND_DELIVERY",
+      "scored": true,
+      "predicted": [
+        "1.2",
+        "1.1",
+        "1.3"
+      ],
+      "top_level_ok": true,
+      "path_ok": true,
+      "elderly_routed": false,
+      "error": null,
+      "models": [
+        "groq/openai/gpt-oss-20b",
+        "groq/openai/gpt-oss-20b"
+      ],
+      "total_tokens": 1078
+    },
+    {
+      "id": "food-03",
+      "description": "I want to learn to cook simple, healthy meals for my diabetic son.",
+      "expected": "NUTRITIONAL_MEAL_PLANNING",
+      "scored": true,
+      "predicted": [
+        "4.7",
+        "4.1",
+        "4.4"
+      ],
+      "top_level_ok": false,
+      "path_ok": false,
+      "elderly_routed": false,
+      "error": null,
+      "models": [
+        "groq/openai/gpt-oss-20b",
+        "groq/openai/gpt-oss-20b"
+      ],
+      "total_tokens": 1307
+    },
+    {
+      "id": "food-04",
+      "description": "We are hosting a community Diwali dinner for 80 people and need help cooking.",
+      "expected": "FESTIVE_OR_BULK_COOKING",
+      "scored": true,
+      "predicted": [
+        "1.3.2",
+        "1.3.4",
+        "1.3.3"
+      ],
+      "top_level_ok": true,
+      "path_ok": true,
+      "elderly_routed": false,
+      "error": null,
+      "models": [
+        "groq/openai/gpt-oss-20b",
+        "groq/openai/gpt-oss-20b",
+        "groq/openai/gpt-oss-20b"
+      ],
+      "total_tokens": 1639
+    },
+    {
+      "id": "food-05",
+      "description": "Our food pantry ran out. Is there a free meal program near me?",
+      "expected": "FOOD_ASSISTANCE",
+      "scored": true,
+      "predicted": [
+        "1.1",
+        "1.2",
+        "1.3"
+      ],
+      "top_level_ok": true,
+      "path_ok": true,
+      "elderly_routed": false,
+      "error": null,
+      "models": [
+        "groq/openai/gpt-oss-20b",
+        "groq/openai/gpt-oss-20b"
+      ],
+      "total_tokens": 998
+    },
+    {
+      "id": "clothing-01",
+      "description": "I need a winter coat for my son.",
+      "expected": "CLOTHING_ASSISTANCE",
+      "scored": true,
+      "predicted": [
+        "2.2",
+        "2.3",
+        "2.1"
+      ],
+      "top_level_ok": true,
+      "path_ok": true,
+      "elderly_routed": false,
+      "error": null,
+      "models": [
+        "groq/openai/gpt-oss-20b",
+        "groq/openai/gpt-oss-20b"
+      ],
+      "total_tokens": 1170
+    },
+    {
+      "id": "clothing-02",
+      "description": "Our house burned down last night and the kids have no clothes.",
+      "expected": "EMERGENCY_CLOTHING_ASSISTANCE",
+      "scored": true,
+      "predicted": [
+        "3.9",
+        "3.2",
+        "3.3"
+      ],
+      "top_level_ok": false,
+      "path_ok": false,
+      "elderly_routed": false,
+      "error": null,
+      "models": [
+        "groq/openai/gpt-oss-20b",
+        "groq/openai/gpt-oss-20b"
+      ],
+      "total_tokens": 1226
+    },
+    {
+      "id": "clothing-03",
+      "description": "I have bags of gently used clothes I would like to give away.",
+      "expected": "DONATE_CLOTHES",
+      "scored": true,
+      "predicted": [
+        "2.1",
+        "2.2",
+        "2.4"
+      ],
+      "top_level_ok": true,
+      "path_ok": true,
+      "elderly_routed": false,
+      "error": null,
+      "models": [
+        "groq/openai/gpt-oss-20b",
+        "groq/openai/gpt-oss-20b"
+      ],
+      "total_tokens": 1252
+    },
+    {
+      "id": "clothing-04",
+      "description": "I need to borrow a suit for a job interview next week.",
+      "expected": "BORROW_CLOTHES",
+      "scored": true,
+      "predicted": [
+        "2.2",
+        "2.1",
+        "2.4"
+      ],
+      "top_level_ok": true,
+      "path_ok": true,
+      "elderly_routed": false,
+      "error": null,
+      "models": [
+        "groq/openai/gpt-oss-20b",
+        "groq/openai/gpt-oss-20b"
+      ],
+      "total_tokens": 1099
+    },
+    {
+      "id": "clothing-05",
+      "description": "My wedding dress needs to be altered before next month.",
+      "expected": "TAILORING",
+      "scored": true,
+      "predicted": [
+        "2.4",
+        "2.1",
+        "2.2"
+      ],
+      "top_level_ok": true,
+      "path_ok": true,
+      "elderly_routed": false,
+      "error": null,
+      "models": [
+        "groq/openai/gpt-oss-20b",
+        "groq/openai/gpt-oss-20b"
+      ],
+      "total_tokens": 1119
+    },
+    {
+      "id": "housing-01",
+      "description": "My kitchen sink has been leaking for a week.",
+      "expected": "PLUMBING",
+      "scored": true,
+      "predicted": [
+        "3.3.1",
+        "3.3.2",
+        "3.3.13"
+      ],
+      "top_level_ok": true,
+      "path_ok": true,
+      "elderly_routed": false,
+      "error": null,
+      "models": [
+        "groq/openai/gpt-oss-20b",
+        "groq/openai/gpt-oss-20b",
+        "groq/openai/gpt-oss-20b"
+      ],
+      "total_tokens": 1721
+    },
+    {
+      "id": "housing-02",
+      "description": "Looking for an electrician to fix a broken switch.",
+      "expected": "ELECTRICIAN",
+      "scored": true,
+      "predicted": [
+        "3.3.3",
+        "3.3.2",
+        "3.3.1"
+      ],
+      "top_level_ok": true,
+      "path_ok": true,
+      "elderly_routed": false,
+      "error": null,
+      "models": [
+        "groq/openai/gpt-oss-20b",
+        "groq/openai/gpt-oss-20b",
+        "groq/openai/gpt-oss-20b"
+      ],
+      "total_tokens": 1766
+    },
+    {
+      "id": "housing-03",
+      "description": "I received an eviction notice after falling behind on rent for three months and need help talking to my landlord.",
+      "expected": "TENANT_RENT_SUPPORT",
+      "scored": true,
+      "predicted": [
+        "3.2",
+        "3.1",
+        "3.3"
+      ],
+      "top_level_ok": true,
+      "path_ok": true,
+      "elderly_routed": false,
+      "error": null,
+      "models": [
+        "groq/openai/gpt-oss-20b",
+        "groq/openai/gpt-oss-20b"
+      ],
+      "total_tokens": 1201
+    },
+    {
+      "id": "housing-04",
+      "description": "Our air conditioner stopped working and it is 100 degrees outside.",
+      "expected": "HVAC_AIR_CONDITIONING",
+      "scored": true,
+      "predicted": [
+        "3.3.6",
+        "3.3.3",
+        "3.3.13"
+      ],
+      "top_level_ok": true,
+      "path_ok": true,
+      "elderly_routed": false,
+      "error": null,
+      "models": [
+        "groq/openai/gpt-oss-20b",
+        "groq/openai/gpt-oss-20b",
+        "groq/openai/gpt-oss-20b"
+      ],
+      "total_tokens": 1781
+    },
+    {
+      "id": "housing-05",
+      "description": "I locked myself out of my apartment and need someone to open the door.",
+      "expected": "LOCKSMITH",
+      "scored": true,
+      "predicted": [
+        "3.1",
+        "3.2",
+        "3.3"
+      ],
+      "top_level_ok": true,
+      "path_ok": false,
+      "elderly_routed": false,
+      "error": null,
+      "models": [
+        "groq/openai/gpt-oss-20b",
+        "groq/openai/gpt-oss-20b"
+      ],
+      "total_tokens": 1211
+    },
+    {
+      "id": "housing-06",
+      "description": "I am moving to Austin and looking for an affordable apartment to rent.",
+      "expected": "LOOKING_FOR_RENTAL",
+      "scored": true,
+      "predicted": [
+        "3.5",
+        "3.2",
+        "3.1"
+      ],
+      "top_level_ok": true,
+      "path_ok": true,
+      "elderly_routed": false,
+      "error": null,
+      "models": [
+        "groq/openai/gpt-oss-20b",
+        "groq/openai/gpt-oss-20b"
+      ],
+      "total_tokens": 1229
+    },
+    {
+      "id": "housing-07",
+      "description": "I need help carrying boxes into my new place this weekend.",
+      "expected": "MOVE_IN_HELP",
+      "scored": true,
+      "predicted": [
+        "3.7",
+        "3.8",
+        "3.1"
+      ],
+      "top_level_ok": true,
+      "path_ok": true,
+      "elderly_routed": false,
+      "error": null,
+      "models": [
+        "groq/openai/gpt-oss-20b",
+        "groq/openai/gpt-oss-20b"
+      ],
+      "total_tokens": 1426
+    },
+    {
+      "id": "housing-08",
+      "description": "How do I set up electricity and internet in my new apartment?",
+      "expected": "UTILITIES_SETUP_SUPPORT",
+      "scored": true,
+      "predicted": [
+        "3.4",
+        "3.7",
+        "3.8"
+      ],
+      "top_level_ok": true,
+      "path_ok": true,
+      "elderly_routed": false,
+      "error": null,
+      "models": [
+        "groq/openai/gpt-oss-20b",
+        "groq/openai/gpt-oss-20b"
+      ],
+      "total_tokens": 1157
+    },
+    {
+      "id": "housing-09",
+      "description": "My landlord wants me to sign a lease and I do not understand the terms.",
+      "expected": "LEASE_SUPPORT",
+      "scored": true,
+      "predicted": [
+        "3.1",
+        "3.2",
+        "3.3"
+      ],
+      "top_level_ok": true,
+      "path_ok": true,
+      "elderly_routed": false,
+      "error": null,
+      "models": [
+        "groq/openai/gpt-oss-20b",
+        "groq/openai/gpt-oss-20b"
+      ],
+      "total_tokens": 1169
+    },
+    {
+      "id": "housing-10",
+      "description": "Our aging roof leaks every time it rains.",
+      "expected": "ROOFING",
+      "scored": true,
+      "predicted": [
+        "6.5",
+        "6.6",
+        "6.7"
+      ],
+      "top_level_ok": false,
+      "path_ok": false,
+      "elderly_routed": true,
+      "error": null,
+      "models": [
+        "groq/openai/gpt-oss-20b"
+      ],
+      "total_tokens": 537
+    },
+    {
+      "id": "housing-11",
+      "description": "Can you help my father fix the falling gutter on his house?",
+      "expected": "REPAIR_MAINTENANCE_SUPPORT",
+      "scored": true,
+      "predicted": [
+        "6.5"
+      ],
+      "top_level_ok": false,
+      "path_ok": false,
+      "elderly_routed": true,
+      "error": null,
+      "models": [
+        "groq/openai/gpt-oss-20b"
+      ],
+      "total_tokens": 614
+    },
+    {
+      "id": "education-01",
+      "description": "My daughter is in ninth grade and is falling behind in algebra. We cannot afford a private tutor.",
+      "expected": "MATH",
+      "scored": true,
+      "predicted": [
+        "4.3.1",
+        "4.3.6",
+        "4.3.5"
+      ],
+      "top_level_ok": true,
+      "path_ok": true,
+      "elderly_routed": false,
+      "error": null,
+      "models": [
+        "groq/openai/gpt-oss-20b",
+        "groq/openai/gpt-oss-20b",
+        "groq/openai/gpt-oss-20b"
+      ],
+      "total_tokens": 2087
+    },
+    {
+      "id": "education-02",
+      "description": "Can someone review my college admission essay?",
+      "expected": "SOP_ESSAY_REVIEW",
+      "scored": true,
+      "predicted": [
+        "4.2",
+        "4.1",
+        "4.7"
+      ],
+      "top_level_ok": true,
+      "path_ok": true,
+      "elderly_routed": false,
+      "error": null,
+      "models": [
+        "groq/openai/gpt-oss-20b",
+        "groq/openai/gpt-oss-20b"
+      ],
+      "total_tokens": 1317
+    },
+    {
+      "id": "education-03",
+      "description": "I want to prepare for the SAT but cannot afford classes.",
+      "expected": "TEST_PREP",
+      "scored": true,
+      "predicted": [
+        "4.3.5",
+        "4.3.6",
+        "4.3.1"
+      ],
+      "top_level_ok": true,
+      "path_ok": true,
+      "elderly_routed": false,
+      "error": null,
+      "models": [
+        "groq/openai/gpt-oss-20b",
+        "groq/openai/gpt-oss-20b",
+        "groq/openai/gpt-oss-20b"
+      ],
+      "total_tokens": 1601
+    },
+    {
+      "id": "education-04",
+      "description": "I am a nurse thinking about switching careers to software. Where do I start?",
+      "expected": "CAREER_GUIDANCE",
+      "scored": true,
+      "predicted": [
+        "4.6",
+        "4.7",
+        "4.3"
+      ],
+      "top_level_ok": true,
+      "path_ok": true,
+      "elderly_routed": false,
+      "error": null,
+      "models": [
+        "groq/openai/gpt-oss-20b",
+        "groq/openai/gpt-oss-20b"
+      ],
+      "total_tokens": 1122
+    },
+    {
+      "id": "education-05",
+      "description": "Are there scholarships for first-generation college students?",
+      "expected": "SCHOLARSHIP_KNOWLEDGE",
+      "scored": true,
+      "predicted": [
+        "4.4",
+        "4.1",
+        "4.6"
+      ],
+      "top_level_ok": true,
+      "path_ok": true,
+      "elderly_routed": false,
+      "error": null,
+      "models": [
+        "groq/openai/gpt-oss-20b",
+        "groq/openai/gpt-oss-20b"
+      ],
+      "total_tokens": 1264
+    },
+    {
+      "id": "education-06",
+      "description": "My son needs help learning Python for his class project.",
+      "expected": "COMPUTER_SCIENCE",
+      "scored": true,
+      "predicted": [
+        "4.3.4",
+        "4.3.6",
+        "4.3.5"
+      ],
+      "top_level_ok": true,
+      "path_ok": true,
+      "elderly_routed": false,
+      "error": null,
+      "models": [
+        "groq/openai/gpt-oss-20b",
+        "groq/openai/gpt-oss-20b",
+        "groq/openai/gpt-oss-20b"
+      ],
+      "total_tokens": 1951
+    },
+    {
+      "id": "education-07",
+      "description": "I am a senior in high school and need help with my college applications.",
+      "expected": "COLLEGE_APPLICATION_HELP",
+      "scored": true,
+      "predicted": [
+        "6.7",
+        "6.5",
+        "6.8"
+      ],
+      "top_level_ok": false,
+      "path_ok": false,
+      "elderly_routed": true,
+      "error": null,
+      "models": [
+        "groq/openai/gpt-oss-20b"
+      ],
+      "total_tokens": 547
+    },
+    {
+      "id": "health-01",
+      "description": "I get tired and short of breath on the stairs and I am not sure if it is my heart. I do not have insurance.",
+      "expected": "MEDICAL_CONSULTATION",
+      "scored": true,
+      "predicted": [
+        "5.1.5",
+        "5.1.1",
+        "5.1.11"
+      ],
+      "top_level_ok": true,
+      "path_ok": true,
+      "elderly_routed": false,
+      "error": null,
+      "models": [
+        "groq/openai/gpt-oss-20b",
+        "groq/openai/gpt-oss-20b",
+        "groq/openai/gpt-oss-20b"
+      ],
+      "total_tokens": 2486
+    },
+    {
+      "id": "health-02",
+      "description": "I have a bad toothache and no dental insurance.",
+      "expected": "DENTAL_OR_ORAL_HEALTH",
+      "scored": true,
+      "predicted": [
+        "5.1.3",
+        "5.1.11",
+        "5.1.1"
+      ],
+      "top_level_ok": true,
+      "path_ok": true,
+      "elderly_routed": false,
+      "error": null,
+      "models": [
+        "groq/openai/gpt-oss-20b",
+        "groq/openai/gpt-oss-20b",
+        "groq/openai/gpt-oss-20b"
+      ],
+      "total_tokens": 1996
+    },
+    {
+      "id": "health-03",
+      "description": "I have been feeling anxious and cannot sleep. I would like to talk to someone.",
+      "expected": "MENTAL_WELLBEING_SUPPORT",
+      "scored": true,
+      "predicted": [
+        "5.3",
+        "5.5",
+        "5.1"
+      ],
+      "top_level_ok": true,
+      "path_ok": true,
+      "elderly_routed": false,
+      "error": null,
+      "models": [
+        "groq/openai/gpt-oss-20b",
+        "groq/openai/gpt-oss-20b"
+      ],
+      "total_tokens": 1253
+    },
+    {
+      "id": "health-04",
+      "description": "I cannot get to the pharmacy. Can someone deliver my prescription?",
+      "expected": "MEDICINE_DELIVERY",
+      "scored": true,
+      "predicted": [
+        "5.2",
+        "5.1",
+        "5.5"
+      ],
+      "top_level_ok": true,
+      "path_ok": true,
+      "elderly_routed": false,
+      "error": null,
+      "models": [
+        "groq/openai/gpt-oss-20b",
+        "groq/openai/gpt-oss-20b"
+      ],
+      "total_tokens": 1348
+    },
+    {
+      "id": "health-05",
+      "description": "My baby has a fever and a rash. Which clinic sees young children?",
+      "expected": "PEDIATRICS_OR_CHILD_HEALTH",
+      "scored": true,
+      "predicted": [
+        "5.1.10",
+        "5.1.1",
+        "5.1.11"
+      ],
+      "top_level_ok": true,
+      "path_ok": true,
+      "elderly_routed": false,
+      "error": null,
+      "models": [
+        "groq/openai/gpt-oss-20b",
+        "groq/openai/gpt-oss-20b",
+        "groq/openai/gpt-oss-20b"
+      ],
+      "total_tokens": 2106
+    },
+    {
+      "id": "health-06",
+      "description": "Where can I get a free flu shot?",
+      "expected": "VACCINATIONS_AND_PREVENTIVE_SCREENINGS",
+      "scored": true,
+      "predicted": [
+        "5.5",
+        "5.1",
+        "5.2"
+      ],
+      "top_level_ok": true,
+      "path_ok": false,
+      "elderly_routed": false,
+      "error": null,
+      "models": [
+        "groq/openai/gpt-oss-20b",
+        "groq/openai/gpt-oss-20b"
+      ],
+      "total_tokens": 1362
+    },
+    {
+      "id": "elderly-01",
+      "description": "My mother is 82 and lives alone. She has trouble getting to her medical appointments and with groceries.",
+      "expected": "ELDERLY_COMMUNITY_ASSISTANCE",
+      "scored": true,
+      "predicted": [
+        "6.6",
+        "6.5",
+        "6.7"
+      ],
+      "top_level_ok": true,
+      "path_ok": true,
+      "elderly_routed": true,
+      "error": null,
+      "models": [
+        "groq/openai/gpt-oss-20b"
+      ],
+      "total_tokens": 570
+    },
+    {
+      "id": "elderly-02",
+      "description": "My grandfather needs a ride to his eye doctor appointment on Tuesday.",
+      "expected": "TRANSPORTATION_APPOINTMENTS_EVENTS",
+      "scored": true,
+      "predicted": [
+        "6.6",
+        "6.5",
+        "6.7"
+      ],
+      "top_level_ok": true,
+      "path_ok": true,
+      "elderly_routed": true,
+      "error": null,
+      "models": [
+        "groq/openai/gpt-oss-20b"
+      ],
+      "total_tokens": 512
+    },
+    {
+      "id": "elderly-03",
+      "description": "My grandmother needs help setting up video calls on her new tablet.",
+      "expected": "DIGITAL_SUPPORT_FOR_SENIORS",
+      "scored": true,
+      "predicted": [
+        "6.2",
+        "6.8",
+        "6.7"
+      ],
+      "top_level_ok": true,
+      "path_ok": true,
+      "elderly_routed": true,
+      "error": null,
+      "models": [
+        "groq/openai/gpt-oss-20b"
+      ],
+      "total_tokens": 521
+    },
+    {
+      "id": "elderly-04",
+      "description": "My elderly neighbour is lonely and would love someone to visit and chat.",
+      "expected": "SOCIAL_CONNECTION",
+      "scored": true,
+      "predicted": [
+        "6.8",
+        "6.5",
+        "6.7"
+      ],
+      "top_level_ok": true,
+      "path_ok": true,
+      "elderly_routed": true,
+      "error": null,
+      "models": [
+        "groq/openai/gpt-oss-20b"
+      ],
+      "total_tokens": 516
+    },
+    {
+      "id": "elderly-05",
+      "description": "My dad is 79 and keeps forgetting to take his medication.",
+      "expected": "MEDICATION_MANAGEMENT",
+      "scored": true,
+      "predicted": [
+        "6.3",
+        "6.7",
+        "6.8"
+      ],
+      "top_level_ok": true,
+      "path_ok": true,
+      "elderly_routed": true,
+      "error": null,
+      "models": [
+        "groq/openai/gpt-oss-20b"
+      ],
+      "total_tokens": 509
+    },
+    {
+      "id": "general-01",
+      "description": "I am going through a hard time and do not know where to start.",
+      "expected": "GENERAL_CATEGORY",
+      "scored": true,
+      "predicted": [
+        "5.3",
+        "5.5",
+        "5.1"
+      ],
+      "top_level_ok": false,
+      "path_ok": false,
+      "elderly_routed": false,
+      "error": null,
+      "models": [
+        "groq/openai/gpt-oss-20b",
+        "groq/openai/gpt-oss-20b"
+      ],
+      "total_tokens": 1542
+    },
+    {
+      "id": "general-02",
+      "description": "Hello, is anyone there?",
+      "expected": "GENERAL_CATEGORY",
+      "scored": true,
+      "predicted": [
+        "0.0.0.0.0",
+        "1",
+        "3"
+      ],
+      "top_level_ok": true,
+      "path_ok": true,
+      "elderly_routed": false,
+      "error": null,
+      "models": [
+        "groq/openai/gpt-oss-20b"
+      ],
+      "total_tokens": 641
+    },
+    {
+      "id": "gap-01",
+      "description": "I cannot pay my electricity bill this month and they will cut me off.",
+      "expected": null,
+      "scored": false,
+      "predicted": [
+        "3.4",
+        "3.2",
+        "3.1"
+      ],
+      "top_level_ok": false,
+      "path_ok": false,
+      "elderly_routed": false,
+      "error": null,
+      "models": [
+        "groq/openai/gpt-oss-20b",
+        "groq/openai/gpt-oss-20b"
+      ],
+      "total_tokens": 1301
+    },
+    {
+      "id": "gap-02",
+      "description": "My car broke down and I cannot afford the repair, so I cannot get to work.",
+      "expected": null,
+      "scored": false,
+      "predicted": [
+        "0.0.0.0.0",
+        "0.0.0.0.0",
+        "0.0.0.0.0"
+      ],
+      "top_level_ok": false,
+      "path_ok": false,
+      "elderly_routed": false,
+      "error": null,
+      "models": [
+        "groq/openai/gpt-oss-20b"
+      ],
+      "total_tokens": 699
+    },
+    {
+      "id": "gap-03",
+      "description": "I need a ride to my job interview tomorrow morning.",
+      "expected": null,
+      "scored": false,
+      "predicted": [
+        "4.6",
+        "4.1",
+        "4.2"
+      ],
+      "top_level_ok": false,
+      "path_ok": false,
+      "elderly_routed": false,
+      "error": null,
+      "models": [
+        "groq/openai/gpt-oss-20b",
+        "groq/openai/gpt-oss-20b"
+      ],
+      "total_tokens": 1217
+    },
+    {
+      "id": "gap-04",
+      "description": "I need help filing my taxes before the deadline.",
+      "expected": null,
+      "scored": false,
+      "predicted": [
+        "0.0.0.0.0",
+        "4",
+        "5"
+      ],
+      "top_level_ok": false,
+      "path_ok": false,
+      "elderly_routed": false,
+      "error": null,
+      "models": [
+        "groq/openai/gpt-oss-20b"
+      ],
+      "total_tokens": 703
+    }
+  ]
+}
