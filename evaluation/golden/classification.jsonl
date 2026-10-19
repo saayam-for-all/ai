@@ -1,0 +1,45 @@
+{"id": "food-01", "description": "I lost my job and need food for my family this week.", "expected": "FOOD_ASSISTANCE", "tags": []}
+{"id": "food-02", "description": "I work double shifts and need someone to pick up and deliver my groceries on Saturday.", "expected": "GROCERY_SHOPPING_AND_DELIVERY", "tags": []}
+{"id": "food-03", "description": "I want to learn to cook simple, healthy meals for my diabetic son.", "expected": "NUTRITIONAL_MEAL_PLANNING", "tags": []}
+{"id": "food-04", "description": "We are hosting a community Diwali dinner for 80 people and need help cooking.", "expected": "FESTIVE_OR_BULK_COOKING", "tags": []}
+{"id": "food-05", "description": "Our food pantry ran out. Is there a free meal program near me?", "expected": "FOOD_ASSISTANCE", "tags": []}
+{"id": "clothing-01", "description": "I need a winter coat for my son.", "expected": "CLOTHING_ASSISTANCE", "tags": ["baseline"]}
+{"id": "clothing-02", "description": "Our house burned down last night and the kids have no clothes.", "expected": "EMERGENCY_CLOTHING_ASSISTANCE", "tags": []}
+{"id": "clothing-03", "description": "I have bags of gently used clothes I would like to give away.", "expected": "DONATE_CLOTHES", "tags": []}
+{"id": "clothing-04", "description": "I need to borrow a suit for a job interview next week.", "expected": "BORROW_CLOTHES", "tags": []}
+{"id": "clothing-05", "description": "My wedding dress needs to be altered before next month.", "expected": "TAILORING", "tags": []}
+{"id": "housing-01", "description": "My kitchen sink has been leaking for a week.", "expected": "PLUMBING", "tags": ["baseline", "routing-hint"]}
+{"id": "housing-02", "description": "Looking for an electrician to fix a broken switch.", "expected": "ELECTRICIAN", "tags": ["routing-hint"]}
+{"id": "housing-03", "description": "I received an eviction notice after falling behind on rent for three months and need help talking to my landlord.", "expected": "TENANT_RENT_SUPPORT", "tags": ["baseline"]}
+{"id": "housing-04", "description": "Our air conditioner stopped working and it is 100 degrees outside.", "expected": "HVAC_AIR_CONDITIONING", "tags": []}
+{"id": "housing-05", "description": "I locked myself out of my apartment and need someone to open the door.", "expected": "LOCKSMITH", "tags": []}
+{"id": "housing-06", "description": "I am moving to Austin and looking for an affordable apartment to rent.", "expected": "LOOKING_FOR_RENTAL", "tags": []}
+{"id": "housing-07", "description": "I need help carrying boxes into my new place this weekend.", "expected": "MOVE_IN_HELP", "tags": []}
+{"id": "housing-08", "description": "How do I set up electricity and internet in my new apartment?", "expected": "UTILITIES_SETUP_SUPPORT", "tags": []}
+{"id": "housing-09", "description": "My landlord wants me to sign a lease and I do not understand the terms.", "expected": "LEASE_SUPPORT", "tags": []}
+{"id": "housing-10", "description": "Our aging roof leaks every time it rains.", "expected": "ROOFING", "tags": ["elderly-router-false-positive"]}
+{"id": "housing-11", "description": "Can you help my father fix the falling gutter on his house?", "expected": "REPAIR_MAINTENANCE_SUPPORT", "tags": ["elderly-router-false-positive"]}
+{"id": "education-01", "description": "My daughter is in ninth grade and is falling behind in algebra. We cannot afford a private tutor.", "expected": "MATH", "tags": ["baseline"]}
+{"id": "education-02", "description": "Can someone review my college admission essay?", "expected": "SOP_ESSAY_REVIEW", "tags": []}
+{"id": "education-03", "description": "I want to prepare for the SAT but cannot afford classes.", "expected": "TEST_PREP", "tags": []}
+{"id": "education-04", "description": "I am a nurse thinking about switching careers to software. Where do I start?", "expected": "CAREER_GUIDANCE", "tags": []}
+{"id": "education-05", "description": "Are there scholarships for first-generation college students?", "expected": "SCHOLARSHIP_KNOWLEDGE", "tags": []}
+{"id": "education-06", "description": "My son needs help learning Python for his class project.", "expected": "COMPUTER_SCIENCE", "tags": []}
+{"id": "education-07", "description": "I am a senior in high school and need help with my college applications.", "expected": "COLLEGE_APPLICATION_HELP", "tags": ["elderly-router-false-positive"]}
+{"id": "health-01", "description": "I get tired and short of breath on the stairs and I am not sure if it is my heart. I do not have insurance.", "expected": "MEDICAL_CONSULTATION", "tags": ["baseline"]}
+{"id": "health-02", "description": "I have a bad toothache and no dental insurance.", "expected": "DENTAL_OR_ORAL_HEALTH", "tags": []}
+{"id": "health-03", "description": "I have been feeling anxious and cannot sleep. I would like to talk to someone.", "expected": "MENTAL_WELLBEING_SUPPORT", "tags": []}
+{"id": "health-04", "description": "I cannot get to the pharmacy. Can someone deliver my prescription?", "expected": "MEDICINE_DELIVERY", "tags": []}
+{"id": "health-05", "description": "My baby has a fever and a rash. Which clinic sees young children?", "expected": "PEDIATRICS_OR_CHILD_HEALTH", "tags": []}
+{"id": "health-06", "description": "Where can I get a free flu shot?", "expected": "VACCINATIONS_AND_PREVENTIVE_SCREENINGS", "tags": []}
+{"id": "elderly-01", "description": "My mother is 82 and lives alone. She has trouble getting to her medical appointments and with groceries.", "expected": "ELDERLY_COMMUNITY_ASSISTANCE", "tags": ["baseline", "elderly-router"]}
+{"id": "elderly-02", "description": "My grandfather needs a ride to his eye doctor appointment on Tuesday.", "expected": "TRANSPORTATION_APPOINTMENTS_EVENTS", "tags": ["elderly-router"]}
+{"id": "elderly-03", "description": "My grandmother needs help setting up video calls on her new tablet.", "expected": "DIGITAL_SUPPORT_FOR_SENIORS", "tags": ["elderly-router"]}
+{"id": "elderly-04", "description": "My elderly neighbour is lonely and would love someone to visit and chat.", "expected": "SOCIAL_CONNECTION", "tags": ["elderly-router"]}
+{"id": "elderly-05", "description": "My dad is 79 and keeps forgetting to take his medication.", "expected": "MEDICATION_MANAGEMENT", "tags": ["elderly-router"]}
+{"id": "general-01", "description": "I am going through a hard time and do not know where to start.", "expected": "GENERAL_CATEGORY", "tags": ["baseline"]}
+{"id": "general-02", "description": "Hello, is anyone there?", "expected": "GENERAL_CATEGORY", "tags": []}
+{"id": "gap-01", "description": "I cannot pay my electricity bill this month and they will cut me off.", "expected": null, "tags": ["known-gap"], "note": "No finance or bill-payment category exists in either taxonomy."}
+{"id": "gap-02", "description": "My car broke down and I cannot afford the repair, so I cannot get to work.", "expected": null, "tags": ["known-gap"], "note": "No vehicle or finance category; transport exists only under Elderly."}
+{"id": "gap-03", "description": "I need a ride to my job interview tomorrow morning.", "expected": null, "tags": ["known-gap"], "note": "Transport exists only under Elderly (6.5, 6.6)."}
+{"id": "gap-04", "description": "I need help filing my taxes before the deadline.", "expected": null, "tags": ["known-gap"], "note": "No finance or paperwork category."}
