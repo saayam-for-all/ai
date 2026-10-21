@@ -10,6 +10,42 @@ team works and reviews in.
 
 ## Unreleased
 
+### Disaster Check — floods from GDACS — [#191](https://github.com/saayam-for-all/ai/issues/191), part 2
+
+**Added**
+
+- Floods, from GDACS, the UN and European Commission disaster alert system.
+  A flood is reported while the grade of its latest update is Orange or Red;
+  a flood that has eased to Green is not. No API key is involved.
+  *Observable difference:* a location inside the affected area of a current
+  Orange or Red flood answers `disaster_detected: true` with a `flood` event,
+  and `sources_checked` now lists GDACS beside USGS.
+- A flood's zone is the affected area GDACS publishes, with
+  `boundary_source: "authoritative"`, not a circle. Measured across 24
+  floods, affected areas reached 5 km to 567 km from their centres.
+  *Observable difference:* against the recorded India flood, Chennai, 265 km
+  from its centre, is in it; Kochi, 74 km from any of its water, is not.
+- A flood GDACS marks as running is reported with `expires_at: null`. Its
+  end date is only the date of its latest update, which can be days old.
+- `services/geometry.py`: the distance from a point to a published area. The
+  circle code moved here from `services/disaster_check.py`, unchanged.
+- `tests/fixtures/gdacs/`: three responses recorded from GDACS, and the tests
+  that replay them.
+
+**Changed**
+
+- A feed that returns a severity outside `minor`, `moderate`, `severe` and
+  `extreme` is treated as unavailable. Before, the unknown value raised in the
+  sort and the whole request became a `500`, including any earthquake found.
+  Raised by Sameer in the review of part 1.
+  *Observable difference:* none with today's two feeds, which only produce
+  known values; a future feed that passes CAP's `Unknown` through can no
+  longer take the others down.
+- With two feeds, a GDACS outage with nothing found answers `502`
+  `DISASTER_CHECK_UNAVAILABLE`, the same rule as a USGS outage. A negative
+  answer costs one call per feed and takes a few seconds, because GDACS is
+  slow; caching (part 6) is the fix.
+
 ### Disaster Check — coordinate query for earthquakes — [#191](https://github.com/saayam-for-all/ai/issues/191)
 
 The first slice of #191. Not yet built: the news-snippet query, the LLM
