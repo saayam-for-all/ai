@@ -467,10 +467,10 @@ Answers whether a natural disaster is affecting a location, from authoritative
 feeds, and returns the impact zone of each event
 ([issue #191](https://github.com/saayam-for-all/ai/issues/191)).
 
-**What is built so far is one slice of that issue:** the latitude/longitude
-query, for **earthquakes only**, from the USGS feed. The feed is public, so
-this service needs no API key. The news-snippet query, the LLM cross-check,
-floods and wildfires are not built yet.
+**What is built so far is two slices of that issue:** the latitude/longitude
+query, for **earthquakes** from the USGS feed and **floods** from GDACS. Both
+feeds are public, so this service needs no API key. The news-snippet query,
+the LLM cross-check and wildfires are not built yet.
 
 It is reachable through the unified router as `"service": "disaster_check"`.
 It has no dedicated Lambda function or API Gateway route yet.
@@ -533,7 +533,8 @@ The Gaziantep query above, replayed against the feed's record of 6 February
     }
   ],
   "sources_checked": [
-    { "source": "USGS", "event_types": ["earthquake"], "status": "ok", "retrieved_at": "2023-02-06T12:00:00Z" }
+    { "source": "USGS", "event_types": ["earthquake"], "status": "ok", "retrieved_at": "2023-02-06T12:00:00Z" },
+    { "source": "GDACS", "event_types": ["flood"], "status": "ok", "retrieved_at": "2023-02-06T12:00:00Z" }
   ]
 }
 ```
@@ -546,7 +547,8 @@ With nothing happening:
   "confidence": null,
   "events": [],
   "sources_checked": [
-    { "source": "USGS", "event_types": ["earthquake"], "status": "ok", "retrieved_at": "2023-02-06T12:00:00Z" }
+    { "source": "USGS", "event_types": ["earthquake"], "status": "ok", "retrieved_at": "2023-02-06T12:00:00Z" },
+    { "source": "GDACS", "event_types": ["flood"], "status": "ok", "retrieved_at": "2023-02-06T12:00:00Z" }
   ]
 }
 ```
@@ -554,32 +556,35 @@ With nothing happening:
 Reading the fields:
 
 - **`disaster_detected: false` covers only what `sources_checked` lists.**
-  Today that is earthquakes. It is not an all-clear for a flood or a wildfire,
-  and a caller must not present it as one.
+  Today that is earthquakes and floods. It is not an all-clear for a wildfire
+  or anything else, and a caller must not present it as one.
 - **`events`** are ordered most severe first. `severity` uses the CAP
   vocabulary (`moderate`, `severe`, `extreme`) so that every event type can
   share one scale.
 - **`confidence`** grades the first event, the most severe one: `high` when
   USGS has reviewed its solution, `medium` while it is still automatic. A
-  reviewed aftershock does not raise the grade of an unreviewed mainshock. It
-  is `null` when nothing is detected.
-- **`impact_zone`** is GeoJSON, so positions are `[longitude, latitude]` and
-  the ring is counterclockwise. It is a 32-sided polygon drawn just outside
-  the circle, so it covers everyone the radius includes.
+  reviewed aftershock does not raise the grade of an unreviewed mainshock. A
+  flood is always `medium`, because GDACS flood alerts are forecasts. It is
+  `null` when nothing is detected.
+- **`impact_zone`** is GeoJSON, so positions are `[longitude, latitude]`.
+  For an earthquake it is a 32-sided counterclockwise polygon drawn just
+  outside the modelled circle, so it covers everyone the radius includes, and
+  `boundary_source` is `modelled`. For a flood it is the affected area GDACS
+  publishes, and `boundary_source` is `authoritative`.
   **`impact_zone_fallback.center` is `[latitude, longitude]`**, as in the
   issue's contract. The two orders differ.
+- **`expires_at`** is `null` for a flood GDACS still marks as running.
 - **`llm_cross_check`** is `null`: no model runs on the coordinate path.
 - **`sources_checked`** is an addition to the issue's contract. It is what
-  makes a negative answer traceable. Once there is more than one feed, a
-  detection can come back while another feed is down, and that feed is named
-  here as `unavailable`. A `false` is only ever returned when every feed
-  answered.
+  makes a negative answer traceable. A detection can come back while another
+  feed is down, and that feed is named here as `unavailable`. A `false` is
+  only ever returned when every feed answered.
 
 #### Status codes
 
 | Status | Meaning |
 |---|---|
-| 200 | The feed answered. Read `disaster_detected`. |
+| 200 | Every feed answered, or one of them found something. Read `disaster_detected`. |
 | 400 | `latitude` or `longitude` missing, or a value out of range. `error` says which. |
 | 501 | `NEWS_SNIPPET_NOT_SUPPORTED` — the request carried a `news_snippet`. |
 | 502 | `DISASTER_CHECK_UNAVAILABLE` — a feed could not be reached or its answer could not be read, and nothing was detected. Retryable. |
@@ -592,7 +597,7 @@ number in range, fails the whole answer rather than being skipped. The body is a
 every path, as [#170](https://github.com/saayam-for-all/ai/issues/170)
 requires.
 
-#### The impact zone is modelled, and the model is a first pass
+#### Earthquakes: the impact zone is modelled, and the model is a first pass
 
 USGS publishes an epicentre and a magnitude, not a boundary, so the zone is a
 circle whose radius comes from magnitude alone:
@@ -622,6 +627,69 @@ These values decide who is warned, and all four are **awaiting review**:
 | How long an earthquake stays live (`expires_at`) | 72 hours | `services/usgs_earthquakes.py` `ALERT_LIFETIME_HOURS` |
 | Volunteer band outside the zone | 50 km | `services/usgs_earthquakes.py` `VOLUNTEER_BAND_KM` |
 
+#### Floods: the impact zone is the area GDACS publishes
+
+Floods come from [GDACS](https://www.gdacs.org), the Global Disaster Alert
+and Coordination System run by the UN and the European Commission's Joint
+Research Centre. Its flood alerts are generated from GloFAS river forecasts.
+
+GDACS gives each flood a centre and an alert level but no magnitude, so there
+is nothing to size a circle from. Measured across 24 recent floods, the
+affected areas reached anywhere from 5 km to 567 km from the centre, with no
+link to the alert level. So the zone is the affected area GDACS publishes for
+each flood: a MultiPolygon, with `boundary_source: "authoritative"`.
+
+- **A flood counts** when the caller's location is inside its affected area,
+  or within `radius_km` of its edge. Holes in the area are outside it: dry
+  ground in the middle of a flood is not in the flood.
+- **`impact_zone_fallback`** is centred where GDACS puts the flood and is
+  wide enough to cover the whole affected area, so it is much larger than the
+  area itself. The area decides; the circle is for clients that cannot draw
+  a polygon.
+- **The alert level is the latest one.** GDACS updates a flood every one to
+  nine days and grades each update. The flood's own grade is the highest it
+  has ever reached, so a flood that was Orange for a day and Green for weeks
+  after would stay on alert for those weeks. Only the grade of the latest
+  update is used. Both Orange floods in the recorded list had eased to Green.
+- **The time window:** a flood counts if GDACS marks it as running, or if it
+  was running at any point inside the window, since floods last weeks.
+  `started_at` is the date GDACS gives. While a flood is running its end
+  date is only the date of its latest update, which can be days old, so
+  `expires_at` is `null` until GDACS marks it as over.
+- **`confidence`** is always `medium`, because these are forecasts.
+
+| Constant | Value | Where |
+| --- | --- | --- |
+| Alert levels reported, at the latest update | Orange and Red (Green, "low impact", was 98 of the 100 most recent floods) | `services/gdacs_floods.py` `ALERT_LEVELS` |
+| Severity | Orange `severe`, Red `extreme` | `services/gdacs_floods.py` `SEVERITY` |
+| How far before the window the flood list is asked from | 10 days (updates came every one to nine days) | `services/gdacs_floods.py` `LOOKBACK_DAYS` |
+| How far from the caller a flood's centre may be for its area to be fetched | 1000 km (the farthest reach measured was 567 km) | `services/gdacs_floods.py` `MAX_IMPACT_RADIUS_KM` |
+| Volunteer band outside the area | 30 km, the value in the issue's flood example | `services/gdacs_floods.py` `VOLUNTEER_BAND_KM` |
+
+These are first-pass values **awaiting review**, like the earthquake ones.
+
+GDACS has a few habits the adapter guards against, each of which would
+otherwise turn into a false all-clear:
+
+- A search with nothing to report is answered `204 No Content`, not an empty
+  list. That, or a well-formed empty list, is read as "no floods". Any other
+  answer that is not a JSON object, such as a bare `null`, fails the check.
+- GDACS reports its own overload as a `400` carrying a database timeout, and
+  has taken over 20 seconds to answer. Both count as GDACS being unavailable;
+  the adapter waits 8 seconds per request.
+- Results come in pages of at most 100. A full page fails the check rather
+  than risk a flood left on the next page.
+- A geometry request for an ID GDACS does not know returns another event's
+  geometry, so every feature must carry the ID that was asked for.
+- A nearby flood whose affected area cannot be fetched or read fails the
+  check: without the area there is no telling who is in the flood.
+- Positions in the affected area are reduced to longitude and latitude. An
+  altitude is not used, and an unchecked `NaN` in one would make the whole
+  response invalid JSON.
+
+GDACS publishes its data without accepting liability for its use. Credit it
+as the source wherever a flood finding is shown.
+
 #### Known limitations
 
 - `disaster_detected` answers for the window asked. A caller who sets
@@ -632,26 +700,44 @@ These values decide who is warned, and all four are **awaiting review**:
   zone that covers a pole is not a valid ring. `impact_zone_fallback` is exact
   in both cases.
 - An aftershock sequence is returned as separate events. Nothing merges them.
-- There is no caching or rate limiting yet. Each call is one request to USGS.
+- There is no caching or rate limiting yet. Each call makes one request to
+  USGS, one to GDACS, and one more to GDACS for each nearby flood.
+- GDACS is slow: 1.5 to 3.8 s for the flood list and 2 to 3 s for each
+  affected area, measured in October 2026, and over 20 s while it was
+  overloaded. A negative answer takes a few seconds, and becomes a `502`
+  whenever GDACS does not answer within 8 s, until caching lands. The flood
+  list is the same for every caller, so one cached copy would serve all of
+  them.
+- A flood's affected area is returned as GDACS publishes it, up to about
+  350 KB for a large flood. Nothing simplifies it yet.
+- Flood findings are forecasts, and with only Orange and Red alerts
+  reported they are rare: 2 of the 100 most recent GDACS floods.
 
 #### Adding a feed
 
 A feed is one module exposing `SOURCE`, `EVENT_TYPES`, `MAX_IMPACT_RADIUS_KM`
 and `fetch_events(latitude, longitude, search_radius_km, since)`, added to
 `FEEDS` in `services/disaster_check.py`. `services/usgs_earthquakes.py` is the
-example to copy. `fetch_events` must raise when the feed cannot be read; an
-empty list means the feed was asked and listed nothing.
+example to copy for a feed that gives a point and a magnitude, and
+`services/gdacs_floods.py` for one that publishes a boundary: an event that
+carries an `area` (a GeoJSON Polygon or MultiPolygon) is matched and drawn by
+that area. `fetch_events` must raise when the feed cannot be read; an empty
+list means the feed was asked and listed nothing. Every event's `severity`
+must be one of `minor`, `moderate`, `severe` or `extreme`. A feed that
+returns anything else, such as CAP's `Unknown`, is treated as unavailable.
 
 #### Regression tests covering this service
 
 | File | Proves |
 | --- | --- |
-| `test_disaster_check_contract.py` | Against two responses recorded from USGS: a location inside a known earthquake is detected with a USGS record in `verified_by`; a quiet location is a `false` from one feed call; an outage is `502` `DISASTER_CHECK_UNAVAILABLE` with no `disaster_detected` field; a `news_snippet` is a `501`; the body is an object on every path. |
+| `test_disaster_check_contract.py` | Against responses recorded from USGS and GDACS: a location inside a known earthquake or flood is detected with the feed's record in `verified_by`; Chennai, 265 km from the centre of the recorded India flood, is in it, while Kochi, 74 km from any of its water, is not; a quiet location is a `false` from one call per feed; any feed outage with nothing found is `502` `DISASTER_CHECK_UNAVAILABLE` with no `disaster_detected` field; a `news_snippet` is a `501`; the body is an object on every path. |
 | `test_disaster_check.py` | An epicentre beyond the caller's radius is still found when its zone reaches them; a feed that did not answer is never a `false`; `confidence` is that of the most severe event; the zone is a closed counterclockwise ring that covers the modelled circle, including across the antimeridian and at a pole; query validation. |
 | `test_usgs_earthquakes.py` | The query sent to USGS; the recorded payload becomes events with latitude and longitude the right way round; an unreachable feed, an unreadable answer, or an event with a NaN or out-of-range magnitude or position raises rather than returning an empty list. |
+| `test_gdacs_floods.py` | The queries sent to GDACS; the recorded India flood becomes an event with its affected area; `204` means no floods; a full page, a geometry answered for another event, a missing affected area, or an unreadable flood raises rather than returning an empty list. |
+| `test_geometry.py` | Distance to a published area: zero inside, to the nearest edge outside, holes counted as outside, the antimeridian measured the short way, checked against the 11,568 vertices of the recorded India flood. |
 
-The fixtures are in `tests/fixtures/usgs/`. No test in the default run calls
-USGS.
+The fixtures are in `tests/fixtures/usgs/` and `tests/fixtures/gdacs/`. No
+test in the default run calls either feed.
 
 #### curl Command
 ```bash
