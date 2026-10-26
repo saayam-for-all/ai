@@ -717,3 +717,32 @@ def test_description_is_not_logged_when_models_fail(monkeypatch, capsys, caplog)
     assert response["statusCode"] == 502
     assert "MODEL_FAILOVER" in caplog.text  # the failures were logged, just not the text
     _assert_not_logged(capsys, caplog)
+
+
+def test_provider_error_text_quoting_the_output_is_not_logged(monkeypatch, capsys, caplog):
+    """Groq's json_validate_failed error carries the model's partial output.
+
+    The SDK puts the whole response body in the exception message, including
+    `failed_generation`, which quotes the volunteer's words as evidence. The
+    model chain logs str(error) on failover, so the message must not survive.
+    """
+    caplog.set_level(logging.DEBUG)
+    leaky = GroqError(
+        "Error code: 400 - {'error': {'code': 'json_validate_failed', "
+        "'failed_generation': '{\"skills\": [{\"evidence\": \"" + _SECRET + "\"}]}'}}"
+    )
+    leaky.status_code = 400
+    leaky.body = {"error": {"code": "json_validate_failed", "failed_generation": _SECRET}}
+    groq = _FakeGroq({
+        _CONFIGURED_GROQ_MODELS[0]: leaky,
+        _CONFIGURED_GROQ_MODELS[1]: _groq_response({"skills": [_skill("2.4", 0.9)]}),
+    })
+    _install(monkeypatch, groq, _FakeGemini(error=AssertionError("unused")))
+
+    response = LF.predict_category_handler(_volunteer_event(_SECRET), None)
+
+    assert response["statusCode"] == 200
+    # Enough survives to diagnose the failover.
+    assert "json_validate_failed" in caplog.text
+    assert "400" in caplog.text
+    _assert_not_logged(capsys, caplog)

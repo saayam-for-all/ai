@@ -39,10 +39,10 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_request_db_schema.py`](../../tests/test_request_db_schema.py) | Unit | #169 | `utils/request_db.py` | 54 |
 | [`tests/test_response_contract.py`](../../tests/test_response_contract.py) | Contract | #146, #169, #170 | `response envelopes` | 10 |
 | [`tests/test_router.py`](../../tests/test_router.py) | Integration | #171 | `lambda_function.lambda_handler` | 34 |
-| [`tests/test_skill_suggestion.py`](../../tests/test_skill_suggestion.py) | Unit | #216 | `services/skill_suggestion_service.py` | 49 |
+| [`tests/test_skill_suggestion.py`](../../tests/test_skill_suggestion.py) | Unit | #216 | `services/skill_suggestion_service.py` | 50 |
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
 | [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 57 |
-| | | | **Total** | **471** |
+| | | | **Total** | **472** |
 
 ## Every test
 
@@ -454,7 +454,7 @@ Router-level regression tests - issue #171.
 
 ### `test_skill_suggestion.py`
 
-*Unit · issue #216 · 49 tests*
+*Unit · issue #216 · 50 tests*
 
 Volunteer skill suggestions: predict_category_api with mode "volunteer_skills" (issue #216).
 
@@ -494,8 +494,9 @@ Volunteer skill suggestions: predict_category_api with mode "volunteer_skills" (
 | `test_request_without_mode_still_reports_its_own_errors` | Request without mode still reports its own errors. |
 | `test_description_and_evidence_are_not_logged_on_success` | Description and evidence are not logged on success. |
 | `test_description_is_not_logged_when_models_fail` | Failover warnings quote the exception; ours must not quote the text. |
+| `test_provider_error_text_quoting_the_output_is_not_logged` | Groq's json_validate_failed error carries the model's partial output. |
 
-> 34 test functions expand to 49 cases through parametrisation.
+> 35 test functions expand to 50 cases through parametrisation.
 
 ### `test_subject_generator.py`
 

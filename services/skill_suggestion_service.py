@@ -85,6 +85,27 @@ def _env_int(name: str, default: int) -> int:
     return value if value > 0 else default
 
 
+def _provider_error(provider: str, error: Exception) -> ValueError:
+    """A failover reason that cannot quote the volunteer's text.
+
+    The Groq SDK puts the whole HTTP response body in its exception message.
+    For `json_validate_failed` that body includes `failed_generation`, the
+    model's partial output with its evidence quotes, and the model chain logs
+    str(error). Keep only what identifies the failure.
+    """
+    parts = [f"{provider} request failed: {type(error).__name__}"]
+    status_code = getattr(error, "status_code", None)
+    if isinstance(status_code, int):
+        parts.append(f"status={status_code}")
+    body = getattr(error, "body", None)
+    if isinstance(body, dict):
+        detail = body.get("error", body)
+        code = detail.get("code") if isinstance(detail, dict) else None
+        if isinstance(code, str) and code.isidentifier():
+            parts.append(f"code={code}")
+    return ValueError(" ".join(parts))
+
+
 def _build_system_prompt() -> str:
     """The fixed instructions and category list.
 
@@ -172,16 +193,19 @@ class SkillSuggestionService:
             if not (_use_groq and client):
                 raise ValueError("Groq client not initialized")
 
-            response = client.chat.completions.create(
-                model=target.model,
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": self._user_message(description)},
-                ],
-                temperature=self.temperature,
-                response_format={"type": "json_object"},
-                **self._groq_extra_kwargs(target),
-            )
+            try:
+                response = client.chat.completions.create(
+                    model=target.model,
+                    messages=[
+                        {"role": "system", "content": SYSTEM_PROMPT},
+                        {"role": "user", "content": self._user_message(description)},
+                    ],
+                    temperature=self.temperature,
+                    response_format={"type": "json_object"},
+                    **self._groq_extra_kwargs(target),
+                )
+            except Exception as error:
+                raise _provider_error(target.provider, error) from None
             token_usage.record(
                 accumulator, response, provider=target.provider, model=target.model
             )
@@ -190,15 +214,18 @@ class SkillSuggestionService:
             if not _gemini_client:
                 raise ValueError("Gemini client not initialized")
 
-            response = _gemini_client.models.generate_content(
-                model=target.model,
-                contents=self._user_message(description),
-                config={
-                    "system_instruction": SYSTEM_PROMPT,
-                    "response_mime_type": "application/json",
-                    "temperature": self.temperature,
-                },
-            )
+            try:
+                response = _gemini_client.models.generate_content(
+                    model=target.model,
+                    contents=self._user_message(description),
+                    config={
+                        "system_instruction": SYSTEM_PROMPT,
+                        "response_mime_type": "application/json",
+                        "temperature": self.temperature,
+                    },
+                )
+            except Exception as error:
+                raise _provider_error(target.provider, error) from None
             token_usage.record(
                 accumulator, response, provider=target.provider, model=target.model
             )
