@@ -127,7 +127,7 @@ def _build_system_prompt() -> str:
             "Ignore personal facts that are not skills, such as age, being retired or a senior, family or location.",
             "A volunteer may have skills in several unrelated areas. Return every category the text supports, not only the closest one.",
             "Some category descriptions are written from the point of view of a person asking for help. Match the skill that would meet that need: a plumber matches Plumbing, a math teacher matches Math.",
-            "A profession implies its everyday skills: a dentist matches Dental Or Oral Health.",
+            "A job title implies that job's own everyday skills. Match the category for that exact profession; never pick a different specialty just because it sits in the same area.",
             "Do not guess skills the text does not support.",
             "Choose only from the category IDs listed below. Do not invent IDs or use names.",
             "",
