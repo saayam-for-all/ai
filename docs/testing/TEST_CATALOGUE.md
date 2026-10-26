@@ -39,9 +39,10 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_request_db_schema.py`](../../tests/test_request_db_schema.py) | Unit | #169 | `utils/request_db.py` | 54 |
 | [`tests/test_response_contract.py`](../../tests/test_response_contract.py) | Contract | #146, #169, #170 | `response envelopes` | 10 |
 | [`tests/test_router.py`](../../tests/test_router.py) | Integration | #171 | `lambda_function.lambda_handler` | 34 |
+| [`tests/test_skill_suggestion.py`](../../tests/test_skill_suggestion.py) | Unit | #216 | `services/skill_suggestion_service.py` | 49 |
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
 | [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 57 |
-| | | | **Total** | **422** |
+| | | | **Total** | **471** |
 
 ## Every test
 
@@ -450,6 +451,51 @@ Router-level regression tests - issue #171.
 | `test_routed_emergency_can_still_ask_for_one_service` | Routing in the query string leaves the body free to name the service. |
 
 > 16 test functions expand to 34 cases through parametrisation.
+
+### `test_skill_suggestion.py`
+
+*Unit · issue #216 · 49 tests*
+
+Volunteer skill suggestions: predict_category_api with mode "volunteer_skills" (issue #216).
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_leaf_set_is_exactly_the_selectable_categories` | Every leaf, and nothing else: no General, no parent. |
+| `test_prompt_offers_every_leaf_and_no_parent_or_general` | Prompt offers every leaf and no parent or general. |
+| `test_category_list_is_a_fixed_system_message` | The category list never changes between requests, so it can be cached; only the user message carries the volunteer's text. |
+| `test_skills_from_several_areas_are_all_returned` | The case the help-request walk cannot serve: one volunteer, three areas. |
+| `test_general_parents_and_unknown_ids_are_dropped` | General parents and unknown ids are dropped. |
+| `test_a_category_name_is_mapped_to_its_leaf_id` | A category name is mapped to its leaf id. |
+| `test_duplicates_keep_the_highest_confidence` | Duplicates keep the highest confidence. |
+| `test_confidence_is_clamped_and_unparseable_values_are_dropped` | Confidence is clamped and unparseable values are dropped. |
+| `test_nan_confidence_is_treated_as_zero` | Nan confidence is treated as zero. |
+| `test_threshold_is_inclusive_at_the_default` | Threshold is inclusive at the default. |
+| `test_results_are_capped_at_six_highest_first` | Results are capped at six highest first. |
+| `test_threshold_and_cap_are_configurable` | Threshold and cap are configurable. |
+| `test_bad_configuration_falls_back_to_the_defaults` | Bad configuration falls back to the defaults. |
+| `test_unmatched_skills_are_cleaned` | Unmatched skills are cleaned. |
+| `test_missing_unmatched_skills_is_an_empty_list` | Missing unmatched skills is an empty list. |
+| `test_description_is_capped_before_it_reaches_the_model` | Description is capped before it reaches the model. |
+| `test_retired_volunteer_is_not_routed_to_elderly_care` | Retired volunteer is not routed to elderly care. |
+| `test_no_match_is_a_valid_answer_and_does_not_fail_over` | No match is a valid answer and does not fail over. |
+| `test_only_filtered_out_results_is_still_a_valid_answer` | General-only output is filtered to nothing; that is 'no match', not an outage. |
+| `test_errors_and_malformed_output_fail_over_to_the_next_model` | Errors and malformed output fail over to the next model. |
+| `test_all_groq_failures_reach_gemini_with_the_same_instructions` | All groq failures reach gemini with the same instructions. |
+| `test_total_outage_is_a_502_through_the_handler` | Total outage is a 502 through the handler. |
+| `test_volunteer_mode_response_envelope` | Volunteer mode response envelope. |
+| `test_mode_value_is_matched_leniently` | Mode value is matched leniently. |
+| `test_volunteer_mode_requires_a_description` | Volunteer mode requires a description. |
+| `test_unknown_mode_is_rejected_rather_than_guessed` | Unknown mode is rejected rather than guessed. |
+| `test_handler_trims_and_caps_the_description` | Handler trims and caps the description. |
+| `test_unexpected_failure_is_a_generic_500` | Unexpected failure is a generic 500. |
+| `test_router_reaches_suggest_skills_by_service_name` | Router reaches suggest skills by service name. |
+| `test_suggest_skills_handler_rejects_a_malformed_body` | Suggest skills handler rejects a malformed body. |
+| `test_request_without_mode_returns_exactly_what_it_did_before` | Create Help Request must not notice that volunteer mode exists. |
+| `test_request_without_mode_still_reports_its_own_errors` | Request without mode still reports its own errors. |
+| `test_description_and_evidence_are_not_logged_on_success` | Description and evidence are not logged on success. |
+| `test_description_is_not_logged_when_models_fail` | Failover warnings quote the exception; ours must not quote the text. |
+
+> 34 test functions expand to 49 cases through parametrisation.
 
 ### `test_subject_generator.py`
 

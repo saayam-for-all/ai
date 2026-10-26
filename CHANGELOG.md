@@ -10,6 +10,34 @@ team works and reviews in.
 
 ## Unreleased
 
+### Volunteer skill suggestions — [#216](https://github.com/saayam-for-all/ai/issues/216)
+
+**Added**
+
+- **`"mode": "volunteer_skills"` on `predict_category_api`.** A volunteer's
+  free-text description of their skills now returns matching skill categories
+  for the Become a Volunteer wizard to pre-select. The new
+  `services/skill_suggestion_service.py` makes one model call over all 69
+  selectable leaf categories, rather than walking one branch of the tree, so a
+  volunteer who tutors, gardens and offers emotional support gets all three.
+  It does not apply the elderly keyword shortcut, because "retired" describes
+  the volunteer. The response uses the same `categories[]` fields as help
+  requests, plus an optional `evidence` phrase per item and an
+  `unmatched_skills` list. A tester can observe:
+  - every returned `category_number` is a leaf, never General or a parent
+    such as `4.3`, with at most 6 items, highest confidence first;
+  - "nothing matched" is a `200` with `categories: []`;
+  - a total model outage is a `502` with `SKILL_SUGGESTION_UNAVAILABLE`;
+  - an unknown `mode` is a `400`.
+- **`suggest_skills` in the unified router**, served by
+  `lambda_function.suggest_skills_handler`, so the mode can move to its own
+  Lambda later without code changes.
+
+**Unchanged**
+
+- A request without `mode`, or with `mode` null or `""`, returns exactly what
+  it did before. `tests/test_skill_suggestion.py` pins the full response.
+
 ### Token usage tracking & reasoning effort — [#194](https://github.com/saayam-for-all/ai/issues/194)
 
 **Fixed**

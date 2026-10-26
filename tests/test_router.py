@@ -165,6 +165,7 @@ def test_every_advertised_service_has_a_handler():
         sentinel = {"statusCode": 200, "body": {}}
         handler_name = {
             "predict_category": "predict_category_handler",
+            "suggest_skills": "suggest_skills_handler",
             "generate_subject": "generate_subject_handler",
             "generate_answer": "generate_answer_handler",
             "emergency_contacts": "emergency_contacts_handler",
