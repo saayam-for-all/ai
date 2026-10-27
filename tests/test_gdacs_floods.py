@@ -22,11 +22,13 @@ import http.client
 import json
 import urllib.error
 import urllib.parse
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
+from services import feed_cache
 from services import gdacs_floods as gdacs
 
 pytestmark = pytest.mark.unit
@@ -40,6 +42,23 @@ CHINA_AREA = "affected_area_FL_1104081_20.json"
 SINCE = datetime(2026, 10, 3, 12, 0, 0, tzinfo=timezone.utc)
 NEAR_INDIA = (11.0, 78.0)
 NEAR_CHINA = (31.3, 108.5)
+# The time the cache sees: noon on 6 October 2026, while the flood ran.
+T0 = datetime(2026, 10, 6, 12, 0, 0, tzinfo=timezone.utc)
+
+
+class _Clock:
+    def __init__(self):
+        self.now = T0
+
+    def __call__(self):
+        return self.now
+
+
+@pytest.fixture(autouse=True)
+def clock():
+    clock = _Clock()
+    with mock.patch.object(feed_cache, "utcnow", clock):
+        yield clock
 
 
 def _recorded(name):
@@ -86,8 +105,12 @@ def gdacs_answers(web):
     return _answer
 
 
-def _fetch(near=NEAR_INDIA, since=SINCE):
+def _answer(near=NEAR_INDIA, since=SINCE):
     return gdacs.fetch_events(near[0], near[1], 1050.0, since)
+
+
+def _fetch(near=NEAR_INDIA, since=SINCE):
+    return _answer(near, since).events
 
 
 def _query(request):
@@ -105,8 +128,10 @@ def _area_requests(urlopen):
 # -------------------------------------------------------------------------
 
 def test_the_list_query_asks_for_floods_that_reached_orange_or_red(gdacs_answers):
-    """From ten days before the window, so a flood still running is not
-    dropped for an end date that has not caught up with it."""
+    """From ten days before the longest window - seven days, so 6 October
+    asks from 19 September - so a flood still running is not dropped for an
+    end date that has not caught up with it, and one list serves every
+    window."""
     with gdacs_answers() as urlopen:
         _fetch()
 
@@ -116,7 +141,7 @@ def test_the_list_query_asks_for_floods_that_reached_orange_or_red(gdacs_answers
     assert query == {
         "eventlist": ["FL"],
         "alertlevel": ["Orange;Red"],
-        "fromDate": ["2026-09-23"],
+        "fromDate": ["2026-09-19"],
         "pageSize": ["100"],
         "pageNumber": ["1"],
         "caller": ["saayam"],
@@ -393,3 +418,179 @@ def test_an_area_answered_with_nothing_usable_fails(gdacs_answers, area):
     with gdacs_answers(area=area):
         with pytest.raises(gdacs.FeedError):
             _fetch()
+
+
+# -------------------------------------------------------------------------
+# The shared answer
+# -------------------------------------------------------------------------
+
+def _list_requests(urlopen):
+    return [c for c in urlopen.call_args_list if c.args[0].full_url.startswith(gdacs.LIST_URL)]
+
+
+def test_the_flood_list_and_areas_are_reused_for_15_minutes(gdacs_answers, clock):
+    with gdacs_answers() as urlopen:
+        first = _answer()
+        clock.now += timedelta(minutes=15)
+        second = _answer()
+    assert len(_list_requests(urlopen)) == 1
+    assert len(_area_requests(urlopen)) == 1
+    assert second == first
+    assert second.retrieved_at == T0 and not second.stale
+
+
+def test_after_15_minutes_the_list_is_fetched_again_but_the_area_is_not(gdacs_answers, clock):
+    """An affected area belongs to one update of one flood and never changes."""
+    with gdacs_answers() as urlopen:
+        _answer()
+        clock.now += timedelta(minutes=16)
+        answer = _answer()
+    assert len(_list_requests(urlopen)) == 2
+    assert len(_area_requests(urlopen)) == 1
+    assert answer.retrieved_at == T0 + timedelta(minutes=16)
+
+
+def test_no_floods_is_reused_too(gdacs_answers, clock):
+    with gdacs_answers(listing=204) as urlopen:
+        _answer()
+        clock.now += timedelta(minutes=10)
+        assert _answer().events == []
+    assert urlopen.call_count == 1
+
+
+def test_while_gdacs_is_down_the_last_list_stands_in_marked_stale(gdacs_answers, clock):
+    with gdacs_answers():
+        _answer()
+    clock.now += timedelta(minutes=20)
+    with gdacs_answers(listing=urllib.error.URLError("no route to host"), area=TimeoutError("down")):
+        answer = _answer()
+    (flood,) = answer.events
+    assert flood["event_id"] == "gdacs-FL-1104121"
+    assert answer.stale is True
+    assert answer.retrieved_at == T0
+
+
+def test_during_the_pause_after_a_failure_gdacs_is_not_asked_again(gdacs_answers, clock):
+    with gdacs_answers():
+        _answer()
+    clock.now += timedelta(minutes=20)
+    with gdacs_answers(listing=urllib.error.URLError("no route to host")) as urlopen:
+        _answer()
+        clock.now += timedelta(seconds=30)
+        answer = _answer()
+    assert len(_list_requests(urlopen)) == 1
+    assert answer.stale is True
+
+
+def test_a_list_older_than_6_hours_does_not_stand_in(gdacs_answers, clock):
+    with gdacs_answers():
+        _answer()
+    clock.now += timedelta(hours=6, seconds=1)
+    with gdacs_answers(listing=urllib.error.URLError("no route to host")):
+        with pytest.raises(gdacs.FeedError):
+            _answer()
+
+
+def test_a_stale_list_cannot_place_a_flood_whose_area_was_never_fetched(gdacs_answers, clock):
+    """The list stands in, but the area of a flood nobody nearby has asked
+    about yet cannot be fetched - so there is no answer, not a `false`."""
+    with gdacs_answers() as urlopen:
+        _answer(near=(51.5, -0.12))
+    assert _area_requests(urlopen) == []
+    clock.now += timedelta(minutes=20)
+    with gdacs_answers(listing=urllib.error.URLError("down"), area=TimeoutError("down")):
+        with pytest.raises(gdacs.FeedError):
+            _answer()
+
+
+def test_an_unreadable_list_is_not_cached(gdacs_answers, clock):
+    with gdacs_answers(listing=b"null"):
+        with pytest.raises(gdacs.FeedError):
+            _answer()
+    clock.now += timedelta(seconds=60)
+    with gdacs_answers():
+        assert len(_answer().events) == 1
+
+
+def test_one_list_serves_every_window(gdacs_answers, clock):
+    with gdacs_answers() as urlopen:
+        _answer(since=T0 - timedelta(hours=168))
+        _answer(since=T0 - timedelta(hours=1))
+        _answer()
+    assert len(_list_requests(urlopen)) == 1
+
+
+def test_the_last_list_stands_in_across_midnight(gdacs_answers, clock):
+    """The list fetched at 23:30 still stands in at 00:05 the next day."""
+    clock.now = datetime(2026, 10, 5, 23, 30, tzinfo=timezone.utc)
+    with gdacs_answers():
+        _answer()
+    clock.now = datetime(2026, 10, 6, 0, 5, tzinfo=timezone.utc)
+    with gdacs_answers(listing=urllib.error.URLError("down")):
+        answer = _answer()
+    assert answer.stale is True
+    assert [e["event_id"] for e in answer.events] == ["gdacs-FL-1104121"]
+
+
+@pytest.mark.parametrize("unreadable", [
+    b"null",
+    b"<html>Bad Gateway</html>",
+    "a flood with a field that cannot be read",
+    "a full page",
+])
+def test_an_answer_that_came_back_unreadable_never_lets_the_old_list_stand_in(gdacs_answers, clock, unreadable):
+    """GDACS answered, so it may be listing a flood the old list does not
+    have. Reported as unavailable, not as the old list's "nothing"."""
+    with gdacs_answers(listing=_listing()):
+        assert _answer().events == []
+    clock.now += timedelta(minutes=20)
+    if unreadable == "a flood with a field that cannot be read":
+        unreadable = _orange_india(iscurrent=True)
+    elif unreadable == "a full page":
+        listing = json.loads(_orange_india())
+        listing["features"] = [listing["features"][0]] + [listing["features"][1]] * 99
+        unreadable = _bytes(listing)
+    with gdacs_answers(listing=unreadable):
+        with pytest.raises(gdacs.FeedError):
+            _answer()
+        clock.now += timedelta(seconds=10)
+        with pytest.raises(feed_cache.BackingOff):
+            _answer()
+
+
+def test_an_affected_area_stands_in_for_up_to_7_days(gdacs_answers, clock):
+    """An area belongs to one update of one flood and never changes."""
+    with gdacs_answers():
+        _answer()
+    clock.now += timedelta(days=6, hours=23)
+    with gdacs_answers(area=TimeoutError("down")):
+        (flood,) = _answer().events
+    assert flood["event_id"] == "gdacs-FL-1104121"
+    clock.now += timedelta(hours=2)
+    with gdacs_answers(area=TimeoutError("down")):
+        with pytest.raises(gdacs.FeedError):
+            _answer()
+
+
+def test_a_window_reaching_back_past_the_shared_list_is_asked_for_on_its_own(gdacs_answers, clock):
+    since = T0 - timedelta(hours=200)
+    with gdacs_answers() as urlopen:
+        _answer(since=since)
+    from_dates = [urllib.parse.parse_qs(urllib.parse.urlsplit(c.args[0].full_url).query)["fromDate"][0]
+                  for c in _list_requests(urlopen)]
+    assert from_dates == ["2026-09-19", "2026-09-18"]
+
+
+@pytest.mark.parametrize("failure,unreachable", [
+    (urllib.error.URLError("no route to host"), True),
+    # GDACS reports its own overload as a 400.
+    (urllib.error.HTTPError(gdacs.LIST_URL, 400, "Bad Request", None, None), True),
+    (TimeoutError("timed out"), True),
+    (b"null", False),
+    (b"<html>Bad Gateway</html>", False),
+])
+def test_only_a_gdacs_that_could_not_be_reached_counts_as_unreachable(gdacs_answers, failure, unreachable):
+    with gdacs_answers(listing=failure):
+        with pytest.raises(gdacs.FeedError) as raised:
+            _answer()
+    assert isinstance(raised.value, feed_cache.Unreachable) is unreachable

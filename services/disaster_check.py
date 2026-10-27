@@ -8,9 +8,9 @@ This is the coordinate half of the service. The news-snippet half, and the LLM
 cross-check that goes with it, are not built yet.
 """
 import math
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta, timezone
 
-from services import gdacs_floods, usgs_earthquakes
+from services import feed_cache, gdacs_floods, usgs_earthquakes
 from services.geometry import circle_polygon, distance_km, distance_to_area_km
 
 # One adapter per authoritative feed. See services/usgs_earthquakes.py for the
@@ -77,9 +77,8 @@ def check_location(latitude, longitude, radius_km, window_hours, now=None):
     raises DisasterCheckUnavailable rather than hand the caller
     ``disaster_detected: false`` for an event type nobody was asked about.
     """
-    now = now or _utcnow()
+    now = now or feed_cache.utcnow()
     since = now - timedelta(hours=window_hours)
-    retrieved_at = _iso(now)
 
     events = []
     sources_checked = []
@@ -90,22 +89,27 @@ def check_location(latitude, longitude, radius_km, window_hours, now=None):
         search_radius_km = radius_km + feed.MAX_IMPACT_RADIUS_KM
         source = {"source": feed.SOURCE, "event_types": list(feed.EVENT_TYPES)}
         try:
-            found = feed.fetch_events(latitude, longitude, search_radius_km, since)
-            for event in found:
+            answer = feed.fetch_events(latitude, longitude, search_radius_km, since)
+            for event in answer.events:
                 _require_known_severity(event)
             # Matched inside the guard as well, so an event this module cannot
             # use takes down its own feed rather than the whole request.
-            reached = [event for event in found if _reaches(event, latitude, longitude, radius_km)]
+            reached = [event for event in answer.events if _reaches(event, latitude, longitude, radius_km)]
+            # When the feed actually answered, which for a cached answer is
+            # earlier than this request. A stale answer is one used because
+            # the feed could not be reached; it still counts as an answer.
+            retrieved_at = _iso(answer.retrieved_at)
         except Exception as e:
             # Fail closed: anything a feed raises, including a bug in its
             # adapter, is an unanswered question rather than an empty answer.
             print(f"ERROR: disaster_check feed {feed.SOURCE} failed: {type(e).__name__}: {e}")
             sources_checked.append({**source, "status": "unavailable"})
             continue
-        sources_checked.append({**source, "status": "ok", "retrieved_at": retrieved_at})
-        events += [(event, feed.SOURCE) for event in reached]
+        status = "stale" if answer.stale else "ok"
+        sources_checked.append({**source, "status": status, "retrieved_at": retrieved_at})
+        events += [(event, feed.SOURCE, retrieved_at) for event in reached]
 
-    unavailable = [source["source"] for source in sources_checked if source["status"] != "ok"]
+    unavailable = [source["source"] for source in sources_checked if source["status"] == "unavailable"]
     if unavailable and not events:
         raise DisasterCheckUnavailable(f"no answer from: {', '.join(unavailable)}")
 
@@ -120,13 +124,9 @@ def check_location(latitude, longitude, radius_km, window_hours, now=None):
         # unreviewed mainshock. With nothing detected there is nothing to
         # grade; sources_checked says what the negative answer covers.
         "confidence": events[0][0]["confidence"] if events else None,
-        "events": [_render(event, source, retrieved_at) for event, source in events],
+        "events": [_render(event, source, retrieved_at) for event, source, retrieved_at in events],
         "sources_checked": sources_checked,
     }
-
-
-def _utcnow():
-    return datetime.now(timezone.utc)
 
 
 def _require_known_severity(event):
