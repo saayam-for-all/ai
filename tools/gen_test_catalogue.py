@@ -10,6 +10,7 @@ pytest collection, so the document can only ever describe tests that exist.
 Run it after adding or renaming tests. CI checks that the committed file
 matches what this produces.
 """
+
 from __future__ import annotations
 
 import ast
@@ -49,6 +50,10 @@ FILE_META = {
     "test_token_usage.py": ("#159", "utils/token_usage.py"),
     "test_model_fallback.py": ("#193", "utils/model_fallback.py"),
     "test_client_factory.py": ("#193", "utils/client.py create_chat_model"),
+    "test_classification_privacy.py": (
+        "#216",
+        "utils/model_fallback.py, lambda_function.predict_category_handler",
+    ),
 }
 
 HEADER = """# Test catalogue
@@ -87,7 +92,9 @@ def collected_counts() -> collections.Counter:
     """Ask pytest what it actually collects, including parametrised cases."""
     result = subprocess.run(
         [sys.executable, "-m", "pytest", "-q", "--collect-only", "--no-header"],
-        capture_output=True, text=True, cwd=REPO,
+        capture_output=True,
+        text=True,
+        cwd=REPO,
     )
     counts: collections.Counter = collections.Counter()
     for line in result.stdout.splitlines():
@@ -111,40 +118,64 @@ def main() -> int:
         tree = ast.parse(path.read_text(encoding="utf-8"))
         mark = None
         for node in tree.body:
-            if isinstance(node, ast.Assign) and getattr(node.targets[0], "id", "") == "pytestmark":
+            if (
+                isinstance(node, ast.Assign)
+                and getattr(node.targets[0], "id", "") == "pytestmark"
+            ):
                 mark = ast.unparse(node.value).split(".")[-1]
         issue, covers = FILE_META[path.name]
-        fns = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name.startswith("test_")]
-        rows.append({
-            "name": path.name,
-            "kind": KIND.get(mark, mark or "-"),
-            "issue": issue,
-            "covers": covers,
-            "cases": counts.get(path.name, 0),
-            "fns": fns,
-            "summary": summarise(ast.get_docstring(tree), path.stem),
-        })
+        fns = [
+            n
+            for n in tree.body
+            if isinstance(n, ast.FunctionDef) and n.name.startswith("test_")
+        ]
+        rows.append(
+            {
+                "name": path.name,
+                "kind": KIND.get(mark, mark or "-"),
+                "issue": issue,
+                "covers": covers,
+                "cases": counts.get(path.name, 0),
+                "fns": fns,
+                "summary": summarise(ast.get_docstring(tree), path.stem),
+            }
+        )
 
-    out = [HEADER, "## Files", "",
-           "| File | Kind | Issue | Covers | Tests |",
-           "| --- | --- | --- | --- | ---: |"]
+    out = [
+        HEADER,
+        "## Files",
+        "",
+        "| File | Kind | Issue | Covers | Tests |",
+        "| --- | --- | --- | --- | ---: |",
+    ]
     total = 0
     for r in rows:
         total += r["cases"]
-        out.append(f"| [`tests/{r['name']}`](../../tests/{r['name']}) | {r['kind']} | "
-                   f"{r['issue']} | `{r['covers']}` | {r['cases']} |")
+        out.append(
+            f"| [`tests/{r['name']}`](../../tests/{r['name']}) | {r['kind']} | "
+            f"{r['issue']} | `{r['covers']}` | {r['cases']} |"
+        )
     out += [f"| | | | **Total** | **{total}** |", "", "## Every test", ""]
 
     for r in rows:
-        out += [f"### `{r['name']}`", "",
-                f"*{r['kind']} · issue {r['issue']} · {r['cases']} tests*", "",
-                r["summary"], "",
-                "| Test | Behaviour it protects |", "| --- | --- |"]
+        out += [
+            f"### `{r['name']}`",
+            "",
+            f"*{r['kind']} · issue {r['issue']} · {r['cases']} tests*",
+            "",
+            r["summary"],
+            "",
+            "| Test | Behaviour it protects |",
+            "| --- | --- |",
+        ]
         for fn in r["fns"]:
             out.append(f"| `{fn.name}` | {summarise(ast.get_docstring(fn), fn.name)} |")
         if r["cases"] > len(r["fns"]):
-            out += ["", f"> {len(r['fns'])} test functions expand to {r['cases']} "
-                        "cases through parametrisation."]
+            out += [
+                "",
+                f"> {len(r['fns'])} test functions expand to {r['cases']} "
+                "cases through parametrisation.",
+            ]
         out.append("")
 
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)

@@ -6,13 +6,12 @@ and the runner that tries configured models in order.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
-from dataclasses import dataclass
 import json
 import logging
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, TypeVar
-
 
 logger = logging.getLogger(__name__)
 ResultT = TypeVar("ResultT")
@@ -77,9 +76,7 @@ def _load_model_chain(
     targets: list[ModelTarget] = []
     for index, entry in enumerate(configured):
         if not isinstance(entry, dict):
-            raise ModelRoutingConfigError(
-                f"model_chain[{index}] must be an object"
-            )
+            raise ModelRoutingConfigError(f"model_chain[{index}] must be an object")
 
         provider = _non_empty_string(entry.get("provider"), "provider", index).lower()
         model = _non_empty_string(entry.get("model"), "model", index)
@@ -125,9 +122,14 @@ def _load_model_chain(
 
 
 def _failure_reason(error: Exception) -> str:
-    """Return a compact single-line reason suitable for a warning log."""
-    detail = " ".join(str(error).split())
-    return f"{type(error).__name__}: {detail}" if detail else type(error).__name__
+    """Return a safe error reason without logging arbitrary exception details."""
+    error_type = type(error).__name__
+    message = str(error).lower()
+
+    if "model_not_found" in message:
+        return f"{error_type}: model_not_found"
+
+    return error_type
 
 
 def run_model_chain(
@@ -205,8 +207,7 @@ def run_model_chain(
         )
 
     raise ModelChainExhausted(
-        f"{operation} failed: model chain exhausted after "
-        f"{len(attempted)} attempt(s)"
+        f"{operation} failed: model chain exhausted after {len(attempted)} attempt(s)"
     )
 
 

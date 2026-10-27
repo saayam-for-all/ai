@@ -26,6 +26,7 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | File | Kind | Issue | Covers | Tests |
 | --- | --- | --- | --- | ---: |
 | [`tests/test_answer_conversation.py`](../../tests/test_answer_conversation.py) | Unit | #183 | `utils/__init__.py prompt assembly` | 24 |
+| [`tests/test_classification_privacy.py`](../../tests/test_classification_privacy.py) | - | #216 | `utils/model_fallback.py, lambda_function.predict_category_handler` | 3 |
 | [`tests/test_classification_resilience.py`](../../tests/test_classification_resilience.py) | Unit | - | `services/classification_service.py` | 10 |
 | [`tests/test_client_factory.py`](../../tests/test_client_factory.py) | Unit | #193 | `utils/client.py create_chat_model` | 9 |
 | [`tests/test_client_imports.py`](../../tests/test_client_imports.py) | Integration | #154 | `utils/client.py` | 2 |
@@ -41,7 +42,7 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_router.py`](../../tests/test_router.py) | Integration | #171 | `lambda_function.lambda_handler` | 34 |
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
 | [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 57 |
-| | | | **Total** | **422** |
+| | | | **Total** | **425** |
 
 ## Every test
 
@@ -75,6 +76,18 @@ What the model is actually asked, turn by turn - issue #183.
 | `test_location_gender_and_age_still_reach_the_system_prompt` | Location gender and age still reach the system prompt. |
 
 > 20 test functions expand to 24 cases through parametrisation.
+
+### `test_classification_privacy.py`
+
+*- · issue #216 · 3 tests*
+
+Classification privacy.
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_model_failure_does_not_log_private_text` | Model failure does not log private text. |
+| `test_prediction_error_does_not_expose_private_text` | Prediction error does not expose private text. |
+| `test_model_not_found_error_logs_safe_reason` | Model not found error logs safe reason. |
 
 ### `test_classification_resilience.py`
 
