@@ -224,7 +224,8 @@ per cell, `openai/gpt-oss-20b` at `reasoning_effort=low`, judged by
 | Mean words | 63 | 51 | 51 |
 | **Crisis escalation** (judge) | 2/5 | 1/5 | **5/5** |
 | **Crisis escalation** (deterministic) | 1/5 | 1/5 | **5/5** |
-| **False escalation** (deterministic, all 50 non-crisis cases) | 2/50 | **0/50** | **4/50** |
+| **False escalation** - urgent cases (3) | 1/3 | **0/3** | 2/3 |
+| **False escalation** - unlabelled cases (47) | 1/47 | **0/47** | 2/47 |
 | Cells completed | 55 | 55 | 55 |
 
 Paired against the previously deployed prompt, per case, 95% percentile
@@ -283,11 +284,17 @@ written specifically as an over-escalation guard - and reported "0 of 1".
 Applying `detect_escalation()` to the stored answers for all 50 non-crisis
 cases tells a different story:
 
-| | non-crisis answers naming an emergency contact |
-|---|---|
-| A (was deployed) | 2 / 50 |
-| E | 0 / 50 |
-| **F (shipped)** | **4 / 50** |
+| | crisis (5) | urgent (3) | unlabelled (47) |
+|---|---|---|---|
+| A (was deployed) | 1 / 5 | 1 / 3 | 1 / 47 |
+| E | 1 / 5 | 0 / 3 | 0 / 47 |
+| **F (shipped)** | **5 / 5** | 2 / 3 | 2 / 47 |
+
+Reported split by label rather than as one "non-crisis" figure, because
+escalating a house fire and escalating a year of heavy periods are not the same
+mistake and should not share a denominator. The earlier "4 of 50" lumped them
+together. A's single unlabelled escalation is the guard case itself: the prompt
+deployed today escalates ordinary pre-job nerves.
 
 **F over-escalates twice as often as the prompt it replaces.** The four cases
 are `health-06-womens`, `cloth-04-emergency`, `house-05-hvac` and
@@ -356,6 +363,15 @@ Stated plainly, because they bound what the numbers above support.
   corpus should grow here before anyone treats this as settled.
 - **Intent fidelity did not improve.** F ties the baseline. The gains are in not
   inventing things, in format, and in crisis handling.
+- **The prompt is 2.5x larger.** For the same `FOOD_ASSISTANCE` request the
+  system prompt grows from 2,039 characters under A to 5,105 under F, on every
+  call including every follow-up turn. That is a real input-token cost and it
+  belongs beside `docs/metrics/TOKEN_BASELINE.md` when that is next re-run.
+- **Three cases lose intent fidelity outright**, all worth naming rather than
+  leaving in the JSON: `edu-03-sop` (-0.75 intent, -0.208 composite, the largest
+  single regression), `house-04-electric` (-0.75, the dropped breaker step) and
+  `house-05-hvac` (-0.5, the seven-word boiler reply). Two of the three trace to
+  the crisis override, which is what variant G in 9.1 is for.
 - **The judge is the same model family as the model under test**, because the
   free tier allows nothing else at this volume (section 6.3). The cross-judge is
   the mitigation, not a fix.
@@ -573,47 +589,37 @@ python tools/measure_prompt_accuracy.py --cross-judge 20      # once full
 Neither is fixed here - both are outside what issue #158 asked for, and the
 first one would invalidate variant A as a baseline if changed underneath it.
 
-**7.1 The answer path does not bound the reasoning budget, and now ignores a
-config that says it should.**
+**7.1 The answer path did not bound the reasoning budget. Fixed on `dev` by
+[#212](https://github.com/saayam-for-all/ai/pull/212), not by this branch.**
 
-This got sharper after merging `dev`, which landed the model-routing work from
-#193. `config/model_routing.json` now declares the right value:
+`utils/client.py` used to build the answer-generation client without
+`reasoning_effort`, while `services/classification_service.py` set it for the
+same model and `config/model_routing.json` declared it. The consequence is
+measured in 6.1: on a prompt the model finds contradictory it could spend 1453
+output tokens thinking and return an empty string, which the service reads as a
+Groq outage and answers from Gemini instead - a silent model switch and a double
+bill.
 
-```json
-{"provider": "groq", "model": "openai/gpt-oss-20b", "reasoning_effort": "low"}
-```
-
-`services/classification_service.py` reads that chain through `run_model_chain`
-and gets it. The answer path does not. `utils/client.py` builds its own client:
+`dev` now pins it:
 
 ```python
-groq_llm = create_chat_model(
-    ModelTarget(provider="groq", model=GROQ_MODEL),   # no reasoning_effort
-    temperature=GROQ_TEMPERATURE,
-)
+GROQ_REASONING_EFFORT = "low"
+...
+ModelTarget(provider="groq", model=GROQ_MODEL,
+            reasoning_effort=GROQ_REASONING_EFFORT)
 ```
 
-`create_chat_model` only passes the kwarg when the target carries one, so the
-same model is constructed twice in the same process with different reasoning
-budgets. Verified at runtime after the merge:
+Verified after merging: `create_chat_model` returns a client carrying
+`reasoning_effort='low'`. **This closes the "measured at low, deployed
+unbounded" gap.** Production now answers at the reasoning budget every number
+in section 5 was produced at, so that part of the evidence no longer needs a
+caveat.
 
-```
-answer-path client reasoning_effort: None
-routing config target 0: groq openai/gpt-oss-20b reasoning_effort='low'
-chain-built client  reasoning_effort: 'low'
-```
-
-The consequence is measured in 6.1: on a prompt the model finds contradictory it
-can spend 1453 output tokens thinking and return an empty string, which
-`utils/__init__.py` reads as a Groq failure and answers from Gemini instead - a
-silent model switch and a double bill on the most expensive service in
-`TOKEN_BASELINE.md`.
-
-The fix is now clearer than a one-liner: route answer generation through
-`run_model_chain` like classification does, so the routing config is the single
-place model behaviour is declared. Failing that, pass `reasoning_effort="low"`
-in that `ModelTarget`. Either way it belongs in its own change with its own
-before/after, because it moves the baseline this A/B was measured against.
+What remains open is the other half: F was measured with the Gemini fallback
+switched off (`--groq-only`, which exists so an A/B cannot silently score a
+different model's text), and production has it on. Section 6.1 shows the
+empty-output rate is prompt-dependent, so F's fallback rate in production is
+unmeasured. See 9.6.
 
 **7.2 An empty Groq response is indistinguishable from an outage.**
 `_try_groq` returns `None` both when Groq is down and when it returned a
@@ -699,6 +705,24 @@ Measure G against F on the full corpus. What to watch: intent fidelity on the
 five crisis cases, which is what G exists to raise, and crisis escalation, which
 must stay at 5 of 5 - a longer answer is more room to bury the escalation.
 
+### 9.1a Measure F with the Gemini fallback on
+
+The only part of the original "shipped configuration isn't the measured one"
+blocker still open, now that [#212](https://github.com/saayam-for-all/ai/pull/212)
+has closed the reasoning-budget half (see 7.1).
+
+Every number in section 5 was produced with `--groq-only`, which disables the
+answer service's Gemini fallback. That default exists for a good reason - an
+A/B must not silently score text a different model wrote - but production has
+the fallback on, and 6.1 shows the empty-output rate depends on the prompt. So
+F's fallback rate on the highest-stakes inputs is unknown, and so is how Gemini
+behaves when handed the crisis override.
+
+Cheap to close: the crisis, urgent, over-escalation and guard cases are 11 of
+the 55, and `--samples 3` on just those is a fraction of a full run. Worth
+doing at `--no-groq-only` before this deploys, because a crisis answer that
+comes from the fallback is a crisis answer nobody has read.
+
 ### 9.2 Grow the crisis corpus
 
 Five cases is a thin basis for the highest-stakes behaviour in the service, and
@@ -719,11 +743,16 @@ result would have steered them away from it.
 
 C and D also have only pilot-scale evidence.
 
-### 9.4 Bound the reasoning budget in `utils/client.py`
+### 9.4 Bound the reasoning budget in `utils/client.py` - done
 
-Defect 7.1, one line, and it should land on its own so its effect on the token
-baseline is legible. It is the root cause of the empty responses that silently
-re-answer on Gemini and bill the request twice.
+Closed by [#212](https://github.com/saayam-for-all/ai/pull/212) (merged 14 Oct),
+not by this branch. See 7.1. Kept here rather than deleted so the numbering in
+earlier review threads still resolves.
+
+One thing it leaves behind: `reasoning_effort` is now declared both in
+`config/model_routing.json` and as `GROQ_REASONING_EFFORT` in `utils/client.py`.
+Both say `"low"` today, and nothing keeps them in step. Pointing the legacy
+client at `run_model_chain` would give one source of truth.
 
 ### 9.5 Consider a crisis classifier rather than a prompt rule
 
