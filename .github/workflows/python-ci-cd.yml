@@ -68,10 +68,14 @@
           id: cache-venv
           with:
             path: .venv
-            key: ${{ runner.os }}-venv-${{ steps.setup-python.outputs.pythonLocation }}-${{ hashFiles('requirements.txt', 'pyproject.toml') }}
-            restore-keys: |
-              ${{ runner.os }}-venv-${{ steps.setup-python.outputs.pythonLocation }}
-              ${{ runner.os }}-venv-
+            # The exact Python version is part of the key because .venv/bin/python
+            # is a symlink into the runner's toolcache. setup-python has no
+            # `pythonLocation` output, so the old key never changed with the
+            # interpreter: when the runner moved from 3.11.16 to 3.11.17 the
+            # cached venv was restored with a dangling symlink and every step
+            # after it failed. No restore-keys for the same reason - a venv
+            # built for another Python or another requirements.txt is not reusable.
+            key: ${{ runner.os }}-venv-py${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('requirements.txt', 'pyproject.toml') }}
 
 
         - name: Cache status
@@ -83,15 +87,19 @@
             fi
 
         # --- BUILD/PACKAGE: Install dependencies ---
-        # FIX - added venv validity guard so a corrupted/stale cache doesn't silently break all downstream steps
+        # FIX - added venv validity guard so a corrupted/stale cache doesn't silently break all downstream steps.
+        # The guard runs the interpreter rather than checking that bin/activate exists: a stale
+        # venv still has its activate script, it just has no Python behind it.
         - name: Build and install package
           env:
             PIP_PROGRESS_BAR: off
             PIP_DISABLE_PIP_VERSION_CHECK: 1
           run: |
             echo "=== Build and install package (output below) ==="
-            if [ "${{ steps.cache-venv.outputs.cache-hit }}" != "true" ] || [ ! -f .venv/bin/activate ]; then
+            if [ "${{ steps.cache-venv.outputs.cache-hit }}" != "true" ] || ! .venv/bin/python -c "import sys" > /dev/null 2>&1; then
               echo "Note: torch + transformers are large (~2GB). First install can take 15-20 min."
+              # Remove a broken venv rather than build over it, so nothing stale survives.
+              rm -rf .venv
               python -m venv .venv
               source .venv/bin/activate
               echo "--- Upgrading pip ---"

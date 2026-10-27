@@ -139,6 +139,64 @@ def test_langchain_reasoning_tokens_count_as_completion():
     assert usage["total_tokens"] == 420
 
 
+@pytest.mark.unit
+def test_langchain_reasoning_already_included_in_output_tokens_is_not_double_counted():
+    """In standard LangChain, output_tokens already includes reasoning tokens.
+
+    output_token_details is an itemized breakdown. We must not add reasoning tokens twice.
+    """
+    message = _LangChainMessage(usage_metadata={
+        "input_tokens": 100,
+        "output_tokens": 320,
+        "total_tokens": 420,
+        "output_token_details": {"reasoning": 300},
+    })
+    usage = token_usage.extract_usage(message)
+    assert usage["prompt_tokens"] == 100
+    assert usage["completion_tokens"] == 320
+    assert usage["total_tokens"] == 420
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "inp,out,tot,reasoning,expected_prompt,expected_completion,expected_total",
+    [
+        # Groq real: 100 / 320 / 420 / 300
+        (100, 320, 420, 300, 100, 320, 420),
+        # Gemini-via-LangChain real (20 visible + 500 thoughts): 100 / 520 / 620 / 500
+        (100, 520, 620, 500, 100, 520, 620),
+        # All reasoning, empty answer: 100 / 300 / 400 / 300
+        (100, 300, 400, 300, 100, 300, 400),
+        # Reasoning excluded, total excludes it: 100 / 20 / 120 / 300
+        (100, 20, 120, 300, 100, 320, 420),
+        # Reasoning excluded, total includes it (121 -> 126 branch): 100 / 20 / 420 / 300
+        (100, 20, 420, 300, 100, 320, 420),
+        # Excluded, output > reasoning, total includes it (elif branch line 124): 100 / 500 / 900 / 300
+        (100, 500, 900, 300, 100, 800, 900),
+        # No total reported: 100 / 20 / None / 300
+        (100, 20, None, 300, 100, 320, 420),
+    ],
+)
+def test_langchain_reasoning_edge_case_shapes(
+    inp, out, tot, reasoning, expected_prompt, expected_completion, expected_total
+):
+    """Exercise LangChain reasoning token shapes and boundary conditions."""
+    metadata = {
+        "input_tokens": inp,
+        "output_tokens": out,
+        "output_token_details": {"reasoning": reasoning},
+    }
+    if tot is not None:
+        metadata["total_tokens"] = tot
+    message = _LangChainMessage(usage_metadata=metadata)
+    usage = token_usage.extract_usage(message)
+    assert usage["prompt_tokens"] == expected_prompt
+    assert usage["completion_tokens"] == expected_completion
+    assert usage["total_tokens"] == expected_total
+
+
+
+
 # ---------------------------------------------------------------------------
 # Degradation: telemetry must never break a served request
 # ---------------------------------------------------------------------------
@@ -348,12 +406,21 @@ def test_subject_generation_reports_its_usage(monkeypatch, capsys):
 def test_answer_generation_reports_its_usage(monkeypatch, capsys):
     import utils
 
-    monkeypatch.setattr(utils, "groq_llm", _FakeChatModel(
-        content="Here is some help.", input_tokens=900, output_tokens=150))
-    monkeypatch.setattr(utils, "gemini_llm", None)
+    fake_model = _FakeChatModel(
+        content="Here is some help.",
+        input_tokens=900,
+        output_tokens=150,
+    )
+
+    def fake_create_chat_model(target, *, temperature):
+        return fake_model
+
+    monkeypatch.setattr(utils, "create_chat_model", fake_create_chat_model)
 
     utils.GroqAnswerGenerationService().generate_answer(
-        category="Housing", subject="Rent", description="I am behind on rent",
+        category="Housing",
+        subject="Rent",
+        description="I am behind on rent",
     )
 
     (record,) = _usage_lines(capsys)
@@ -364,28 +431,35 @@ def test_answer_generation_reports_its_usage(monkeypatch, capsys):
 
 @pytest.mark.integration
 def test_a_groq_failure_still_bills_the_gemini_retry(monkeypatch, capsys):
-    """The fallback path spends twice on one request.
-
-    A total that reports only the provider that answered understates the cost
-    of exactly the requests that cost the most.
-    """
+    """Only successful model responses contribute recorded token usage."""
     import utils
 
     class _Down:
-        model_name = "groq-down"
         def invoke(self, _messages):
             raise RuntimeError("groq is down")
 
-    monkeypatch.setattr(utils, "groq_llm", _Down())
-    monkeypatch.setattr(utils, "gemini_llm", _FakeChatModel(
-        content="Fallback answer.", input_tokens=900, output_tokens=200))
+    gemini = _FakeChatModel(
+        content="Fallback answer.",
+        input_tokens=900,
+        output_tokens=200,
+    )
+
+    def fake_create_chat_model(target, *, temperature):
+        if target.provider == "groq":
+            return _Down()
+        if target.provider == "gemini":
+            return gemini
+        raise ValueError(f"Unexpected provider: {target.provider}")
+
+    monkeypatch.setattr(utils, "create_chat_model", fake_create_chat_model)
 
     utils.GroqAnswerGenerationService().generate_answer(
-        category="Housing", subject="Rent", description="I am behind on rent",
+        category="Housing",
+        subject="Rent",
+        description="I am behind on rent",
     )
 
     (record,) = _usage_lines(capsys)
-    # Groq raised before returning a message, so only Gemini's spend is real.
     assert record["total_tokens"] == 1100
     assert [c["provider"] for c in record["calls"]] == ["gemini"]
 
@@ -402,7 +476,7 @@ def test_organization_search_reports_its_usage(monkeypatch, capsys):
 
     monkeypatch.setattr(SO, "_providers", lambda: [("groq", lambda: _FakeChatModel())])
     monkeypatch.setattr(SO, "build_prompt", lambda *a: object())
-    monkeypatch.setattr(SO, "_invoke_provider", lambda llm, prompt, s, d, l, usage=None, name="": (
+    monkeypatch.setattr(SO, "_invoke_provider", lambda llm, prompt, sub, desc, loc, usage=None, name="": (
         token_usage.record(usage, message, provider=name, model="fake") and None
     ) or rows)
 
@@ -503,7 +577,7 @@ def test_classification_logs_as_well_as_returns(monkeypatch, capsys):
 
         def create(self, **kwargs):
             block = kwargs["messages"][0]["content"].split("Categories:\n")[1]
-            ids = [l.split(":")[0].strip() for l in block.splitlines() if ":" in l]
+            ids = [line.split(":")[0].strip() for line in block.splitlines() if ":" in line]
             chosen = next((i for i in ids if get_direct_children(i)), ids[0])
             payload = json.dumps({"categories": [{"category": chosen, "confidence": 0.9}]})
 
@@ -720,18 +794,23 @@ def test_log_usage_never_raises_on_a_hostile_accumulator(capsys):
 
 @pytest.mark.integration
 def test_answer_generation_with_no_provider_at_all(monkeypatch, capsys):
-    """No keys configured: Gemini raises, and the spend log is still emitted."""
+    """No configured provider succeeds, but the spend log is still emitted."""
     import utils
+    from utils.model_fallback import ModelChainExhausted
 
-    monkeypatch.setattr(utils, "groq_llm", None)
-    monkeypatch.setattr(utils, "gemini_llm", None)
+    def fake_create_chat_model(target, *, temperature):
+        raise ValueError(f"{target.provider} API key is not configured")
 
-    with pytest.raises(ValueError):
+    monkeypatch.setattr(utils, "create_chat_model", fake_create_chat_model)
+
+    with pytest.raises(ModelChainExhausted):
         utils.GroqAnswerGenerationService().generate_answer(
-            category="Housing", subject="Rent", description="behind on rent",
+            category="Housing",
+            subject="Rent",
+            description="behind on rent",
         )
 
-    # The finally: block reports even when the call failed.
+    # The finally block reports usage even when every model attempt fails.
     (record,) = _usage_lines(capsys)
     assert record["total_calls"] == 0
 

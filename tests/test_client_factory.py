@@ -156,3 +156,38 @@ def test_constructor_failure_can_fall_through_to_another_provider(monkeypatch):
         ("groq", "groq-primary"),
         ("gemini", "gemini-final"),
     ]
+
+
+def test_legacy_groq_defaults_include_low_reasoning_effort():
+    assert client_module.GROQ_REASONING_EFFORT == "low"
+
+
+class _FakeSSM:
+    def get_parameters(self, Names, WithDecryption):
+        return {"Parameters": [{"Name": n, "Value": "test-key"} for n in Names]}
+
+
+def test_shared_groq_model_is_built_with_low_reasoning_effort(monkeypatch):
+    """groq_llm serves subject and answer generation; it must request low effort."""
+    import importlib
+    import boto3
+    import langchain_google_genai
+    import langchain_groq
+
+    built = []
+
+    class _RecordingChatGroq:
+        def __init__(self, **kwargs):
+            built.append(kwargs)
+
+    monkeypatch.setattr(boto3, "client", lambda *a, **k: _FakeSSM())
+    monkeypatch.setattr(langchain_groq, "ChatGroq", _RecordingChatGroq)
+    monkeypatch.setattr(langchain_google_genai, "ChatGoogleGenerativeAI", lambda **k: object())
+    try:
+        importlib.reload(client_module)
+        assert built and built[0]["reasoning_effort"] == "low"
+    finally:
+        monkeypatch.undo()
+        importlib.reload(client_module)
+
+

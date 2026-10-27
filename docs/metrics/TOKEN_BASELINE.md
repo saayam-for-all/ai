@@ -49,10 +49,7 @@ have succeeded must not fail because telemetry did.
 
 ### Thinking tokens
 
-Both current models bill reasoning tokens as output while reporting them apart
-from the visible answer (`thoughts_token_count`, `output_token_details.reasoning`).
-The util adds them back. Without that, the numbers below would understate real
-spend by roughly 3x on the two worst services.
+Both current models bill reasoning tokens as output. In raw `google.genai`, thinking tokens (`thoughts_token_count`) are reported separately from the visible answer, and `_from_gemini` adds them back. In LangChain (`ChatGroq`, `ChatGoogleGenerativeAI`), `output_tokens` already includes reasoning/thinking tokens with `output_token_details.reasoning` provided as an itemized breakdown; `_from_langchain` avoids double counting while ensuring reasoning is counted if omitted. Without counting reasoning tokens, numbers would understate real spend by roughly 3x on the two worst services.
 
 ---
 
@@ -102,13 +99,13 @@ input. For typical requests, most prompt spend is template, not user text.
 
 ### 3.1 `reasoning_effort` is unset on the shared LangChain model — measured, one line
 
-`GROQ_MODEL` is `openai/gpt-oss-20b`, a reasoning model that defaults to *high*
+`GROQ_MODEL` is `openai/gpt-oss-20b`, a reasoning model that defaults to *medium*
 effort. Two places already know this and pin it low:
 
 - `classification_service._groq_extra_kwargs()` → `reasoning_effort="low"`
 - `search_orgs.load_llm()` → `reasoning_effort="low"`
 
-The shared `groq_llm` in `utils/client.py:69-73` does not. That model is what
+The shared `groq_llm` in `utils/client.py` previously did not. That model is what
 answer generation and subject generation use - and they are exactly the two
 services whose completion tokens run away.
 
@@ -130,8 +127,8 @@ Answers get longer while costing less, because what is removed is invisible
 reasoning, not content. Combined saving is roughly **1,900 tokens per full
 request, ~23% of total spend**, from one keyword argument.
 
-Not applied here - it changes model behavior on two user-facing services and
-deserves its own PR and review. It is a one-line change to `utils/client.py`.
+Applied in `fix/token-usage-and-reasoning-effort` (#194): `utils/client.py` explicitly
+pins `reasoning_effort="low"` on `ModelTarget` for `groq_llm`.
 
 ### 3.2 Classification re-sends the taxonomy at every level
 

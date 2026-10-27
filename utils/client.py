@@ -19,6 +19,7 @@ GEMINI_PARAM = "/dev/saayam/GenAI/gemini/key"
 # target-aware factory.
 GROQ_MODEL = "openai/gpt-oss-20b"
 GROQ_TEMPERATURE = 0.3
+GROQ_REASONING_EFFORT = "low"
 GEMINI_MODEL = "gemini-2.5-flash"
 GEMINI_TEMPERATURE = 0.3
 
@@ -103,7 +104,11 @@ if GROQ_API_KEY:
     try:
         client = Groq(api_key=GROQ_API_KEY)
         groq_llm = create_chat_model(
-            ModelTarget(provider="groq", model=GROQ_MODEL),
+            ModelTarget(
+                provider="groq",
+                model=GROQ_MODEL,
+                reasoning_effort=GROQ_REASONING_EFFORT,
+            ),
             temperature=GROQ_TEMPERATURE,
         )
         _use_groq = True
