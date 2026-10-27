@@ -1,0 +1,1190 @@
+{
+  "schema_version": 1,
+  "issue": "#216",
+  "about": [
+    "Labelled volunteer descriptions for measuring the recall and precision of",
+    "predict_category_api with mode \"volunteer_skills\".",
+    "",
+    "A case labels a list of SKILLS, not a flat list of category IDs. Each skill",
+    "carries an `accept` set, because parts of the taxonomy are genuinely",
+    "ambiguous and a model is not wrong for picking either side: 5.1.1 General",
+    "Consultation against 5.1.11 Other Medical Concern, 6.5 Errands Events",
+    "Transportation against 6.6 Transportation Appointments Events, 5.4",
+    "Medication Reminders against 6.3 Medication Management. A skill counts as",
+    "found when any ID in its accept set is predicted.",
+    "",
+    "None of these descriptions is one of the ten V1-V10 cases in issue #216.",
+    "Those cases shaped the prompt, so scoring against them would measure the prompt against its own",
+    "design inputs. Situations are deliberately echoed; wording is not reused."
+  ],
+  "traits": {
+    "short": "Under 40 characters. A bare profession, the shape that fell to General at 0.99 confidence.",
+    "multi_area": "Three or more skills spanning at least two top-level branches. The reason volunteer mode exists.",
+    "contains_retired": "Contains 'retired' or 'senior' describing the volunteer, not someone needing care.",
+    "non_english": "Written in a language other than English.",
+    "long": "Over 1000 characters. Rambling, with the skills buried in context.",
+    "no_match": "States no skill the taxonomy covers. The right answer is an empty list, not a guess.",
+    "unmatched_skills": "States a real skill with no home in the taxonomy, which belongs in unmatched_skills."
+  },
+  "cases": [
+    {
+      "id": "short-dentist",
+      "description": "I practise dentistry.",
+      "language": "en",
+      "traits": [
+        "short"
+      ],
+      "expected": [
+        {
+          "skill": "dentistry",
+          "accept": [
+            "5.1.3"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "short-welder",
+      "description": "Certified welder.",
+      "language": "en",
+      "traits": [
+        "short"
+      ],
+      "expected": [
+        {
+          "skill": "welding",
+          "accept": [
+            "3.3.11"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "short-optometrist",
+      "description": "I am an optometrist.",
+      "language": "en",
+      "traits": [
+        "short"
+      ],
+      "expected": [
+        {
+          "skill": "eye care",
+          "accept": [
+            "5.1.4"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "short-roofer",
+      "description": "Roofer, twelve years.",
+      "language": "en",
+      "traits": [
+        "short"
+      ],
+      "expected": [
+        {
+          "skill": "roofing",
+          "accept": [
+            "3.3.7"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "short-paediatrician",
+      "description": "I am a paediatrician.",
+      "language": "en",
+      "traits": [
+        "short"
+      ],
+      "expected": [
+        {
+          "skill": "child health",
+          "accept": [
+            "5.1.10"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "short-locksmith",
+      "description": "Locksmith by trade.",
+      "language": "en",
+      "traits": [
+        "short"
+      ],
+      "expected": [
+        {
+          "skill": "locksmithing",
+          "accept": [
+            "3.3.8"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "hvac-science-tutor-bulk-cook",
+      "description": "I install and service air conditioning units during the week. On Saturdays I tutor high school chemistry, and I help out by cooking large batches of food for community events.",
+      "language": "en",
+      "traits": [
+        "multi_area"
+      ],
+      "expected": [
+        {
+          "skill": "hvac",
+          "accept": [
+            "3.3.6"
+          ]
+        },
+        {
+          "skill": "science tutoring",
+          "accept": [
+            "4.3.3"
+          ]
+        },
+        {
+          "skill": "bulk cooking",
+          "accept": [
+            "1.3.2"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "carpenter-essay-driver",
+      "description": "I build and repair furniture and fit shelving. I also read through university application essays for students in my neighbourhood, and I drive two older neighbours to their hospital appointments.",
+      "language": "en",
+      "traits": [
+        "multi_area"
+      ],
+      "expected": [
+        {
+          "skill": "carpentry",
+          "accept": [
+            "3.3.4"
+          ]
+        },
+        {
+          "skill": "essay review",
+          "accept": [
+            "4.2"
+          ]
+        },
+        {
+          "skill": "driving to appointments",
+          "accept": [
+            "6.5",
+            "6.6"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "nurse-listener-prescriptions-driver",
+      "description": "I work as a registered nurse on a hospital ward. I am happy to sit with people who are feeling low, I can pick up prescriptions, and I drive people to their appointments when they have no other way of getting there.",
+      "language": "en",
+      "traits": [
+        "multi_area"
+      ],
+      "expected": [
+        {
+          "skill": "nursing consultation",
+          "accept": [
+            "5.1.1",
+            "5.1.11"
+          ]
+        },
+        {
+          "skill": "emotional support",
+          "accept": [
+            "5.3"
+          ]
+        },
+        {
+          "skill": "medicine delivery",
+          "accept": [
+            "5.2"
+          ]
+        },
+        {
+          "skill": "transport",
+          "accept": [
+            "6.5",
+            "6.6"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tailor-career-coach-gardener",
+      "description": "I take in and alter clothes so they fit properly. I sit with people to work through their CV and practise interview answers with them. I also keep two community gardens tidy.",
+      "language": "en",
+      "traits": [
+        "multi_area"
+      ],
+      "expected": [
+        {
+          "skill": "tailoring",
+          "accept": [
+            "2.4"
+          ]
+        },
+        {
+          "skill": "career guidance",
+          "accept": [
+            "4.6"
+          ]
+        },
+        {
+          "skill": "gardening",
+          "accept": [
+            "3.3.5"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "mason-maths-groceries",
+      "description": "Bricklaying and concrete work is what I do for a living. In the evenings I go over maths homework with two children on my street, and I pick up and drop off shopping for a neighbour who cannot get out.",
+      "language": "en",
+      "traits": [
+        "multi_area"
+      ],
+      "expected": [
+        {
+          "skill": "masonry",
+          "accept": [
+            "3.3.10"
+          ]
+        },
+        {
+          "skill": "maths tutoring",
+          "accept": [
+            "4.3.1"
+          ]
+        },
+        {
+          "skill": "grocery shopping",
+          "accept": [
+            "1.2"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "painter-english-roommate",
+      "description": "I paint interiors and exteriors. I also help people whose first language is not English with their reading and writing, and I have a knack for matching up people who are looking to share a flat.",
+      "language": "en",
+      "traits": [
+        "multi_area"
+      ],
+      "expected": [
+        {
+          "skill": "painting",
+          "accept": [
+            "3.3.9"
+          ]
+        },
+        {
+          "skill": "english tutoring",
+          "accept": [
+            "4.3.2"
+          ]
+        },
+        {
+          "skill": "finding a flatmate",
+          "accept": [
+            "3.6"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "physio-meal-plans-visits",
+      "description": "I am a physiotherapist. I can put together a sensible eating plan for someone recovering from an injury, and I visit people who live on their own and do not see many others during the week.",
+      "language": "en",
+      "traits": [
+        "multi_area"
+      ],
+      "expected": [
+        {
+          "skill": "physiotherapy",
+          "accept": [
+            "5.1.6"
+          ]
+        },
+        {
+          "skill": "meal planning",
+          "accept": [
+            "1.3.3"
+          ]
+        },
+        {
+          "skill": "social connection",
+          "accept": [
+            "6.8"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "electrician-scholarships-pool",
+      "description": "Rewiring, sockets, fuse boxes, that is my trade. I spent years applying for study funding myself so I know the scholarship process well, and I look after a couple of swimming pools in the summer.",
+      "language": "en",
+      "traits": [
+        "multi_area"
+      ],
+      "expected": [
+        {
+          "skill": "electrical work",
+          "accept": [
+            "3.3.3"
+          ]
+        },
+        {
+          "skill": "scholarship knowledge",
+          "accept": [
+            "4.4"
+          ]
+        },
+        {
+          "skill": "pool maintenance",
+          "accept": [
+            "3.3.12"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "devices-for-elders-testprep-coding",
+      "description": "I set up tablets and phones for older people in my building and show them how to make video calls. I also coach students through entrance exam practice papers and teach beginner programming.",
+      "language": "en",
+      "traits": [
+        "multi_area"
+      ],
+      "expected": [
+        {
+          "skill": "digital support for seniors",
+          "accept": [
+            "6.2"
+          ]
+        },
+        {
+          "skill": "test prep",
+          "accept": [
+            "4.3.5"
+          ]
+        },
+        {
+          "skill": "computer science tutoring",
+          "accept": [
+            "4.3.4"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "retired-accountant-maths-tutor",
+      "description": "I retired last year after a long career in accounting. These days I tutor secondary school maths two afternoons a week, and I still do the books for a couple of small charities.",
+      "language": "en",
+      "traits": [
+        "contains_retired",
+        "unmatched_skills"
+      ],
+      "expected": [
+        {
+          "skill": "maths tutoring",
+          "accept": [
+            "4.3.1"
+          ]
+        }
+      ],
+      "expected_unmatched": [
+        "accounting"
+      ],
+      "notes": "Bookkeeping has no leaf in the taxonomy."
+    },
+    {
+      "id": "retired-nurse-medication",
+      "description": "Recently retired nurse here. I can help people keep on top of when to take their medication, and I am happy to explain health information in plain language.",
+      "language": "en",
+      "traits": [
+        "contains_retired"
+      ],
+      "expected": [
+        {
+          "skill": "medication reminders",
+          "accept": [
+            "5.4",
+            "6.3"
+          ]
+        },
+        {
+          "skill": "health education",
+          "accept": [
+            "5.5"
+          ]
+        }
+      ],
+      "notes": "5.4 and 6.3 describe the same help from different branches."
+    },
+    {
+      "id": "senior-carpenter-handyman",
+      "description": "I am a senior citizen but still strong and steady. I do carpentry and the sort of small repairs around a house that nobody else wants to deal with.",
+      "language": "en",
+      "traits": [
+        "contains_retired"
+      ],
+      "expected": [
+        {
+          "skill": "carpentry",
+          "accept": [
+            "3.3.4"
+          ]
+        },
+        {
+          "skill": "handyman work",
+          "accept": [
+            "3.3.2"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "retired-teacher-reading-writing",
+      "description": "After thirty years in a classroom I retired, but I would like to keep helping young people with their reading and writing.",
+      "language": "en",
+      "traits": [
+        "contains_retired"
+      ],
+      "expected": [
+        {
+          "skill": "english tutoring",
+          "accept": [
+            "4.3.2"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "retired-engineer-welding-tutoring",
+      "description": "Retired mechanical engineer. I can weld and do metal fabrication, and I would enjoy tutoring physics or maths to anyone who is struggling.",
+      "language": "en",
+      "traits": [
+        "contains_retired",
+        "multi_area"
+      ],
+      "expected": [
+        {
+          "skill": "welding",
+          "accept": [
+            "3.3.11"
+          ]
+        },
+        {
+          "skill": "science tutoring",
+          "accept": [
+            "4.3.3"
+          ]
+        },
+        {
+          "skill": "maths tutoring",
+          "accept": [
+            "4.3.1"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "retired-driver",
+      "description": "I am seventy-one and retired, and I drive older people to their hospital appointments.",
+      "language": "en",
+      "traits": [
+        "contains_retired"
+      ],
+      "expected": [
+        {
+          "skill": "transport to appointments",
+          "accept": [
+            "6.5",
+            "6.6"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "es-electricista-pintor-cerrajero",
+      "description": "Soy electricista titulado. También pinto casas y arreglo cerraduras cuando alguien se queda fuera.",
+      "language": "es",
+      "traits": [
+        "non_english"
+      ],
+      "expected": [
+        {
+          "skill": "electrical work",
+          "accept": [
+            "3.3.3"
+          ]
+        },
+        {
+          "skill": "painting",
+          "accept": [
+            "3.3.9"
+          ]
+        },
+        {
+          "skill": "locksmithing",
+          "accept": [
+            "3.3.8"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "es-cocina-comunitaria",
+      "description": "Cocino comidas para grupos grandes en eventos comunitarios y sé planificar menús saludables para personas con diabetes.",
+      "language": "es",
+      "traits": [
+        "non_english"
+      ],
+      "expected": [
+        {
+          "skill": "bulk cooking",
+          "accept": [
+            "1.3.2"
+          ]
+        },
+        {
+          "skill": "nutritional meal planning",
+          "accept": [
+            "1.3.3"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "fr-jardinage-peinture",
+      "description": "Je m'occupe de jardins et je fais de la peinture intérieure chez les gens du quartier.",
+      "language": "fr",
+      "traits": [
+        "non_english"
+      ],
+      "expected": [
+        {
+          "skill": "gardening",
+          "accept": [
+            "3.3.5"
+          ]
+        },
+        {
+          "skill": "painting",
+          "accept": [
+            "3.3.9"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "hi-ganit-vigyan",
+      "description": "मैं गणित और विज्ञान पढ़ाता हूँ।",
+      "language": "hi",
+      "traits": [
+        "non_english",
+        "short"
+      ],
+      "expected": [
+        {
+          "skill": "maths tutoring",
+          "accept": [
+            "4.3.1"
+          ]
+        },
+        {
+          "skill": "science tutoring",
+          "accept": [
+            "4.3.3"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "de-pflege-termine",
+      "description": "Ich bin Krankenpfleger und begleite ältere Menschen zu ihren Arztterminen.",
+      "language": "de",
+      "traits": [
+        "non_english"
+      ],
+      "expected": [
+        {
+          "skill": "nursing consultation",
+          "accept": [
+            "5.1.1",
+            "5.1.11"
+          ]
+        },
+        {
+          "skill": "transport to appointments",
+          "accept": [
+            "6.5",
+            "6.6"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "zh-dentist-carpentry",
+      "description": "我是一名牙医，平时也会做一些木工活。",
+      "language": "zh",
+      "traits": [
+        "non_english"
+      ],
+      "expected": [
+        {
+          "skill": "dentistry",
+          "accept": [
+            "5.1.3"
+          ]
+        },
+        {
+          "skill": "carpentry",
+          "accept": [
+            "3.3.4"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "long-handyman-and-cook",
+      "description": "I have lived in the same neighbourhood for nearly twenty years and over that time I have ended up being the person people knock on the door for when something stops working. It started with my own house, which was in a poor state when we bought it, and I learned as I went. These days I can deal with most things that go wrong indoors. I have replaced taps and cleared blocked waste pipes more times than I can count, and I can usually find a leak before it does real damage. I repaint rooms properly, which means filling and sanding first rather than just putting a coat over the top. I put up shelves, rehang doors that have dropped, and fix the hundred small things that make a house feel tired. I also keep the garden at the community centre going, which is mostly pruning, weeding and keeping the beds in some sort of order through the year. The other thing I do, and I enjoy it more than any of the repairs, is cook. When there is a gathering at the centre I am usually the one making food for forty or fifty people, and I have got reasonably good at working out quantities so there is enough without a mountain left over at the end. I am not a trained chef and I would not claim to be, but large numbers do not frighten me.",
+      "language": "en",
+      "traits": [
+        "long",
+        "multi_area"
+      ],
+      "expected": [
+        {
+          "skill": "plumbing",
+          "accept": [
+            "3.3.1"
+          ]
+        },
+        {
+          "skill": "painting",
+          "accept": [
+            "3.3.9"
+          ]
+        },
+        {
+          "skill": "handyman work",
+          "accept": [
+            "3.3.2"
+          ]
+        },
+        {
+          "skill": "gardening",
+          "accept": [
+            "3.3.5"
+          ]
+        },
+        {
+          "skill": "bulk cooking",
+          "accept": [
+            "1.3.2"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "long-teacher-career",
+      "description": "I spent most of my working life in secondary education, first teaching mathematics and later as a head of year, which meant I spent as much time on where students were going next as on what they were doing that term. I am comfortable with the whole of the school maths curriculum and I still enjoy the moment where something that looked impossible suddenly makes sense to someone. I have also sat on the other side of the table for entrance examinations, so I know what the papers are actually testing and how to prepare for them without simply drilling past papers until everyone is sick of them. A large part of my old job was helping students put together their university applications, and I read a great many personal statements over the years. I can tell fairly quickly whether a statement is saying something real or just saying what the writer thinks an admissions tutor wants to hear, and I can help someone get from the second to the first. Beyond applications, I spent a lot of time talking to young people about what they actually wanted to do with themselves, which is a different conversation from which course to pick, and I would be glad to keep having it.",
+      "language": "en",
+      "traits": [
+        "long"
+      ],
+      "expected": [
+        {
+          "skill": "maths tutoring",
+          "accept": [
+            "4.3.1"
+          ]
+        },
+        {
+          "skill": "test prep",
+          "accept": [
+            "4.3.5"
+          ]
+        },
+        {
+          "skill": "college application help",
+          "accept": [
+            "4.1"
+          ]
+        },
+        {
+          "skill": "essay review",
+          "accept": [
+            "4.2"
+          ]
+        },
+        {
+          "skill": "career guidance",
+          "accept": [
+            "4.6"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "long-community-health",
+      "description": "I trained as a community health worker and have worked in clinics and in people's homes for about twelve years. Most of what I do is unglamorous and useful. I take blood pressure readings and talk people through what the numbers mean, because a reading on its own frightens people and an explanation usually does not. I run sessions on managing long term conditions, which is really about helping somebody fit a condition around their life rather than the other way round. A lot of my time goes on medication: making sure people understand what they have been given, why they are taking it, and what happens if they stop, and setting up something simple so they remember the evening dose. I collect prescriptions for people who cannot easily get to a pharmacy. I also spend a good deal of time simply sitting with people who are struggling, and while I am not a therapist and would not pretend to be, I have learned to listen without rushing to fix things. If someone needs more than that I know how to help them find it.",
+      "language": "en",
+      "traits": [
+        "long"
+      ],
+      "expected": [
+        {
+          "skill": "general consultation",
+          "accept": [
+            "5.1.1",
+            "5.1.11"
+          ]
+        },
+        {
+          "skill": "health education",
+          "accept": [
+            "5.5"
+          ]
+        },
+        {
+          "skill": "medication reminders",
+          "accept": [
+            "5.4",
+            "6.3"
+          ]
+        },
+        {
+          "skill": "medicine delivery",
+          "accept": [
+            "5.2"
+          ]
+        },
+        {
+          "skill": "emotional support",
+          "accept": [
+            "5.3"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "no-match-free-weekends",
+      "description": "I am free most weekends and I would like to help out wherever I am needed.",
+      "language": "en",
+      "traits": [
+        "no_match"
+      ],
+      "expected": []
+    },
+    {
+      "id": "no-match-friendly",
+      "description": "I am a friendly person who cares a great deal about my community.",
+      "language": "en",
+      "traits": [
+        "no_match"
+      ],
+      "expected": []
+    },
+    {
+      "id": "no-match-es-domingos",
+      "description": "Mi tiempo libre es los domingos y me gustaría ayudar en lo que haga falta.",
+      "language": "es",
+      "traits": [
+        "no_match",
+        "non_english"
+      ],
+      "expected": []
+    },
+    {
+      "id": "no-match-enthusiastic",
+      "description": "I have a lot of enthusiasm and I learn quickly.",
+      "language": "en",
+      "traits": [
+        "no_match"
+      ],
+      "expected": []
+    },
+    {
+      "id": "no-match-translator-bookkeeper",
+      "description": "I translate documents between Portuguese and English, and I do the bookkeeping for two small businesses.",
+      "language": "en",
+      "traits": [
+        "no_match",
+        "unmatched_skills"
+      ],
+      "expected": [],
+      "expected_unmatched": [
+        "translation",
+        "bookkeeping"
+      ],
+      "notes": "Both are real skills with no leaf in the taxonomy. The right answer is no categories and two unmatched skills."
+    },
+    {
+      "id": "photographer-plumber",
+      "description": "I am a professional photographer. I also do basic plumbing repairs, which is how I paid my way through college.",
+      "language": "en",
+      "traits": [
+        "unmatched_skills"
+      ],
+      "expected": [
+        {
+          "skill": "plumbing",
+          "accept": [
+            "3.3.1"
+          ]
+        }
+      ],
+      "expected_unmatched": [
+        "photography"
+      ]
+    },
+    {
+      "id": "solicitor-english-tutor",
+      "description": "I am a qualified solicitor. I also tutor English to adults who are studying for citizenship tests.",
+      "language": "en",
+      "traits": [
+        "unmatched_skills"
+      ],
+      "expected": [
+        {
+          "skill": "english tutoring",
+          "accept": [
+            "4.3.2"
+          ]
+        }
+      ],
+      "expected_unmatched": [
+        "legal advice"
+      ]
+    },
+    {
+      "id": "pet-boarding-painter",
+      "description": "I board dogs and cats when their owners are away, and I paint rooms for people who cannot manage it themselves.",
+      "language": "en",
+      "traits": [
+        "unmatched_skills"
+      ],
+      "expected": [
+        {
+          "skill": "painting",
+          "accept": [
+            "3.3.9"
+          ]
+        }
+      ],
+      "expected_unmatched": [
+        "pet care"
+      ]
+    },
+    {
+      "id": "hvac-only",
+      "description": "I service heating and air conditioning systems, domestic and light commercial.",
+      "language": "en",
+      "traits": [],
+      "expected": [
+        {
+          "skill": "hvac",
+          "accept": [
+            "3.3.6"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "clothing-donations",
+      "description": "I collect, sort and pass on donated clothing to families who need it.",
+      "language": "en",
+      "traits": [],
+      "expected": [
+        {
+          "skill": "donating clothes",
+          "accept": [
+            "2.1"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "lease-reader",
+      "description": "I sit with people who have just arrived in the country and go through their tenancy agreement with them before they sign anything.",
+      "language": "en",
+      "traits": [],
+      "expected": [
+        {
+          "skill": "lease support",
+          "accept": [
+            "3.1"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "van-owner-moving",
+      "description": "I own a van and I help people shift boxes and furniture at weekends.",
+      "language": "en",
+      "traits": [],
+      "expected": [
+        {
+          "skill": "move in help",
+          "accept": [
+            "3.7"
+          ]
+        }
+      ],
+      "notes": "3.8 is booking a removals firm, which is arranging a service rather than doing the lifting. Deliberately not accepted."
+    },
+    {
+      "id": "therapist-listening",
+      "description": "I am a licensed therapist and I offer a listening ear to anyone going through a difficult stretch.",
+      "language": "en",
+      "traits": [],
+      "expected": [
+        {
+          "skill": "mental wellbeing support",
+          "accept": [
+            "5.3"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "utilities-setup",
+      "description": "I help people get the electricity, water and internet switched on when they move into a new place.",
+      "language": "en",
+      "traits": [],
+      "expected": [
+        {
+          "skill": "utilities setup",
+          "accept": [
+            "3.4"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "study-groups",
+      "description": "I organise study groups for university students who are preparing for their exams.",
+      "language": "en",
+      "traits": [],
+      "expected": [
+        {
+          "skill": "study group formation",
+          "accept": [
+            "4.5"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "vaccination-drives",
+      "description": "I run community vaccination drives and preventive health screenings.",
+      "language": "en",
+      "traits": [],
+      "expected": [
+        {
+          "skill": "vaccinations and screenings",
+          "accept": [
+            "5.1.9"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "selling-furniture",
+      "description": "I help people sell furniture and household things they no longer need.",
+      "language": "en",
+      "traits": [],
+      "expected": [
+        {
+          "skill": "selling things",
+          "accept": [
+            "3.10"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "emergency-winter-coats",
+      "description": "I keep a stock of winter coats and boots and can get them to a family at short notice when something goes wrong.",
+      "language": "en",
+      "traits": [],
+      "expected": [
+        {
+          "skill": "emergency clothing",
+          "accept": [
+            "2.3",
+            "2.1"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "senior-meals",
+      "description": "I cook and drop off hot meals for two housebound older people on my street most days.",
+      "language": "en",
+      "traits": [],
+      "expected": [
+        {
+          "skill": "meal support for elders",
+          "accept": [
+            "6.9",
+            "1.3.1"
+          ]
+        }
+      ],
+      "notes": "6.9 is the elderly-branch framing, 1.3.1 the cooking-branch one."
+    },
+    {
+      "id": "scheduling-appointments",
+      "description": "I keep a diary for an older neighbour and ring up to book her appointments so nothing gets missed.",
+      "language": "en",
+      "traits": [],
+      "expected": [
+        {
+          "skill": "scheduling appointments",
+          "accept": [
+            "6.7"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "rent-support",
+      "description": "I have been through a rent arrears process myself and I can help tenants work out what support they can claim.",
+      "language": "en",
+      "traits": [],
+      "expected": [
+        {
+          "skill": "tenant rent support",
+          "accept": [
+            "3.2"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "senior-relocation",
+      "description": "I help older people downsize and move into sheltered accommodation, from sorting what to keep through to the move itself.",
+      "language": "en",
+      "traits": [],
+      "notes": "Not tagged contains_retired: the trait is about the word describing the volunteer, which is what misfires the elderly shortcut. Here it describes the people being helped.",
+      "expected": [
+        {
+          "skill": "senior relocation",
+          "accept": [
+            "6.1"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "medical-devices",
+      "description": "I set up home blood pressure monitors and glucose meters for people and show them how to use them.",
+      "language": "en",
+      "traits": [],
+      "expected": [
+        {
+          "skill": "medical device setup",
+          "accept": [
+            "6.4"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "food-bank",
+      "description": "I run a food bank collection point two mornings a week.",
+      "language": "en",
+      "traits": [],
+      "expected": [
+        {
+          "skill": "food assistance",
+          "accept": [
+            "1.1"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "borrow-formal-clothes",
+      "description": "I lend out suits and formal outfits to people who need something to wear to an interview.",
+      "language": "en",
+      "traits": [],
+      "expected": [
+        {
+          "skill": "borrowing clothes",
+          "accept": [
+            "2.2",
+            "2.1"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "education-resources",
+      "description": "I gather up second-hand textbooks and laptops and pass them on to students who cannot buy their own.",
+      "language": "en",
+      "traits": [],
+      "expected": [
+        {
+          "skill": "education resource sharing",
+          "accept": [
+            "4.7"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "rental-search",
+      "description": "I know the local rental market well and help newcomers find a place they can actually afford.",
+      "language": "en",
+      "traits": [],
+      "expected": [
+        {
+          "skill": "looking for rental",
+          "accept": [
+            "3.5"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dermatology",
+      "description": "I am a dermatologist and I run free skin check clinics once a month.",
+      "language": "en",
+      "traits": [],
+      "expected": [
+        {
+          "skill": "dermatology",
+          "accept": [
+            "5.1.7"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cultural-cuisine",
+      "description": "I teach people how to cook the dishes they grew up with when they cannot find them where they now live.",
+      "language": "en",
+      "traits": [],
+      "expected": [
+        {
+          "skill": "cultural cuisine guidance",
+          "accept": [
+            "1.3.4"
+          ]
+        }
+      ]
+    }
+  ]
+}
