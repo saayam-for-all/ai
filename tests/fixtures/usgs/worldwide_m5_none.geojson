@@ -1,0 +1,1 @@
+{"type":"FeatureCollection","metadata":{"generated":1793083200000,"url":"https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&eventtype=earthquake&minmagnitude=5.0&orderby=magnitude&starttime=2023-02-10T03:00:00&endtime=2023-02-10T03:59:59","title":"USGS Earthquakes","status":200,"api":"2.8.2","count":0},"features":[]}

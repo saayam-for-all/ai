@@ -15,6 +15,7 @@ from unittest import mock
 import pytest
 
 from services import disaster_check as dc
+from services.feed_cache import FeedAnswer
 
 pytestmark = pytest.mark.unit
 
@@ -43,18 +44,20 @@ def _event(event_id="quake-1", latitude=0.0, longitude=0.0, radius_km=100.0,
 class _Feed:
     """A stand-in adapter: the four names FEEDS relies on, and a call log."""
 
-    def __init__(self, events=(), raises=None, source="FEED", event_types=("earthquake",)):
+    def __init__(self, events=(), raises=None, source="FEED", event_types=("earthquake",),
+                 retrieved_at=NOW, stale=False):
         self.SOURCE = source
         self.EVENT_TYPES = event_types
         self.MAX_IMPACT_RADIUS_KM = 1000.0
         self.calls = []
         self._events, self._raises = list(events), raises
+        self._retrieved_at, self._stale = retrieved_at, stale
 
     def fetch_events(self, latitude, longitude, search_radius_km, since):
         self.calls.append((latitude, longitude, search_radius_km, since))
         if self._raises:
             raise self._raises
-        return self._events
+        return FeedAnswer(self._events, self._retrieved_at, self._stale)
 
 
 def _check(*feeds, latitude=0.0, longitude=0.0, radius_km=50.0, window_hours=72.0):
@@ -183,6 +186,54 @@ def test_one_feed_down_is_never_a_negative_answer():
         _check(down, quiet)
     with pytest.raises(dc.DisasterCheckUnavailable):
         _check(quiet, down)
+
+
+# -------------------------------------------------------------------------
+# When each feed answered
+# -------------------------------------------------------------------------
+
+def test_each_feed_reports_when_it_actually_answered():
+    """A cached answer is older than the request, and says so.
+
+    Raised in the review of part 1: stamping every answer with the request
+    time would make a cached one look current.
+    """
+    earlier = NOW - timedelta(minutes=12)
+    result = _check(
+        _Feed([_event("quake-1")], source="USGS"),
+        _Feed(source="GDACS", event_types=("flood",), retrieved_at=earlier),
+    )
+    assert [(s["source"], s["retrieved_at"]) for s in result["sources_checked"]] == [
+        ("USGS", "2026-10-01T12:00:00Z"), ("GDACS", "2026-10-01T11:48:00Z"),
+    ]
+
+
+def test_an_event_carries_the_time_its_own_feed_answered():
+    earlier = NOW - timedelta(minutes=12)
+    (event,) = _check(_Feed([_event("quake-1")], source="USGS", retrieved_at=earlier))["events"]
+    assert event["verified_by"][0]["retrieved_at"] == "2026-10-01T11:48:00Z"
+
+
+def test_a_stale_answer_is_named_and_still_counts_as_an_answer():
+    """A feed that could not be reached, standing in with an older answer
+    inside its limit, is marked stale - and a `false` can rest on it."""
+    earlier = NOW - timedelta(hours=2)
+    result = _check(
+        _Feed(source="USGS"),
+        _Feed(source="GDACS", event_types=("flood",), retrieved_at=earlier, stale=True),
+    )
+    assert result["disaster_detected"] is False
+    assert [(s["source"], s["status"], s["retrieved_at"]) for s in result["sources_checked"]] == [
+        ("USGS", "ok", "2026-10-01T12:00:00Z"), ("GDACS", "stale", "2026-10-01T10:00:00Z"),
+    ]
+
+
+def test_a_stale_answer_does_not_cover_for_a_feed_that_is_down():
+    with pytest.raises(dc.DisasterCheckUnavailable):
+        _check(
+            _Feed(source="USGS", raises=RuntimeError("feed down")),
+            _Feed(source="GDACS", event_types=("flood",), stale=True),
+        )
 
 
 # -------------------------------------------------------------------------

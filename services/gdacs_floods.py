@@ -11,6 +11,9 @@ be right, so each flood's zone is the affected area GDACS publishes for it,
 reported as ``boundary_source: "authoritative"``.
 
 Exposes the same four names as services/usgs_earthquakes.py.
+
+The flood list is the same for every caller worldwide, so it is cached and
+shared, and each flood's affected area is cached by flood and update.
 """
 import http.client
 import json
@@ -18,6 +21,7 @@ import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta, timezone
 
+from services import feed_cache
 from services.geometry import distance_km, farthest_km
 
 SOURCE = "GDACS"
@@ -51,47 +55,102 @@ MAX_IMPACT_RADIUS_KM = 1000.0
 # The value the issue's own flood example uses. Awaiting review.
 VOLUNTEER_BAND_KM = 30
 
+# GDACS publishes its flood list about once a day, so a list is reused for 15
+# minutes, and for up to 6 hours while GDACS cannot be reached - marked stale,
+# with the time GDACS actually answered. An affected area belongs to one
+# update of one flood and never changes, so it is kept for a day, and an
+# older copy is as good as a new one. First-pass values awaiting review.
+LIST_FRESH_SECONDS = 15 * 60
+LIST_STALE_SECONDS = 6 * 60 * 60
+AREA_FRESH_SECONDS = 24 * 60 * 60
+AREA_STALE_SECONDS = 7 * 24 * 60 * 60
+
+# The shared list reaches back far enough for the longest window
+# disaster_check accepts, so one list serves every caller whatever their
+# window, and across midnight. A window reaching further back is asked for on
+# its own.
+COVER_HOURS = 168
+
+_LISTS = feed_cache.FeedCache(fresh_seconds=LIST_FRESH_SECONDS, stale_seconds=LIST_STALE_SECONDS, max_entries=1)
+# The recorded India area, 205 KB as JSON, takes about 1.5 MB once read, so
+# eight of that size take about 12 MB. Only Orange and Red floods near a
+# caller are fetched: 2 of the 100 most recent floods were Orange.
+_AREAS = feed_cache.FeedCache(fresh_seconds=AREA_FRESH_SECONDS, stale_seconds=AREA_STALE_SECONDS, max_entries=8)
+
 
 class FeedError(Exception):
     """The feed could not be reached, or answered with something unusable."""
+
+
+class FeedUnreachable(FeedError, feed_cache.Unreachable):
+    """GDACS could not be reached: a network error, a timeout or an HTTP error."""
 
 
 def fetch_events(latitude, longitude, search_radius_km, since):
     """Orange and Red floods running at any time since a moment, near a point.
 
     Raises FeedError when GDACS is unreachable or its answer cannot be read,
-    including when a nearby flood's affected area cannot be fetched. An empty
-    list is therefore a real answer: GDACS was asked and listed nothing.
+    including when a nearby flood's affected area cannot be fetched, or
+    feed_cache.BackingOff in the minute after a failure with nothing cached
+    to stand in. No floods is therefore a real answer: GDACS was asked and
+    listed nothing.
     """
+    listing = _LISTS.get("floods", _shared)
+    from_date, floods = listing.value
+    retrieved_at, stale = listing.fetched_at, listing.stale
+    needed = _from_date(since)
+    if needed < from_date:
+        floods, retrieved_at, stale = _floods(needed), feed_cache.utcnow(), False
+
+    events = []
+    for flood in floods:
+        if flood["alert_level"] not in ALERT_LEVELS:
+            continue
+        if not flood["running"] and flood["ended_at"] < since:
+            continue
+        if distance_km(latitude, longitude, flood["latitude"], flood["longitude"]) > search_radius_km:
+            continue
+        try:
+            area = _AREAS.get((flood["event_id"], flood["episode_id"]), lambda: _affected_area(flood))
+        except (KeyError, TypeError, ValueError, OverflowError) as e:
+            raise FeedError(f"GDACS affected area was not in the expected shape: {type(e).__name__}: {e}") from e
+        events.append(_event(flood, area.value))
+    return feed_cache.FeedAnswer(events, retrieved_at, stale)
+
+
+def _shared():
+    from_date = _from_date(feed_cache.utcnow() - timedelta(hours=COVER_HOURS))
+    return from_date, _floods(from_date)
+
+
+def _from_date(since):
+    """The date GDACS is asked from for a window starting at ``since``.
+
+    GDACS returns the floods whose end date is on or after it. Dates written
+    this way sort as text.
+    """
+    return (since - timedelta(days=LOOKBACK_DAYS)).astimezone(timezone.utc).strftime("%Y-%m-%d")
+
+
+def _floods(from_date):
+    """Every flood GDACS lists from a date, read and checked, or FeedError."""
     listing = _get(LIST_URL, {
         "eventlist": "FL",
         "alertlevel": ";".join(ALERT_LEVELS),
-        # GDACS returns the floods whose end date is on or after this date.
-        "fromDate": (since - timedelta(days=LOOKBACK_DAYS)).astimezone(timezone.utc).strftime("%Y-%m-%d"),
+        "fromDate": from_date,
         "pageSize": PAGE_SIZE,
         "pageNumber": 1,
         "caller": "saayam",
     })
     if listing is None:
         return []
-
     try:
         features = _features(listing)
         if len(features) >= PAGE_SIZE:
             # A full page may have left floods on the next one, and a flood
             # that is not looked at cannot be reported.
             raise FeedError(f"GDACS returned a full page of {PAGE_SIZE}; the list may be incomplete")
-        events = []
-        for feature in features:
-            flood = _flood(feature)
-            if flood["alert_level"] not in ALERT_LEVELS:
-                continue
-            if not flood["running"] and flood["ended_at"] < since:
-                continue
-            if distance_km(latitude, longitude, flood["latitude"], flood["longitude"]) > search_radius_km:
-                continue
-            events.append(_event(flood, _affected_area(flood)))
-        return events
+        return [_flood(feature) for feature in features]
     except (KeyError, TypeError, ValueError, OverflowError) as e:
         raise FeedError(f"GDACS payload was not in the expected shape: {type(e).__name__}: {e}") from e
 
@@ -112,9 +171,14 @@ def _get(url, params):
         with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:  # nosec B310
             if response.status == 204:
                 return None
-            payload = json.loads(response.read().decode("utf-8-sig"))
-    except (OSError, ValueError, http.client.HTTPException) as e:
-        raise FeedError(f"GDACS request failed: {type(e).__name__}: {e}") from e
+            body = response.read()
+    except (OSError, http.client.HTTPException) as e:
+        # GDACS reports its own overload as a 400, so every HTTP error counts.
+        raise FeedUnreachable(f"GDACS request failed: {type(e).__name__}: {e}") from e
+    try:
+        payload = json.loads(body.decode("utf-8-sig"))
+    except ValueError as e:
+        raise FeedError(f"GDACS answer is not JSON: {e}") from e
     if not isinstance(payload, dict):
         raise FeedError(f"GDACS answered with a JSON {type(payload).__name__}, not an object")
     return payload

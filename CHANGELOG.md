@@ -10,6 +10,41 @@ team works and reviews in.
 
 ## Unreleased
 
+### Disaster Check — caching — [#191](https://github.com/saayam-for-all/ai/issues/191), part 6
+
+**Added**
+
+- `services/feed_cache.py`: an in-memory cache for feed answers, kept by each
+  running Lambda. USGS answers are reused for 1 minute, the GDACS flood list
+  for 15 minutes and each affected area for 24 hours.
+  *Observable difference:* a second request within those times asks no feed,
+  and a negative answer no longer waits for GDACS each time.
+- While GDACS cannot be reached, its last flood list stands in for up to
+  6 hours, reported with `"status": "stale"` in `sources_checked`. A GDACS
+  that answers with something unreadable or incomplete is unavailable
+  instead, never stood in for. An earthquake answer never stands in.
+  *Observable difference:* a GDACS outage no longer turns every negative
+  answer into a `502`, for the first 6 hours.
+- After a feed fails it is not asked again for 60 seconds, so callers are
+  answered at once rather than each waiting 8 seconds.
+
+**Changed**
+
+- `retrieved_at` in `sources_checked` and `verified_by` is when the feed
+  actually answered, not when the request came in. Raised by Sameer in the
+  review of part 1.
+- USGS is asked once for every magnitude 5+ earthquake worldwide in the last
+  seven days, and each request keeps its own window and location. Results for
+  any one location are unchanged when USGS's answer is readable. One
+  unreadable event anywhere now makes USGS unavailable for every caller,
+  where before it affected only callers whose query included it.
+- A review status written in capitals (`REVIEWED`, as the Pacific Tsunami
+  Warning Center writes it) is now graded `high`, like `reviewed`.
+- `fetch_events` returns a `FeedAnswer` (events, when the feed answered,
+  whether it is stale) instead of a list.
+- The recorded USGS answers in `tests/fixtures/usgs/` are now worldwide ones;
+  the 6 February 2023 answer holds the same 15 earthquakes as before.
+
 ### Disaster Check — floods from GDACS — [#191](https://github.com/saayam-for-all/ai/issues/191), part 2
 
 **Added**

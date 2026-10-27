@@ -1,8 +1,7 @@
 """USGS earthquake feed adapter for disaster_check - issue #191.
 
 The authoritative source for earthquakes. It is public and takes no API key,
-so this module has no credential to load and nothing to import beyond the
-standard library.
+so this module has no credential to load.
 
 Every feed adapter exposes the same four names, which is all
 ``services.disaster_check`` relies on:
@@ -10,16 +9,24 @@ Every feed adapter exposes the same four names, which is all
     SOURCE                the name recorded in ``verified_by``
     EVENT_TYPES           the event types an answer from this feed covers
     MAX_IMPACT_RADIUS_KM  the widest zone one of its events can have
-    fetch_events          the query, returning feed-neutral event records
+    fetch_events          the query, returning a feed_cache.FeedAnswer: the
+                          feed-neutral event records, when the feed actually
+                          answered, and whether that answer is stale
 
 A flood or wildfire adapter is a second module with the same four names,
 added to ``services.disaster_check.FEEDS``.
+
+USGS is asked once for every earthquake worldwide in the window, and that one
+answer is cached and shared by every caller; disaster_check keeps the events
+that reach each caller. A query per location could not be shared.
 """
 import http.client
 import json
 import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta, timezone
+
+from services import feed_cache
 
 SOURCE = "USGS"
 EVENT_TYPES = ("earthquake",)
@@ -43,9 +50,25 @@ MAX_IMPACT_RADIUS_KM = 1000.0
 ALERT_LIFETIME_HOURS = 72
 VOLUNTEER_BAND_KM = 50
 
+# An earthquake can happen at any minute, so the worldwide answer is reused
+# for one minute at most and never once USGS stops answering. A first-pass
+# value awaiting review - see the README.
+FRESH_SECONDS = 60
+
+# The shared answer reaches this far back, the longest window disaster_check
+# accepts, so one answer serves every caller whatever their window. A window
+# reaching further back is asked for on its own.
+COVER_HOURS = 168
+
+_ANSWERS = feed_cache.FeedCache(fresh_seconds=FRESH_SECONDS, stale_seconds=0, max_entries=1)
+
 
 class FeedError(Exception):
     """The feed could not be reached, or answered with something unusable."""
+
+
+class FeedUnreachable(FeedError, feed_cache.Unreachable):
+    """USGS could not be reached: a network error, a timeout or an HTTP error."""
 
 
 def impact_radius_km(magnitude):
@@ -69,20 +92,45 @@ def severity_for(magnitude):
 
 
 def fetch_events(latitude, longitude, search_radius_km, since):
-    """Earthquakes at or above MIN_MAGNITUDE near a point since a moment.
+    """Earthquakes at or above MIN_MAGNITUDE anywhere, since a moment.
 
-    Raises FeedError when the feed is unreachable or its answer cannot be
-    read. An empty list is therefore a real answer - the feed was asked and
-    listed nothing - and never a stand-in for a failure.
+    The location is not sent to USGS: the worldwide answer is shared, and
+    disaster_check keeps the events whose zone reaches the caller. Raises
+    FeedError when the feed is unreachable or its answer cannot be read, or
+    feed_cache.BackingOff in the minute after a failure. No events is a real
+    answer - the feed was asked and listed nothing - never a stand-in for a
+    failure.
     """
+    answer = _ANSWERS.get("worldwide", _shared)
+    start, events = answer.value
+    retrieved_at, stale = answer.fetched_at, answer.stale
+    if since < start:
+        start = _hour(since)
+        events, retrieved_at, stale = _worldwide(start), feed_cache.utcnow(), False
+    # The answer starts at an hour, at or before the window; this puts the
+    # window's own edge back exactly.
+    events = [event for event in events if event["started_at"] >= since]
+    return feed_cache.FeedAnswer(events, retrieved_at, stale)
+
+
+def _shared():
+    start = _hour(feed_cache.utcnow() - timedelta(hours=COVER_HOURS))
+    return start, _worldwide(start)
+
+
+def _hour(moment):
+    return moment.astimezone(timezone.utc).replace(minute=0, second=0, microsecond=0)
+
+
+def _worldwide(start):
+    # No limit is sent: USGS refuses a search that would match more than
+    # 20,000 events rather than cutting it short, so an answer is never
+    # silently incomplete.
     query = urllib.parse.urlencode({
         "format": "geojson",
         "eventtype": "earthquake",
-        "latitude": latitude,
-        "longitude": longitude,
-        "maxradiuskm": search_radius_km,
         "minmagnitude": MIN_MAGNITUDE,
-        "starttime": since.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S"),
+        "starttime": start.strftime("%Y-%m-%dT%H:%M:%S"),
         "orderby": "magnitude",
     })
     request = urllib.request.Request(
@@ -92,9 +140,13 @@ def fetch_events(latitude, longitude, search_radius_km, since):
     try:
         # QUERY_URL is a module constant, so the scheme is always https.
         with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:  # nosec B310
-            payload = json.load(response)
-    except (OSError, ValueError, http.client.HTTPException) as e:
-        raise FeedError(f"USGS query failed: {type(e).__name__}: {e}") from e
+            body = response.read()
+    except (OSError, http.client.HTTPException) as e:
+        raise FeedUnreachable(f"USGS query failed: {type(e).__name__}: {e}") from e
+    try:
+        payload = json.loads(body)
+    except ValueError as e:
+        raise FeedError(f"USGS answer is not JSON: {e}") from e
 
     # Anything other than a list here would iterate as "no events": an empty
     # object or string yields nothing, and nothing is an all-clear.
@@ -144,6 +196,7 @@ def _to_event(feature):
         "volunteer_band_km": VOLUNTEER_BAND_KM,
         # A seismologist has reviewed the solution. Automatic solutions are
         # published within minutes and are revised, occasionally withdrawn.
-        "confidence": "high" if properties.get("status") == "reviewed" else "medium",
+        # Some networks write the status in capitals.
+        "confidence": "high" if str(properties.get("status")).lower() == "reviewed" else "medium",
         "url": str(properties["url"]),
     }

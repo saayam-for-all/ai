@@ -16,19 +16,27 @@ The body stays an object on every path, per #170: the web client reads
 """
 import json
 import urllib.error
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
 
 import pytest
 
 import lambda_function as LF
-from services import disaster_check, gdacs_floods, usgs_earthquakes
+from services import feed_cache, gdacs_floods, usgs_earthquakes
 
 pytestmark = pytest.mark.contract
 
 USGS = Path(__file__).parent / "fixtures" / "usgs"
 GDACS = Path(__file__).parent / "fixtures" / "gdacs"
+
+# Recorded worldwide USGS answers. Kahramanmaras: every magnitude 5+
+# earthquake on 6 February 2023 from 00:00 to 12:00 UTC, all 15 of them in
+# that sequence. None: an hour with none anywhere. Last week: 19-26 October
+# 2026, 73 earthquakes worldwide.
+KAHRAMANMARAS = "worldwide_m5_2023-02-06.geojson"
+NO_EARTHQUAKES = "worldwide_m5_none.geojson"
+LAST_WEEK = "worldwide_m5_2026-10-19.geojson"
 
 # Gaziantep, about 35 km from the M7.8 epicentre of 6 February 2023.
 GAZIANTEP = {"latitude": 37.0662, "longitude": 37.3833}
@@ -69,7 +77,7 @@ def feeds(web):
     as (event, episode), whose recorded affected areas GDACS will serve. Pass
     bytes or an exception in place of a name to make a feed misbehave.
     """
-    def _answer(usgs="no_events.geojson", floods=None, areas=()):
+    def _answer(usgs=NO_EARTHQUAKES, floods=None, areas=()):
         routes = {
             f"{gdacs_floods.GEOMETRY_URL}?eventtype=FL&eventid={event_id}&":
                 (GDACS / f"affected_area_FL_{event_id}_{episode_id}.json").read_bytes()
@@ -81,10 +89,33 @@ def feeds(web):
     return _answer
 
 
+class _Clock:
+    def __init__(self, now):
+        self.now = now
+
+    def __call__(self):
+        return self.now
+
+
+def _at(moment):
+    """Run requests, and the caches behind them, at a moment."""
+    return mock.patch.object(feed_cache, "utcnow", _Clock(moment))
+
+
 def _on(day):
     """Run the request at noon UTC on a day in October 2026."""
-    moment = datetime(2026, 10, day, 12, 0, 0, tzinfo=timezone.utc)
-    return mock.patch.object(disaster_check, "_utcnow", return_value=moment)
+    return _at(datetime(2026, 10, day, 12, 0, 0, tzinfo=timezone.utc))
+
+
+@pytest.fixture
+def on_the_day_of_the_earthquake():
+    """Noon UTC on 6 February 2023, inside the recorded USGS answer.
+
+    USGS's answer is filtered to the window here, not by USGS, so a request
+    made today would see none of the 2023 earthquakes.
+    """
+    with _at(datetime(2023, 2, 6, 12, 0, 0, tzinfo=timezone.utc)):
+        yield
 
 
 @pytest.fixture
@@ -119,8 +150,8 @@ def _urls(urlopen):
 # A location inside a known earthquake
 # -------------------------------------------------------------------------
 
-def test_a_location_inside_a_known_earthquake_is_detected(feeds):
-    with feeds(usgs="kahramanmaras_2023-02-06.geojson"):
+def test_a_location_inside_a_known_earthquake_is_detected(feeds, on_the_day_of_the_earthquake):
+    with feeds(usgs=KAHRAMANMARAS):
         res = _call(GAZIANTEP)
 
     assert res["statusCode"] == 200
@@ -136,8 +167,8 @@ def test_a_location_inside_a_known_earthquake_is_detected(feeds):
     assert mainshock["started_at"] == "2023-02-06T01:17:34Z"
 
 
-def test_every_event_carries_every_field_of_the_contract(feeds):
-    with feeds(usgs="kahramanmaras_2023-02-06.geojson"):
+def test_every_event_carries_every_field_of_the_contract(feeds, on_the_day_of_the_earthquake):
+    with feeds(usgs=KAHRAMANMARAS):
         events = _call(GAZIANTEP)["body"]["events"]
 
     assert len(events) > 1
@@ -145,9 +176,9 @@ def test_every_event_carries_every_field_of_the_contract(feeds):
         assert set(event) == EVENT_FIELDS, event["event_id"]
 
 
-def test_every_detection_is_backed_by_an_authoritative_source(feeds):
+def test_every_detection_is_backed_by_an_authoritative_source(feeds, on_the_day_of_the_earthquake):
     """No event may reach a caller without the record that confirms it."""
-    with feeds(usgs="kahramanmaras_2023-02-06.geojson"):
+    with feeds(usgs=KAHRAMANMARAS):
         events = _call(GAZIANTEP)["body"]["events"]
 
     for event in events:
@@ -159,8 +190,8 @@ def test_every_detection_is_backed_by_an_authoritative_source(feeds):
         assert event["llm_cross_check"] is None
 
 
-def test_every_earthquake_zone_says_it_is_modelled(feeds):
-    with feeds(usgs="kahramanmaras_2023-02-06.geojson"):
+def test_every_earthquake_zone_says_it_is_modelled(feeds, on_the_day_of_the_earthquake):
+    with feeds(usgs=KAHRAMANMARAS):
         events = _call(GAZIANTEP)["body"]["events"]
 
     for event in events:
@@ -176,9 +207,9 @@ def test_every_earthquake_zone_says_it_is_modelled(feeds):
         assert event["impact_zone_fallback"]["radius_km"] > 0
 
 
-def test_small_aftershocks_far_from_the_caller_are_left_out(feeds):
+def test_small_aftershocks_far_from_the_caller_are_left_out(feeds, on_the_day_of_the_earthquake):
     """The feed is searched widely; only zones that reach the caller count."""
-    with feeds(usgs="kahramanmaras_2023-02-06.geojson"):
+    with feeds(usgs=KAHRAMANMARAS):
         events = _call({**GAZIANTEP, "radius_km": 5})["body"]["events"]
 
     # The M7.8, M7.5 and M6.7 zones cover Gaziantep. The M5-6 aftershocks
@@ -186,9 +217,9 @@ def test_small_aftershocks_far_from_the_caller_are_left_out(feeds):
     assert [e["event_id"] for e in events] == ["usgs-us6000jllz", "usgs-us6000jlqa", "usgs-us6000jlm1"]
 
 
-def test_the_response_survives_json_serialisation(feeds):
+def test_the_response_survives_json_serialisation(feeds, on_the_day_of_the_earthquake):
     """API Gateway serialises the envelope; a datetime in it would be a 500."""
-    with feeds(usgs="kahramanmaras_2023-02-06.geojson"):
+    with feeds(usgs=KAHRAMANMARAS):
         res = _call(GAZIANTEP)
     assert json.loads(json.dumps(res)) == res
 
@@ -305,6 +336,83 @@ def test_a_flood_response_survives_json_serialisation(feeds, during_the_india_fl
 
 
 # -------------------------------------------------------------------------
+# Answers shared between requests
+# -------------------------------------------------------------------------
+
+def _usgs_requests(urlopen):
+    return [u for u in _urls(urlopen) if u.startswith(usgs_earthquakes.QUERY_URL)]
+
+
+def test_one_worldwide_answer_serves_callers_in_different_places(feeds):
+    """Asked about Tibet, then about the Aeolian Islands, USGS is asked once."""
+    with _at(datetime(2026, 10, 26, 12, 0, 0, tzinfo=timezone.utc)), feeds(usgs=LAST_WEEK) as urlopen:
+        tibet = _call({"latitude": 32.4, "longitude": 93.8, "window_hours": 168})["body"]
+        alicudi = _call({"latitude": 38.54, "longitude": 14.35, "window_hours": 168})["body"]
+
+    assert len(_usgs_requests(urlopen)) == 1
+    assert tibet["events"][0]["headline"] == "M 7.0 - 191 km ENE of Nagqu, China"
+    assert alicudi["events"][0]["headline"] == "M 5.7 - 61 km WNW of Leni, Italy"
+    assert all(e["headline"].endswith("Italy") for e in alicudi["events"])
+    assert not any(e["headline"].endswith("China") for e in alicudi["events"])
+
+
+def test_a_repeated_request_asks_no_feed_at_all(feeds, on_the_day_of_the_earthquake):
+    with feeds(usgs=KAHRAMANMARAS) as urlopen:
+        first = _call(GAZIANTEP)
+        second = _call(GAZIANTEP)
+    assert urlopen.call_count == 2, "one call per feed, for the first request only"
+    assert second == first
+
+
+def test_a_cached_answer_reports_when_the_feed_actually_answered(feeds):
+    """Raised in the review of part 1: a cached answer must not look current."""
+    start = datetime(2023, 2, 6, 12, 0, 0, tzinfo=timezone.utc)
+    clock = _Clock(start)
+    with mock.patch.object(feed_cache, "utcnow", clock), feeds(usgs=KAHRAMANMARAS):
+        _call(GAZIANTEP)
+        clock.now = start + timedelta(seconds=45)
+        body = _call(GAZIANTEP)["body"]
+
+    assert {s["source"]: s["retrieved_at"] for s in body["sources_checked"]} == {
+        "USGS": "2023-02-06T12:00:00Z", "GDACS": "2023-02-06T12:00:00Z",
+    }
+    assert body["events"][0]["verified_by"][0]["retrieved_at"] == "2023-02-06T12:00:00Z"
+
+
+def test_while_gdacs_is_down_its_last_answer_stands_in_marked_stale(feeds):
+    """GDACS publishes its list about once a day; for up to 6 hours an
+    earlier answer stands in, with the time GDACS gave it."""
+    start = datetime(2026, 10, 6, 12, 0, 0, tzinfo=timezone.utc)
+    clock = _Clock(start)
+    with mock.patch.object(feed_cache, "utcnow", clock):
+        with _india_flood(feeds):
+            _call(CHENNAI)
+        clock.now = start + timedelta(minutes=20)
+        with feeds(floods=DOWN):
+            body = _call(CHENNAI)["body"]
+
+    assert body["disaster_detected"] is True
+    (flood,) = body["events"]
+    assert flood["verified_by"][0]["retrieved_at"] == "2026-10-06T12:00:00Z"
+    assert [(s["source"], s["status"], s["retrieved_at"]) for s in body["sources_checked"]] == [
+        ("USGS", "ok", "2026-10-06T12:20:00Z"),
+        ("GDACS", "stale", "2026-10-06T12:00:00Z"),
+    ]
+
+
+def test_an_earthquake_answer_never_stands_in_once_usgs_is_down(feeds):
+    start = datetime(2023, 2, 6, 12, 0, 0, tzinfo=timezone.utc)
+    clock = _Clock(start)
+    with mock.patch.object(feed_cache, "utcnow", clock):
+        with feeds(usgs=KAHRAMANMARAS):
+            _call(GAZIANTEP)
+        clock.now = start + timedelta(minutes=2)
+        with feeds(usgs=DOWN):
+            res = _call(GAZIANTEP)
+    assert res["statusCode"] == 502
+
+
+# -------------------------------------------------------------------------
 # A location with nothing happening
 # -------------------------------------------------------------------------
 
@@ -351,9 +459,9 @@ def test_any_feed_outage_with_nothing_found_is_an_error_not_an_all_clear(feeds, 
     assert "disaster_detected" not in res["body"]
 
 
-def test_an_earthquake_is_still_reported_while_gdacs_is_down(feeds):
+def test_an_earthquake_is_still_reported_while_gdacs_is_down(feeds, on_the_day_of_the_earthquake):
     """A detection stands on its own feed; the dead one is named."""
-    with feeds(usgs="kahramanmaras_2023-02-06.geojson", floods=DOWN):
+    with feeds(usgs=KAHRAMANMARAS, floods=DOWN):
         body = _call(GAZIANTEP)["body"]
 
     assert body["disaster_detected"] is True
@@ -437,9 +545,9 @@ def test_a_body_that_is_not_an_object_is_a_400(raw):
 # How the request arrives
 # -------------------------------------------------------------------------
 
-def test_the_router_reaches_the_real_handler(feeds):
+def test_the_router_reaches_the_real_handler(feeds, on_the_day_of_the_earthquake):
     """`"service": "disaster_check"` in the body, as the issue specifies."""
-    with feeds(usgs="kahramanmaras_2023-02-06.geojson"):
+    with feeds(usgs=KAHRAMANMARAS):
         res = LF.lambda_handler(
             {"body": json.dumps({"service": "disaster_check", **GAZIANTEP})}, None
         )
@@ -447,8 +555,8 @@ def test_the_router_reaches_the_real_handler(feeds):
     assert res["body"]["disaster_detected"] is True
 
 
-def test_a_direct_invoke_where_the_event_is_the_payload(feeds):
+def test_a_direct_invoke_where_the_event_is_the_payload(feeds, on_the_day_of_the_earthquake):
     """Another Lambda invoking this one sends no `body` wrapper."""
-    with feeds(usgs="kahramanmaras_2023-02-06.geojson"):
+    with feeds(usgs=KAHRAMANMARAS):
         res = LF.lambda_handler({"service": "disaster_check", **GAZIANTEP}, None)
     assert res["body"]["disaster_detected"] is True
