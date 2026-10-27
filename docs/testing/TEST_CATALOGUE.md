@@ -29,6 +29,7 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_classification_eval.py`](../../tests/test_classification_eval.py) | Unit | #197 | `evaluation/ scoring, gate, fingerprint` | 36 |
 | [`tests/test_classification_eval_gate.py`](../../tests/test_classification_eval_gate.py) | Integration | #197 | `classification quality gate` | 4 |
 | [`tests/test_classification_resilience.py`](../../tests/test_classification_resilience.py) | Unit | - | `services/classification_service.py` | 10 |
+| [`tests/test_classification_telemetry.py`](../../tests/test_classification_telemetry.py) | Unit | #197 | `utils/classification_telemetry.py, tools/setup_observability.py` | 36 |
 | [`tests/test_client_factory.py`](../../tests/test_client_factory.py) | Unit | #193 | `utils/client.py create_chat_model` | 9 |
 | [`tests/test_client_imports.py`](../../tests/test_client_imports.py) | Integration | #154 | `utils/client.py` | 2 |
 | [`tests/test_emergency_dataset.py`](../../tests/test_emergency_dataset.py) | Dataset | #146 | `services/emergency_numbers.json` | 17 |
@@ -44,7 +45,7 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_router.py`](../../tests/test_router.py) | Integration | #171 | `lambda_function.lambda_handler` | 34 |
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
 | [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 57 |
-| | | | **Total** | **552** |
+| | | | **Total** | **588** |
 
 ## Every test
 
@@ -149,6 +150,37 @@ Guards the two failure modes behind "every request lands in General".
 | `test_total_chain_failure_is_a_clear_502` | Total chain failure is a clear 502. |
 
 > 9 test functions expand to 10 cases through parametrisation.
+
+### `test_classification_telemetry.py`
+
+*Unit · issue #197 · 36 tests*
+
+The CLASSIFICATION_OUTCOME line and the alarms built on it (issue #197, stack 5).
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_each_outcome_is_told_apart_and_sets_only_its_own_flag` | General, empty and error each get a distinct outcome and exactly one flag. |
+| `test_error_type_names_the_exception` | An error line says what failed, so an alarm can be triaged from the log. |
+| `test_depth_is_how_far_down_the_taxonomy_the_answer_is` | Depth counts levels of the chosen category; General is depth 0, not 5. |
+| `test_fallback_is_any_answer_from_a_model_other_than_the_primary` | A fallback means the answer was not from the model the golden set measured. |
+| `test_cost_and_routing_fields_come_from_the_request` | Calls, tokens, latency and the router decision are carried through. |
+| `test_a_malformed_usage_record_still_yields_a_record` | A usage value that is not an accumulator degrades to zero cost, not an exception. |
+| `test_the_line_is_valid_embedded_metric_format` | Every declared metric is a number at the top level, and the dimension is present. |
+| `test_a_prediction_prints_exactly_one_outcome_line` | One request, one line; the existing TOKEN_USAGE line is still printed too. |
+| `test_an_exhausted_model_chain_still_prints_its_line_and_still_raises` | The failing request is the one most worth counting, and the handler still sees the error. |
+| `test_a_retired_primary_model_is_counted_as_a_fallback` | The answer still arrives, and the line says it came from a fallback model. |
+| `test_the_description_is_never_logged` | Only the length of the person's text is recorded, never the text. |
+| `test_the_router_decision_is_recorded` | A request the elderly router diverts is flagged, so its share can be watched. |
+| `test_telemetry_that_fails_never_breaks_the_request` | If building the line raises, the prediction is still returned and the failure is logged. |
+| `test_definitions_use_the_namespace_and_dimension_the_line_emits` | An alarm on a namespace or dimension nobody writes to would never fire. |
+| `test_every_alarm_is_a_rate_over_metrics_the_line_emits` | Each alarm divides emitted metrics by Requests, guarded by a minimum volume. |
+| `test_an_sns_topic_is_notified_on_alarm_and_on_recovery` | With a topic, both the alarm and its all-clear are sent; without one, neither. |
+| `test_every_query_reads_only_outcome_lines` | Each saved query filters on the event name, so it never mixes in other log lines. |
+| `test_dry_run_prints_the_plan_and_sends_nothing` | The default must be safe to run by anyone, with no AWS credentials. |
+| `test_apply_refuses_the_placeholder_log_group` | --apply without a real log group would save queries against nothing. |
+| `test_apply_upserts_alarms_and_updates_existing_queries_in_place` | Running twice must not duplicate saved queries: an existing name is updated by id. |
+
+> 20 test functions expand to 36 cases through parametrisation.
 
 ### `test_client_factory.py`
 

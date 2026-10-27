@@ -1,4 +1,5 @@
 import json
+import time
 from utils.categories_with_description import TAXONOMY
 from utils.client import client, _use_groq, _gemini_client
 from utils.model_fallback import ModelTarget, run_model_chain
@@ -10,7 +11,7 @@ from utils.predict_category_list import (
     get_category_hierarchy,
 )
 from utils.routing_for_categories import is_elderly_context
-from utils import token_usage
+from utils import classification_telemetry, token_usage
 
 
 class GroqClassificationService:
@@ -301,14 +302,32 @@ class GroqClassificationService:
         which has four exit points. Classification is the one service whose
         usage is also returned to the caller - `body.token_usage` predates this
         module - so it both logs and returns.
+
+        Every prediction, including one that raises, also prints one
+        CLASSIFICATION_OUTCOME line recording what was decided; see
+        utils/classification_telemetry.py.
         """
         usage_accumulator = token_usage.new_accumulator()
+        started = time.perf_counter()
+        results, error = None, None
         try:
-            return self._walk_taxonomy(description, usage_accumulator)
+            results, _ = self._walk_taxonomy(description, usage_accumulator)
+            return results, usage_accumulator
+        except Exception as exc:
+            error = exc
+            raise
         finally:
             token_usage.log_usage(
                 "predict_category",
                 usage_accumulator,
+                description_chars=len(description or ""),
+            )
+            classification_telemetry.log_outcome(
+                results,
+                usage_accumulator,
+                error=error,
+                elapsed_ms=(time.perf_counter() - started) * 1000,
+                elderly_routed=is_elderly_context(description or ""),
                 description_chars=len(description or ""),
             )
 
