@@ -1,3 +1,10 @@
+"""
+Guards issue #217: "Need help gardening" must reach 3.3.5 GARDEN, not General.
+
+Covers the Garden routing hint, General as a fallback only, and the leaf
+results contract (no duplicates, no top-level parents). No network calls:
+the ranked model step is stubbed.
+"""
 import pytest
 
 import services.classification_service as cs
@@ -10,6 +17,8 @@ from utils.predict_category_list import (
 
 GARDEN_ID = category_name_to_number["GARDEN"]
 GENERAL_ID = category_name_to_number["GENERAL_CATEGORY"]
+
+pytestmark = pytest.mark.unit
 
 
 def test_garden_description_matches_category_name():
