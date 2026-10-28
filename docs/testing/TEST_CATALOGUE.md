@@ -40,9 +40,10 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_response_contract.py`](../../tests/test_response_contract.py) | Contract | #146, #169, #170 | `response envelopes` | 10 |
 | [`tests/test_router.py`](../../tests/test_router.py) | Integration | #171 | `lambda_function.lambda_handler` | 34 |
 | [`tests/test_skill_suggestion.py`](../../tests/test_skill_suggestion.py) | Unit | #216 | `services/skill_suggestion_service.py` | 50 |
+| [`tests/test_skill_suggestion_eval.py`](../../tests/test_skill_suggestion_eval.py) | - | #216 | `tools/measure_skill_suggestions.py` | 33 |
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
 | [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 57 |
-| | | | **Total** | **472** |
+| | | | **Total** | **505** |
 
 ## Every test
 
@@ -497,6 +498,27 @@ Volunteer skill suggestions: predict_category_api with mode "volunteer_skills" (
 | `test_provider_error_text_quoting_the_output_is_not_logged` | Groq's json_validate_failed error carries the model's partial output. |
 
 > 35 test functions expand to 50 cases through parametrisation.
+
+### `test_skill_suggestion_eval.py`
+
+*- · issue #216 · 33 tests*
+
+The volunteer skills evaluation harness and its labelled set (issue #216).
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_a_case_reports_what_was_found_missed_and_extra` | A case reports what was found missed and extra. |
+| `test_an_acceptable_answer_is_not_an_error_but_does_not_count_as_found` | An acceptable answer is not an error but does not count as found. |
+| `test_rates_are_micro_averaged_over_every_label` | Rates are micro averaged over every label. |
+| `test_no_match_cases_are_scored_separately` | No match cases are scored separately. |
+| `test_an_unmeasured_rate_never_passes` | An unmeasured rate never passes. |
+| `test_the_target_needs_both_rates_at_eighty_percent` | The target needs both rates at eighty percent. |
+| `test_tags_get_their_own_rates` | Tags get their own rates. |
+| `test_case_ids_are_unique` | Case ids are unique. |
+| `test_every_case_is_well_formed` | Every case is well formed. |
+| `test_every_label_is_a_selectable_leaf` | Every label is a selectable leaf. |
+
+> 10 test functions expand to 33 cases through parametrisation.
 
 ### `test_subject_generator.py`
 

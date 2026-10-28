@@ -1,0 +1,82 @@
+{
+  "_about": "Labelled volunteer descriptions for tools/measure_skill_suggestions.py (issue #216). 'expected' are the skills a good answer must find; 'acceptable' are other IDs that are also right and so do not count against precision. An empty 'expected' means the right answer is no suggestion at all. Every ID must be a selectable leaf in utils/predict_category_list.py; tests/test_skill_suggestion_eval.py enforces this.",
+  "cases": [
+    {
+      "id": "V1-retired-math-teacher",
+      "description": "I'm a retired math teacher. I can help students with algebra and with SAT preparation.",
+      "expected": ["4.3.1", "4.3.5"],
+      "acceptable": [],
+      "tags": ["multi-skill", "retired-senior"]
+    },
+    {
+      "id": "V2-electrician-plumbing",
+      "description": "I'm a licensed electrician and I also do some plumbing work on weekends.",
+      "expected": ["3.3.3", "3.3.1"],
+      "acceptable": [],
+      "tags": ["multi-skill", "profession"]
+    },
+    {
+      "id": "V3-nurse-cook-driver",
+      "description": "I work as a nurse. I also cook for large community events, and I'm happy to drive people to their appointments.",
+      "expected": ["5.1.1", "1.3.2", "6.6"],
+      "acceptable": ["5.1.11", "6.5"],
+      "tags": ["multi-area", "profession"]
+    },
+    {
+      "id": "V4-video-calls-for-seniors",
+      "description": "I like helping older people set up video calls with their families on phones and tablets.",
+      "expected": ["6.2"],
+      "acceptable": ["6.8"],
+      "tags": ["single-skill"]
+    },
+    {
+      "id": "V5-sewing-and-resumes",
+      "description": "I do sewing and clothing alterations. I can also help people write resumes and practise for job interviews.",
+      "expected": ["2.4", "4.6"],
+      "acceptable": [],
+      "tags": ["multi-area"]
+    },
+    {
+      "id": "V6-coding-and-essays",
+      "description": "I teach kids how to code, and I review college application essays.",
+      "expected": ["4.3.4", "4.2", "4.1"],
+      "acceptable": [],
+      "tags": ["multi-skill"]
+    },
+    {
+      "id": "V7-pickup-truck-moving",
+      "description": "I have a pickup truck and I help people move house.",
+      "expected": ["3.7"],
+      "acceptable": ["3.8", "6.1"],
+      "tags": ["single-skill"]
+    },
+    {
+      "id": "V8-licensed-counsellor",
+      "description": "I'm a licensed counsellor and I can offer emotional support to people who are struggling.",
+      "expected": ["5.3"],
+      "acceptable": [],
+      "tags": ["single-skill", "profession"]
+    },
+    {
+      "id": "V9-dentist",
+      "description": "I'm a dentist.",
+      "expected": ["5.1.3"],
+      "acceptable": [],
+      "tags": ["short", "profession"]
+    },
+    {
+      "id": "V10-garden-paint-handyman",
+      "description": "Gardening, painting and general handyman jobs around the house.",
+      "expected": ["3.3.5", "3.3.9", "3.3.2"],
+      "acceptable": [],
+      "tags": ["multi-skill"]
+    },
+    {
+      "id": "N1-free-on-weekends",
+      "description": "I'm free on weekends and happy to help.",
+      "expected": [],
+      "acceptable": [],
+      "tags": ["no-match", "short"]
+    }
+  ]
+}
