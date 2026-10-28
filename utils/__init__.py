@@ -74,15 +74,8 @@ class AnswerGenerationServiceInterface(ABC):
 class GroqAnswerGenerationService(AnswerGenerationServiceInterface):
     """Groq implementation of answer generation service with Gemini fallback."""
 
-    def __init__(
-        self,
-        model: str = GROQ_MODEL,
-        temperature: float = GROQ_TEMPERATURE,
-        gemini_model: str = GEMINI_MODEL,
-    ):
-        self.model = model
+    def __init__(self, temperature: float = GROQ_TEMPERATURE):
         self.temperature = temperature
-        self.gemini_model = gemini_model
         self.gemini_temperature = GEMINI_TEMPERATURE
 
     @staticmethod
