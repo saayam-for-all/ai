@@ -5,6 +5,7 @@ Python 3.14+ compatible.
 
 from utils import GroqAnswerGenerationService
 
+
 def generate_ai_answer(
     category: str,
     subject: str,
