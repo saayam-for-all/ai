@@ -10,6 +10,18 @@ team works and reviews in.
 
 ## Unreleased
 
+### Configured model fallback — [#193](https://github.com/saayam-for-all/ai/issues/193)
+
+**Changed**
+
+- Answer generation now reuses cached model clients for identical configurations, avoiding repeated client construction across fallback attempts.
+- Model-chain tests derive expected attempt counts from `config/model_routing.json`, keeping assertions aligned with the configured fallback chain.
+- Removed unused model-name arguments from `GroqAnswerGenerationService`.
+
+**Fixed**
+
+- Added coverage confirming that token usage from empty model responses is recorded when fallback continues to another model.
+
 ### Token usage tracking & reasoning effort — [#194](https://github.com/saayam-for-all/ai/issues/194)
 
 **Fixed**

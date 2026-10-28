@@ -27,7 +27,7 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | --- | --- | --- | --- | ---: |
 | [`tests/test_answer_conversation.py`](../../tests/test_answer_conversation.py) | Unit | #183 | `utils/__init__.py prompt assembly` | 24 |
 | [`tests/test_classification_resilience.py`](../../tests/test_classification_resilience.py) | Unit | - | `services/classification_service.py` | 10 |
-| [`tests/test_client_factory.py`](../../tests/test_client_factory.py) | Unit | #193 | `utils/client.py create_chat_model` | 9 |
+| [`tests/test_client_factory.py`](../../tests/test_client_factory.py) | Unit | #193 | `utils/client.py create_chat_model` | 11 |
 | [`tests/test_client_imports.py`](../../tests/test_client_imports.py) | Integration | #154 | `utils/client.py` | 2 |
 | [`tests/test_emergency_dataset.py`](../../tests/test_emergency_dataset.py) | Dataset | #146 | `services/emergency_numbers.json` | 17 |
 | [`tests/test_emergency_locale.py`](../../tests/test_emergency_locale.py) | Unit | #146 | `services/emergency.py` | 67 |
@@ -40,8 +40,8 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_response_contract.py`](../../tests/test_response_contract.py) | Contract | #146, #169, #170 | `response envelopes` | 10 |
 | [`tests/test_router.py`](../../tests/test_router.py) | Integration | #171 | `lambda_function.lambda_handler` | 34 |
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
-| [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 57 |
-| | | | **Total** | **422** |
+| [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 58 |
+| | | | **Total** | **425** |
 
 ## Every test
 
@@ -98,7 +98,7 @@ Guards the two failure modes behind "every request lands in General".
 
 ### `test_client_factory.py`
 
-*Unit · issue #193 · 9 tests*
+*Unit · issue #193 · 11 tests*
 
 Unit tests for target-aware LangChain client construction.
 
@@ -107,13 +107,15 @@ Unit tests for target-aware LangChain client construction.
 | `test_groq_factory_uses_the_target_model_temperature_and_credentials` | Groq factory uses the target model temperature and credentials. |
 | `test_groq_factory_omits_unconfigured_reasoning_effort` | Groq factory omits unconfigured reasoning effort. |
 | `test_gemini_factory_uses_the_target_model_temperature_and_credentials` | Gemini factory uses the target model temperature and credentials. |
+| `test_factory_reuses_cached_model_for_same_configuration` | Factory reuses cached model for same configuration. |
+| `test_factory_does_not_reuse_model_for_different_configuration` | Factory does not reuse model for different configuration. |
 | `test_factory_rejects_a_target_whose_provider_has_no_key` | Factory rejects a target whose provider has no key. |
 | `test_factory_rejects_an_unsupported_provider` | Factory rejects an unsupported provider. |
 | `test_constructor_failure_can_fall_through_to_another_provider` | Constructor failure can fall through to another provider. |
 | `test_legacy_groq_defaults_include_low_reasoning_effort` | Legacy groq defaults include low reasoning effort. |
 | `test_shared_groq_model_is_built_with_low_reasoning_effort` | groq_llm serves subject and answer generation; it must request low effort. |
 
-> 8 test functions expand to 9 cases through parametrisation.
+> 10 test functions expand to 11 cases through parametrisation.
 
 ### `test_client_imports.py`
 
@@ -475,7 +477,7 @@ Unit tests for the Generate Subject service.
 
 ### `test_token_usage.py`
 
-*- · issue #159 · 57 tests*
+*- · issue #159 · 58 tests*
 
 The shared token counter (issue #159).
 
@@ -505,7 +507,8 @@ The shared token counter (issue #159).
 | `test_log_usage_survives_an_unserialisable_label` | Log usage survives an unserialisable label. |
 | `test_subject_generation_reports_its_usage` | Subject generation reports its usage. |
 | `test_answer_generation_reports_its_usage` | Answer generation reports its usage. |
-| `test_a_groq_failure_still_bills_the_gemini_retry` | Only successful model responses contribute recorded token usage. |
+| `test_only_successful_model_responses_are_billed` | Only successful model responses contribute recorded token usage. |
+| `test_empty_model_responses_are_billed` | Empty model responses still contribute recorded token usage. |
 | `test_organization_search_reports_its_usage` | The service that could not report usage at all before #159. |
 | `test_classification_counts_every_call_in_its_walk` | Classification is a loop, and the loop is the cost. |
 | `test_classification_usage_survives_having_no_provider` | No key configured must still return the published (results, usage) pair. |
@@ -526,4 +529,4 @@ The shared token counter (issue #159).
 | `test_recording_into_a_broken_accumulator_is_logged` | Recording into a broken accumulator is logged. |
 | `test_an_unserialisable_record_degrades_to_totals_rather_than_vanishing` | Losing the labels is acceptable; losing the whole request is not. |
 
-> 44 test functions expand to 57 cases through parametrisation.
+> 45 test functions expand to 58 cases through parametrisation.

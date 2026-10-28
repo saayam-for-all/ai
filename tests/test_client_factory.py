@@ -10,6 +10,12 @@ from utils.model_fallback import ModelTarget, run_model_chain
 
 pytestmark = pytest.mark.unit
 
+@pytest.fixture(autouse=True)
+def clear_chat_model_cache():
+    client_module._create_chat_model_cached.cache_clear()
+    yield
+    client_module._create_chat_model_cached.cache_clear()
+
 
 def _recording_constructor(calls, result):
     def construct(**kwargs):
@@ -86,6 +92,54 @@ def test_gemini_factory_uses_the_target_model_temperature_and_credentials(monkey
         }
     ]
 
+def test_factory_reuses_cached_model_for_same_configuration(monkeypatch):
+    calls = []
+    expected = object()
+    monkeypatch.setattr(client_module, "GROQ_API_KEY", "test-groq-key")
+    monkeypatch.setattr(
+        client_module,
+        "ChatGroq",
+        _recording_constructor(calls, expected),
+    )
+    target = ModelTarget(
+        provider="groq",
+        model="groq-primary",
+        reasoning_effort="low",
+    )
+
+    first = client_module.create_chat_model(target, temperature=0.3)
+    second = client_module.create_chat_model(target, temperature=0.3)
+
+    assert first is second is expected
+    assert len(calls) == 1
+
+
+def test_factory_does_not_reuse_model_for_different_configuration(monkeypatch):
+    calls = []
+
+    def construct(**kwargs):
+        model = object()
+        calls.append((kwargs, model))
+        return model
+
+    monkeypatch.setattr(client_module, "GROQ_API_KEY", "test-groq-key")
+    monkeypatch.setattr(client_module, "ChatGroq", construct)
+
+    target = ModelTarget(
+        provider="groq",
+        model="groq-primary",
+        reasoning_effort="low",
+    )
+
+    first = client_module.create_chat_model(target, temperature=0.3)
+    same_config = client_module.create_chat_model(target, temperature=0.3)
+    different_temperature = client_module.create_chat_model(
+        target, temperature=0.4
+    )
+
+    assert first is same_config
+    assert first is not different_temperature
+    assert len(calls) == 2
 
 @pytest.mark.parametrize(
     ("target", "key_name", "expected_message"),
