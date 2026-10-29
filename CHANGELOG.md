@@ -10,6 +10,27 @@ team works and reviews in.
 
 ## Unreleased
 
+### GenAI Cost Model — [#194](https://github.com/saayam-for-all/ai/issues/194)
+
+**Added**
+
+- `docs/metrics/GENAI_COST_MODEL.md` — establishes the cost, capacity, and model
+  lifecycle governance specification with verified provider rates, empirical token baselines
+  re-measured on commit `271a402`, volume projections, free-tier limits, and self-hosting economics.
+- Cost per help request established at **~$0.00108** (6,405 tokens at measured mean including
+  25% Gemini fallback on org search) and **~$0.00067** (4,800 tokens on normal Groq-only operation).
+- Sustained Gemini 2.5 Flash fallback established at **~6.8× to ~7.2×** nominally, with operational
+  failover reaching 10× to 15×+ on empty-result and thinking-heavy queries.
+- Free-tier capacity cliff documented: Groq's 200k tokens/day limit yields **31 to 41 requests/day**.
+  Exceeding the limit silently cascades traffic to Gemini at ~7× the cost rather than rejecting users,
+  confirming that moving to Pay-As-You-Go (< $17/month near-term) is critical prior to public launch.
+- Deprecation audit updated to 28 Oct 2026: verified active production status of `openai/gpt-oss-20b`,
+  `120b`, and `gemini-2.5-flash`; flagged heightened preview risk for `openai/gpt-oss-safeguard-20b`
+  following PR #213. Clarified that Saayam consumes Google models via the Gemini API rather than Vertex AI.
+- Self-hosting breakeven established at **~350,000 to ~565,000 requests/month**, confirming that
+  serverless API execution remains dramatically more economical than dedicated EC2 GPU instances.
+- Standing monthly review agenda (every 30 days) and quarterly currency check process documented.
+
 ### Token usage tracking & reasoning effort — [#194](https://github.com/saayam-for-all/ai/issues/194)
 
 **Fixed**
