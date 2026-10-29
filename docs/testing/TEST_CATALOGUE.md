@@ -32,7 +32,7 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_emergency_dataset.py`](../../tests/test_emergency_dataset.py) | Dataset | #146 | `services/emergency_numbers.json` | 17 |
 | [`tests/test_emergency_locale.py`](../../tests/test_emergency_locale.py) | Unit | #146 | `services/emergency.py` | 67 |
 | [`tests/test_emergency_s3_reader.py`](../../tests/test_emergency_s3_reader.py) | Unit | #334 | `services/emergency.py S3 reader` | 23 |
-| [`tests/test_gardening_category.py`](../../tests/test_gardening_category.py) | Unit | #217 | `services/classification_service.py` | 13 |
+| [`tests/test_gardening_category.py`](../../tests/test_gardening_category.py) | Unit | #217 | `services/classification_service.py` | 15 |
 | [`tests/test_generate_answer.py`](../../tests/test_generate_answer.py) | Contract | #169 | `generate_answer_handler` | 50 |
 | [`tests/test_import_blast_radius.py`](../../tests/test_import_blast_radius.py) | Integration | #169, #171 | `module-scope imports` | 4 |
 | [`tests/test_model_fallback.py`](../../tests/test_model_fallback.py) | Unit | #193 | `utils/model_fallback.py` | 24 |
@@ -42,7 +42,7 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_router.py`](../../tests/test_router.py) | Integration | #171 | `lambda_function.lambda_handler` | 34 |
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
 | [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 57 |
-| | | | **Total** | **435** |
+| | | | **Total** | **437** |
 
 ## Every test
 
@@ -226,7 +226,7 @@ Unit tests for issue #334 - S3 dataset loader with caching and zero-downtime fal
 
 ### `test_gardening_category.py`
 
-*Unit · issue #217 · 13 tests*
+*Unit · issue #217 · 15 tests*
 
 Guards issue #217: "Need help gardening" must reach 3.3.5 GARDEN, not General.
 
@@ -240,10 +240,12 @@ Guards issue #217: "Need help gardening" must reach 3.3.5 GARDEN, not General.
 | `test_general_is_omitted_when_a_specific_category_exists` | General is omitted when a specific category exists. |
 | `test_gardening_hint_is_absent_when_garden_path_is_not_a_candidate` | Gardening hint is absent when garden path is not a candidate. |
 | `test_walk_descends_past_general_when_a_specific_path_is_offered` | Walk descends past general when a specific path is offered. |
+| `test_walk_keeps_general_when_specific_alternative_is_below_threshold` | Walk keeps general when specific alternative is below threshold. |
+| `test_walk_accepts_specific_top_choice_regardless_of_confidence` | Walk accepts specific top choice regardless of confidence. |
 | `test_walk_keeps_general_when_alternatives_are_below_threshold` | Walk keeps general when alternatives are below threshold. |
 | `test_walk_keeps_general_when_it_is_the_only_option` | Walk keeps general when it is the only option. |
 
-> 10 test functions expand to 13 cases through parametrisation.
+> 12 test functions expand to 15 cases through parametrisation.
 
 ### `test_generate_answer.py`
 
