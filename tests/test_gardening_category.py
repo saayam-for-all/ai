@@ -126,7 +126,7 @@ def test_walk_descends_past_general_when_a_specific_path_is_offered():
         [
             [
                 {"category": GENERAL_ID, "confidence": 0.95},
-                {"category": "3", "confidence": 0.6},
+                {"category": "3", "confidence": 0.95},
                 {"category": "1", "confidence": 0.2},
             ],
             [{"category": "3.3", "confidence": 0.9}],
@@ -134,6 +134,29 @@ def test_walk_descends_past_general_when_a_specific_path_is_offered():
         ]
     ) == [GARDEN_ID]
 
+
+def test_walk_keeps_general_when_specific_alternative_is_below_threshold():
+    assert _walk_with(
+        [
+            [
+                {"category": GENERAL_ID, "confidence": 0.95},
+                {"category": "3", "confidence": 0.75},
+            ]
+        ]
+    ) == [GENERAL_ID]
+
+
+def test_walk_accepts_specific_top_choice_regardless_of_confidence():
+    assert _walk_with(
+        [
+            [
+                {"category": "3", "confidence": 0.75},
+                {"category": GENERAL_ID, "confidence": 0.95},
+            ],
+            [{"category": "3.3", "confidence": 0.9}],
+            [{"category": GARDEN_ID, "confidence": 0.95}],
+        ]
+    ) == [GARDEN_ID]
 
 def test_walk_keeps_general_when_alternatives_are_below_threshold():
     assert _walk_with(

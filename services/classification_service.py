@@ -12,9 +12,9 @@ from utils.predict_category_list import (
 from utils.routing_for_categories import is_elderly_context
 from utils import token_usage
 
-# Lowest confidence at which a specific category beats a General top pick
-# (the bottom of the prompt's "weak/ambiguous" band).
-MIN_SPECIFIC_CONFIDENCE = 0.3
+# Minimum confidence for a lower-ranked specific category to beat a General top pick.
+# A specific category ranked first is accepted regardless of this threshold.
+MIN_SPECIFIC_CONFIDENCE = 0.9
 
 
 class GroqClassificationService:
