@@ -32,6 +32,19 @@ team works and reviews in.
 - **`suggest_skills` in the unified router**, served by
   `lambda_function.suggest_skills_handler`, so the mode can move to its own
   Lambda later without code changes.
+- **A labelled evaluation set and an accuracy harness**, so the accuracy claim
+  behind this feature is reproducible.
+  `docs/metrics/volunteer_skills_eval_set.json` holds 59 volunteer
+  descriptions covering the cases the issue named: bare professions, profiles
+  spanning several areas, text that calls the volunteer retired or senior,
+  five non-English languages, descriptions over 1,000 characters and
+  descriptions stating no skill the taxonomy covers. A labelled skill carries
+  a set of acceptable IDs, because 5.1.1 and 5.1.11, and 6.5 and 6.6, say the
+  same thing twice and a model is not wrong for picking either.
+  `python tools/measure_skill_suggestion_accuracy.py` runs it twice against
+  live models and writes `docs/metrics/volunteer_skills_eval.json`; the
+  counting rules live in `tools/skill_eval_scoring.py` and are unit tested.
+  Findings are written up in `docs/metrics/VOLUNTEER_SKILLS_EVAL.md`.
 
 **Unchanged**
 
