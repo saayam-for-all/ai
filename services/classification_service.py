@@ -12,6 +12,10 @@ from utils.predict_category_list import (
 from utils.routing_for_categories import is_elderly_context
 from utils import token_usage
 
+# Minimum confidence for a lower-ranked specific category to beat a General top pick.
+# A specific category ranked first is accepted regardless of this threshold.
+MIN_SPECIFIC_CONFIDENCE = 0.9
+
 
 class GroqClassificationService:
     def __init__(self, temperature=0.8, top_p=0.3):
@@ -24,6 +28,35 @@ class GroqClassificationService:
         if target.reasoning_effort:
             return {"reasoning_effort": target.reasoning_effort}
         return {}
+
+    @staticmethod
+    def _gardening_routing_hint(candidates: list[str]) -> str | None:
+        """Guide gardening requests toward the Garden category."""
+        garden_id = category_name_to_number.get("GARDEN")
+        if not garden_id:
+            return None
+
+        ancestors = [
+            category_id
+            for category_id in candidates
+            if garden_id == category_id
+            or garden_id.startswith(f"{category_id}.")
+        ]
+        # Only hint when the Garden path is actually selectable at this level.
+        if not ancestors:
+            return None
+
+        garden_name = help_categories.get(garden_id, "GARDEN")
+        target_id = max(ancestors, key=len)
+        target_name = help_categories.get(target_id, target_id)
+
+        return (
+            "Gardening routing rule: For gardening, garden maintenance, "
+            "landscaping, lawn care, or outdoor upkeep, prefer the Garden path. "
+            f"Garden category: {garden_id} ({garden_name}). "
+            f"Current applicable path: {target_id} ({target_name}). "
+            "Do not choose GENERAL_CATEGORY for a clear gardening request."
+        )
 
     def _build_prompt_for_candidates(
         self, description: str, candidates: list[str]
@@ -45,6 +78,10 @@ class GroqClassificationService:
             "Return JSON only with keys category and confidence (0.0 to 1.0).",
             "Confidence bands: 0.9-1.0 explicit match; 0.6-0.8 strong match; 0.3-0.5 weak/ambiguous; <0.3 unsure.",
         ]
+        gardening_hint = self._gardening_routing_hint(candidates)
+        if gardening_hint:
+            prompt_lines.append(gardening_hint)
+
         if set(candidates) == set(get_top_level_categories()):
             prompt_lines.append(
                 "Routing hint: choose HOUSING_ASSISTANCE for repairs/maintenance (plumber, leak, electrician, handyman); "
@@ -86,6 +123,10 @@ class GroqClassificationService:
             "Return at least the top 3 most relevant categories.",
             "Choose only from the category IDs listed below; do not invent IDs or use names.",
         ]
+        gardening_hint = self._gardening_routing_hint(candidates)
+        if gardening_hint:
+            prompt_lines.append(gardening_hint)
+
         if set(candidates) == set(get_top_level_categories()):
             prompt_lines.append(
                 "Routing hint: choose HOUSING_ASSISTANCE for repairs/maintenance (plumber, leak, electrician, handyman); "
@@ -312,6 +353,83 @@ class GroqClassificationService:
                 description_chars=len(description or ""),
             )
 
+    @staticmethod
+    def _format_leaf_results(ranked_level: list[dict]) -> list[dict]:
+        """Return unique specific categories, using General only as a fallback."""
+        top_level_ids = set(get_top_level_categories())
+        seen: set[str] = set()
+        results = []
+        general_result = None
+
+        for item in ranked_level:
+            category_id = item.get("category")
+            if not category_id:
+                continue
+
+            if category_id == category_name_to_number.get("GENERAL_CATEGORY"):
+                if general_result is None:
+                    general_id = category_name_to_number.get("GENERAL_CATEGORY")
+                    general_name = help_categories.get(general_id)
+                    if general_name:
+                        general_result = {
+                            "category_number": general_id,
+                            "category_name": general_name,
+                            "confidence": item.get("confidence", 0.0),
+                            "hierarchy": get_category_hierarchy(general_id),
+                        }
+                continue
+
+            # Never expose top-level parent categories as suggestions.
+            if category_id in top_level_ids or category_id in seen:
+                continue
+
+            category_name = help_categories.get(category_id)
+            if not category_name:
+                continue
+
+            seen.add(category_id)
+            results.append(
+                {
+                    "category_number": category_id,
+                    "category_name": category_name,
+                    "confidence": item.get("confidence", 0.0),
+                    "hierarchy": get_category_hierarchy(category_id),
+                }
+            )
+
+            if len(results) == 3:
+                break
+
+        # General is permitted only when there is no specific result.
+        if results:
+            return results
+        if general_result is not None:
+            return [general_result]
+        return []
+
+    @staticmethod
+    def _choose_path(ranked_level: list[dict]) -> str | None:
+        """Pick the category to descend into, preferring specific over General.
+
+        General has no children, so ranking it first ends the walk. When the
+        model also offers a specific category with at least weak-match
+        confidence, follow that instead so General stays a true fallback.
+        """
+        top_choice = ranked_level[0].get("category")
+        general_id = category_name_to_number.get("GENERAL_CATEGORY")
+        if top_choice != general_id:
+            return top_choice
+
+        for item in ranked_level[1:]:
+            category_id = item.get("category")
+            if (
+                category_id
+                and category_id != general_id
+                and item.get("confidence", 0.0) >= MIN_SPECIFIC_CONFIDENCE
+            ):
+                return category_id
+        return top_choice
+
     def _walk_taxonomy(self, description: str, usage_accumulator: dict) -> tuple:
         candidates = get_top_level_categories()
         depth = 0
@@ -325,29 +443,13 @@ class GroqClassificationService:
             if not ranked_level:
                 return [], usage_accumulator
 
-            top_choice = ranked_level[0].get("category")
+            top_choice = self._choose_path(ranked_level)
             if not top_choice:
                 return [], usage_accumulator
 
             next_candidates = get_direct_children(top_choice)
             if not next_candidates:
-                results = []
-                for item in ranked_level:
-                    category_id = item.get("category")
-                    category_name = help_categories.get(category_id)
-                    if not category_name:
-                        continue
-                    results.append(
-                        {
-                            "category_number": category_id,
-                            "category_name": category_name,
-                            "confidence": item.get("confidence", 0.0),
-                            "hierarchy": get_category_hierarchy(category_id),
-                        }
-                    )
-                    if len(results) >= 3:
-                        break
-                return results, usage_accumulator
+                return self._format_leaf_results(ranked_level), usage_accumulator
 
             candidates = next_candidates
             depth += 1
