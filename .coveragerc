@@ -11,6 +11,11 @@ omit =
     utils/prompts_no_hallucination_reviewed.py
     utils/categories*.py
     utils/predict_category_list.py
+    # Measurement harnesses, not runtime code. They exist to call live models
+    # and write a committed JSON; there is nothing here a unit test can run.
+    # The pure scoring they rely on lives in tools/skill_eval_scoring.py,
+    # which is counted and tested.
+    tools/measure_*.py
 
 [report]
 show_missing = True
