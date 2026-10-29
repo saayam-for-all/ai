@@ -21,9 +21,22 @@ ways that issue #216 measured.
 So this mode makes one call over every selectable leaf, says plainly that the
 text is an offer, and validates the answer server-side against the leaf set.
 
+Token cost. The category list is most of the prompt, so it is written once per
+group with a short skill-side hint per leaf, not as a full path plus the
+help-request description (those describe a need, and the medical ones run to
+several hundred characters of symptom triage). A session also means a repeated
+description costs nothing and a new one sends only the new text; see
+`suggest_skills_for_session`.
+
+Explanations. Every suggestion says what the volunteer wrote (`evidence`, a
+quote checked against the text), what it was matched to (`hierarchy`) and why
+(`reason`). Medical consultation categories (5.1.*) are suggested only when
+that quote really is in the text.
+
 Privacy: the description and the model's `evidence` quotes are the volunteer's
 own words. Neither may reach a log line or an exception message, because
-`run_model_chain` logs `str(error)` on every failover.
+`run_model_chain` logs `str(error)` on every failover. The session carries the
+volunteer's text back to the web app; it is never stored server-side.
 """
 
 from __future__ import annotations
@@ -31,7 +44,6 @@ from __future__ import annotations
 import json
 import os
 
-from utils.categories_with_description import TAXONOMY
 from utils.client import client, _use_groq, _gemini_client
 from utils.model_fallback import ModelTarget, run_model_chain
 from utils.predict_category_list import (
@@ -52,9 +64,77 @@ MAX_DESCRIPTION_CHARS = 2000
 DEFAULT_MIN_CONFIDENCE = 0.5
 DEFAULT_MAX_RESULTS = 6
 
+#: Most suggestions a session returns once several descriptions are merged.
+#: A single description still returns at most DEFAULT_MAX_RESULTS.
+DEFAULT_MAX_SESSION_RESULTS = 12
+
+#: Descriptions a session remembers. The oldest is dropped beyond this.
+MAX_SESSION_ENTRIES = 10
+
+#: Categories whose suggestion must quote the volunteer's own words.
+MEDICAL_CONSULTATION_PREFIX = "5.1."
+
 _MAX_EVIDENCE_CHARS = 120
+_MAX_REASON_CHARS = 160
 _MAX_UNMATCHED_SKILLS = 6
 _MAX_UNMATCHED_SKILL_CHARS = 60
+
+#: A few words per leaf, written from the volunteer's side. Leaves whose name
+#: already says it (Plumbing, Math) have none. Keys must be leaf IDs; a test
+#: keeps this in step with utils/predict_category_list.py.
+SKILL_HINTS = {
+    "1.1": "food banks, pantries, meal programs",
+    "1.2": "shopping for or delivering groceries",
+    "1.3.1": "everyday cooking",
+    "1.3.2": "cooking for events or large groups",
+    "1.3.3": "nutrition, dietitian, balanced diets",
+    "1.3.4": "traditional or regional cuisines",
+    "2.1": "giving clothes away",
+    "2.2": "lending clothes",
+    "2.3": "urgent clothing in a crisis",
+    "2.4": "sewing, alterations, mending",
+    "3.1": "lease agreements, landlord matters",
+    "3.2": "tenant rights, rent problems",
+    "3.3.2": "small fixes around the home",
+    "3.3.4": "woodwork, furniture repair",
+    "3.3.5": "gardening, landscaping, yard work",
+    "3.3.6": "heating, ventilation, air conditioning",
+    "3.3.9": "painting walls or houses",
+    "3.4": "setting up internet, power, water",
+    "3.5": "finding rentals",
+    "3.6": "roommate matching",
+    "3.7": "packing, carrying, moving help",
+    "3.8": "arranging packers and movers",
+    "3.9": "helping buy furniture or home goods",
+    "3.10": "helping sell furniture or belongings",
+    "4.2": "reviewing essays and personal statements",
+    "4.3.2": "English language, literature",
+    "4.3.3": "physics, chemistry, biology",
+    "4.3.4": "programming, coding",
+    "4.3.5": "SAT, GRE, GMAT",
+    "4.4": "scholarships, financial aid",
+    "4.6": "resumes, interviews, job search, mentoring",
+    "4.7": "sharing books, notes, courses",
+    "5.1.1": "doctor, nurse, general medical care",
+    "5.1.3": "dentist",
+    "5.1.4": "optometrist, eye doctor",
+    "5.1.5": "cardiology, blood pressure",
+    "5.1.6": "physiotherapy, orthopedics, rehab",
+    "5.1.8": "gynecology, midwifery",
+    "5.1.10": "pediatrician, child health",
+    "5.1.11": "other medical professions",
+    "5.2": "pharmacy pickup, delivering medicine",
+    "5.3": "counselling, emotional support, listening",
+    "5.5": "teaching health, hygiene, wellness",
+    "6.1": "helping seniors move home",
+    "6.2": "phones, tablets, apps, video calls",
+    "6.3": "organising medicines (non-clinical)",
+    "6.4": "home medical devices",
+    "6.5": "errands, rides to events",
+    "6.6": "driving people to appointments",
+    "6.8": "companionship, visits, calls, walks",
+    "6.9": "cooking for dietary needs",
+}
 
 
 def _leaf_category_ids() -> tuple[str, ...]:
@@ -106,46 +186,57 @@ def _provider_error(provider: str, error: Exception) -> ValueError:
     return ValueError(" ".join(parts))
 
 
+def _category_lines() -> list[str]:
+    """The leaves, one short line each, under a header per parent group.
+
+    `ID | Leaf name: hint`. The shared path is written once in the header
+    instead of on every line.
+    """
+    lines = []
+    current_group = None
+    for category_id in LEAF_CATEGORY_IDS:
+        path = get_category_hierarchy(category_id).split(" > ")
+        group = " > ".join(path[:-1])
+        if group != current_group:
+            lines.append(f"# {group}")
+            current_group = group
+        line = f"{category_id} | {path[-1]}"
+        hint = SKILL_HINTS.get(category_id)
+        if hint:
+            line = f"{line}: {hint}"
+        lines.append(line)
+    return lines
+
+
 def _build_system_prompt() -> str:
     """The fixed instructions and category list.
 
     Kept identical across requests, and separate from the volunteer's text, so
     provider-side prompt caching can reuse it.
     """
-    category_lines = []
-    for category_id in LEAF_CATEGORY_IDS:
-        line = f"{category_id} | {get_category_hierarchy(category_id)}"
-        description = TAXONOMY.get(help_categories[category_id], "")
-        if description:
-            line = f"{line} | {description}"
-        category_lines.append(line)
-
     return "\n".join(
         [
-            "You match a volunteer's description of their own skills to the skill categories below.",
-            "The text describes what the volunteer can OFFER to other people. It is not a request for help.",
-            "Ignore personal facts that are not skills, such as age, being retired or a senior, family or location.",
-            "A volunteer may have skills in several unrelated areas. Return every category the text supports, not only the closest one.",
-            "Some category descriptions are written from the point of view of a person asking for help. Match the skill that would meet that need: a plumber matches Plumbing, a math teacher matches Math.",
-            "A job title implies that job's own everyday skills. Match the category for that exact profession; never pick a different specialty just because it sits in the same area.",
-            "Do not guess skills the text does not support.",
-            "Choose only from the category IDs listed below. Do not invent IDs or use names.",
+            "Match a volunteer's description of their own skills to the categories below.",
+            "The text says what the volunteer can OFFER. It is not a request for help.",
+            "Ignore facts that are not skills: age, being retired or a senior, family, location.",
+            "Skills may span several areas. Return every category the text supports, and none it does not.",
+            "A job title implies that job's everyday skills; match that exact profession, not a neighbouring specialty.",
+            "Use only the IDs listed.",
             "",
-            "For each match give:",
-            '- "category": the category ID',
-            '- "confidence": 0.0 to 1.0 (0.9-1.0 stated explicitly; 0.6-0.8 strongly implied; below 0.5 a guess)',
-            '- "evidence": the short phrase from the text that supports it, copied word for word',
+            "Per match:",
+            '"category": the ID',
+            '"confidence": 0-1 (0.9+ stated outright, 0.6-0.8 strongly implied, under 0.5 a guess)',
+            '"evidence": the phrase from the text, copied word for word',
+            '"reason": why it fits, at most 10 words',
             "",
-            'Put skills the volunteer clearly states but that fit none of the categories in "unmatched_skills", as short phrases from the text.',
-            "The description may be in any language. Evidence and unmatched skills stay in the description's language.",
+            'Stated skills that fit no category go in "unmatched_skills" as short phrases from the text.',
+            "The text may be in any language; evidence stays in that language.",
             "",
-            "Categories (ID | path | description):",
-            *category_lines,
+            *_category_lines(),
             "",
-            "Return JSON only, in this format:",
-            '{"skills": [{"category": "CATEGORY_ID", "confidence": 0.9, "evidence": "phrase from the text"}], '
-            '"unmatched_skills": ["phrase from the text"]}',
-            'If nothing matches, return {"skills": [], "unmatched_skills": []}.',
+            'Return JSON only: {"skills": [{"category": "ID", "confidence": 0.9, '
+            '"evidence": "phrase", "reason": "why"}], "unmatched_skills": ["phrase"]}',
+            'Nothing matches: {"skills": [], "unmatched_skills": []}',
         ]
     )
 
@@ -276,7 +367,36 @@ class SkillSuggestionService:
         phrase = " ".join(value.split())
         return phrase[:max_chars] if phrase else None
 
-    def _parse_skills(self, response_data: dict) -> list[dict]:
+    def _suggestion(self, category_id: str, confidence: float, item: dict, text: str) -> dict | None:
+        """One suggestion with its explanation, or None if it may not be made.
+
+        `evidence` is kept only if it really is in the volunteer's text, so the
+        explanation never shows a quote they did not write. A medical
+        consultation category without such a quote is not suggested at all.
+        """
+        evidence = self._clean_phrase(item.get("evidence"), _MAX_EVIDENCE_CHARS)
+        if evidence and not _quote_in_text(evidence, text):
+            evidence = None
+        if category_id.startswith(MEDICAL_CONSULTATION_PREFIX) and not evidence:
+            return None
+
+        hierarchy = get_category_hierarchy(category_id)
+        suggestion = {
+            "category_number": category_id,
+            "category_name": help_categories[category_id],
+            "confidence": confidence,
+            "hierarchy": hierarchy,
+        }
+        if evidence:
+            suggestion["evidence"] = evidence
+        suggestion["explanation"] = {
+            "user_said": evidence,
+            "matched_to": hierarchy,
+            "why": self._clean_phrase(item.get("reason"), _MAX_REASON_CHARS),
+        }
+        return suggestion
+
+    def _parse_skills(self, response_data: dict, text: str) -> list[dict]:
         best_by_id: dict[str, dict] = {}
         for item in response_data.get("skills") or []:
             if not isinstance(item, dict):
@@ -291,16 +411,9 @@ class SkillSuggestionService:
             if existing and existing["confidence"] >= confidence:
                 continue
 
-            suggestion = {
-                "category_number": category_id,
-                "category_name": help_categories[category_id],
-                "confidence": confidence,
-                "hierarchy": get_category_hierarchy(category_id),
-            }
-            evidence = self._clean_phrase(item.get("evidence"), _MAX_EVIDENCE_CHARS)
-            if evidence:
-                suggestion["evidence"] = evidence
-            best_by_id[category_id] = suggestion
+            suggestion = self._suggestion(category_id, confidence, item, text)
+            if suggestion:
+                best_by_id[category_id] = suggestion
 
         # sorted() is stable, so equal confidences keep the model's order.
         ranked = sorted(best_by_id.values(), key=lambda s: s["confidence"], reverse=True)
@@ -343,7 +456,7 @@ class SkillSuggestionService:
                 operation="suggest_skills",
             )
             return (
-                self._parse_skills(response_data),
+                self._parse_skills(response_data, description),
                 self._parse_unmatched(response_data),
                 usage_accumulator,
             )
@@ -357,3 +470,134 @@ class SkillSuggestionService:
 
 def suggest_skills(description: str) -> tuple[list[dict], list[str], dict]:
     return SkillSuggestionService().suggest_skills(description)
+
+
+def _normalize_text(text: str) -> str:
+    return " ".join(text.split()).casefold()
+
+
+def _quote_in_text(quote: str, text: str) -> bool:
+    quote = _normalize_text(quote).strip(" \"'“”‘’.,;:!?")
+    return bool(quote) and quote in _normalize_text(text)
+
+
+def _to_session_skill(suggestion: dict) -> dict:
+    """A suggestion in the compact shape the session carries.
+
+    The same shape the model answers in, so a session coming back from the
+    client is re-validated by the same parser rather than trusted.
+    """
+    skill = {
+        "category": suggestion["category_number"],
+        "confidence": suggestion["confidence"],
+    }
+    if suggestion.get("evidence"):
+        skill["evidence"] = suggestion["evidence"]
+    why = suggestion.get("explanation", {}).get("why")
+    if why:
+        skill["reason"] = why
+    return skill
+
+
+def _read_session(raw, service: SkillSuggestionService) -> list[dict]:
+    """The entries of a session the web app sent back, re-validated.
+
+    The client holds the session, so nothing in it is trusted: unknown IDs,
+    General, parents, out-of-range confidence and medical suggestions whose
+    quote is not in that entry's text are dropped exactly as they would be
+    from a model. A malformed session is treated as no session.
+    """
+    if not isinstance(raw, dict) or not isinstance(raw.get("entries"), list):
+        return []
+    entries = []
+    for entry in raw["entries"][-MAX_SESSION_ENTRIES:]:
+        if not isinstance(entry, dict):
+            continue
+        text = entry.get("text")
+        if not isinstance(text, str) or not text.strip():
+            continue
+        text = text.strip()[:MAX_DESCRIPTION_CHARS]
+        skills = entry.get("skills")
+        entries.append(
+            {
+                "text": text,
+                "categories": service._parse_skills(
+                    {"skills": skills if isinstance(skills, list) else []}, text
+                ),
+                "unmatched_skills": service._parse_unmatched(entry),
+            }
+        )
+    return entries
+
+
+def suggest_skills_for_session(description: str, session=None, suggest=None) -> dict:
+    """Suggest skills for one description within a volunteer's session.
+
+    The session is the free text the volunteer has written so far in this
+    sitting, with what was suggested for each piece. It lives in the web app
+    and comes back on every call, like `conversation_history` does for
+    Generate Answer; nothing is stored server-side.
+
+    It keeps token cost down two ways:
+
+    * a description already in the session (the volunteer pressed Suggest
+      again, or went back a step) is answered from it with no model call;
+    * a new description is sent to the model on its own, and its suggestions
+      are merged with the earlier ones server-side.
+
+    Returns the response body: `categories` (merged, highest confidence
+    first), `unmatched_skills`, `token_usage`, `cached`, and the updated
+    `session` to send back next time.
+    """
+    service = SkillSuggestionService()
+    suggest = suggest or suggest_skills
+    description = (description or "").strip()[:MAX_DESCRIPTION_CHARS]
+    entries = _read_session(session, service)
+
+    key = _normalize_text(description)
+    cached = any(_normalize_text(entry["text"]) == key for entry in entries)
+    if cached:
+        usage = token_usage.new_accumulator()
+        token_usage.log_usage(
+            "suggest_skills", usage, description_chars=len(description), cached=True
+        )
+    else:
+        categories, unmatched, usage = suggest(description)
+        entries.append(
+            {"text": description, "categories": categories, "unmatched_skills": unmatched}
+        )
+        entries = entries[-MAX_SESSION_ENTRIES:]
+
+    best_by_id: dict[str, dict] = {}
+    for entry in entries:
+        for suggestion in entry["categories"]:
+            existing = best_by_id.get(suggestion["category_number"])
+            if not existing or suggestion["confidence"] > existing["confidence"]:
+                best_by_id[suggestion["category_number"]] = suggestion
+    max_results = _env_int("SKILL_SUGGESTION_MAX_SESSION_RESULTS", DEFAULT_MAX_SESSION_RESULTS)
+    ranked = sorted(best_by_id.values(), key=lambda s: s["confidence"], reverse=True)
+
+    unmatched_skills: list[str] = []
+    seen: set[str] = set()
+    for entry in entries:
+        for phrase in entry["unmatched_skills"]:
+            if phrase.casefold() not in seen:
+                seen.add(phrase.casefold())
+                unmatched_skills.append(phrase)
+
+    return {
+        "categories": ranked[:max_results],
+        "unmatched_skills": unmatched_skills[:max_results],
+        "token_usage": usage,
+        "cached": cached,
+        "session": {
+            "entries": [
+                {
+                    "text": entry["text"],
+                    "skills": [_to_session_skill(s) for s in entry["categories"]],
+                    "unmatched_skills": entry["unmatched_skills"],
+                }
+                for entry in entries
+            ]
+        },
+    }
