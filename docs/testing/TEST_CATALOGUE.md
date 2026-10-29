@@ -39,10 +39,12 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_request_db_schema.py`](../../tests/test_request_db_schema.py) | Unit | #169 | `utils/request_db.py` | 54 |
 | [`tests/test_response_contract.py`](../../tests/test_response_contract.py) | Contract | #146, #169, #170 | `response envelopes` | 10 |
 | [`tests/test_router.py`](../../tests/test_router.py) | Integration | #171 | `lambda_function.lambda_handler` | 34 |
+| [`tests/test_skill_eval_dataset.py`](../../tests/test_skill_eval_dataset.py) | Dataset | #216 | `docs/metrics/volunteer_skills_eval_set.json` | 24 |
+| [`tests/test_skill_eval_scoring.py`](../../tests/test_skill_eval_scoring.py) | Unit | #216 | `tools/skill_eval_scoring.py` | 22 |
 | [`tests/test_skill_suggestion.py`](../../tests/test_skill_suggestion.py) | Unit | #216 | `services/skill_suggestion_service.py` | 50 |
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
 | [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 57 |
-| | | | **Total** | **472** |
+| | | | **Total** | **518** |
 
 ## Every test
 
@@ -451,6 +453,67 @@ Router-level regression tests - issue #171.
 | `test_routed_emergency_can_still_ask_for_one_service` | Routing in the query string leaves the body free to name the service. |
 
 > 16 test functions expand to 34 cases through parametrisation.
+
+### `test_skill_eval_dataset.py`
+
+*Dataset · issue #216 · 24 tests*
+
+The volunteer evaluation set itself (issue #216).
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_every_accepted_id_is_a_selectable_leaf` | The same guarantee the service makes about its own output. |
+| `test_no_label_is_general_or_a_parent` | No label is general or a parent. |
+| `test_accept_sets_are_non_empty_and_free_of_duplicates` | Accept sets are non empty and free of duplicates. |
+| `test_a_skill_name_is_not_reused_within_a_case` | Two skills with the same name would be indistinguishable in the report. |
+| `test_the_set_meets_the_minimum_size` | The set meets the minimum size. |
+| `test_case_ids_are_unique` | Case ids are unique. |
+| `test_each_required_trait_is_represented` | Each required trait is represented. |
+| `test_at_least_two_non_english_languages_appear` | At least two non english languages appear. |
+| `test_every_case_declares_a_language` | Every case declares a language. |
+| `test_short_cases_are_actually_short` | Short cases are actually short. |
+| `test_long_cases_are_actually_long` | Long cases are actually long. |
+| `test_retired_cases_actually_say_retired_or_senior` | Retired cases actually say retired or senior. |
+| `test_multi_area_cases_span_at_least_two_top_level_branches` | Three skills inside one branch is not the case volunteer mode exists for. |
+| `test_no_match_cases_label_no_skills` | No match cases label no skills. |
+| `test_unmatched_skill_cases_say_what_should_land_there` | Unmatched skill cases say what should land there. |
+| `test_no_case_reuses_a_description_from_issue_216` | Paraphrasing the situations is fine; reusing the text is not. |
+| `test_descriptions_fit_within_the_services_own_cap` | Over 2,000 characters the service truncates, and a label at the end of a longer description would be unreachable rather than missed. |
+| `test_descriptions_are_unique` | Descriptions are unique. |
+
+> 18 test functions expand to 24 cases through parametrisation.
+
+### `test_skill_eval_scoring.py`
+
+*Unit · issue #216 · 22 tests*
+
+How volunteer skill suggestions are scored (issue #216).
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_an_exact_single_match_is_one_true_positive` | An exact single match is one true positive. |
+| `test_an_acceptable_alternative_counts_as_found` | 5.1.11 Other Medical Concern stands in for 5.1.1 General Consultation. |
+| `test_one_prediction_cannot_satisfy_two_skills` | Otherwise a single 5.1.1 would score both labelled medical skills. |
+| `test_pairing_does_not_depend_on_the_order_the_labels_were_written` | The case a greedy walk gets wrong. |
+| `test_an_ambiguous_pairing_credits_the_confident_prediction` | Totals do not depend on this, but the report should be deterministic. |
+| `test_leftover_predictions_are_false_positives` | Leftover predictions are false positives. |
+| `test_unfound_skills_are_false_negatives` | Unfound skills are false negatives. |
+| `test_predicting_nothing_on_a_labelled_case_is_all_misses` | Predicting nothing on a labelled case is all misses. |
+| `test_a_no_match_case_with_suggestions_is_all_false_positives` | A no match case with suggestions is all false positives. |
+| `test_a_correctly_empty_no_match_case_counts_nowhere` | A correctly empty no match case counts nowhere. |
+| `test_false_suggestion_rate_isolates_the_invented_skills` | Recall cannot see this, and precision dilutes it across every case. |
+| `test_a_provider_error_scores_every_labelled_skill_as_missed` | A run full of 429s must not read as perfect precision. |
+| `test_errors_are_counted_in_the_aggregate` | Errors are counted in the aggregate. |
+| `test_totals_are_micro_averaged_across_cases` | Worked by hand: 3 TP, 1 FP, 2 FN. |
+| `test_a_run_that_answered_nothing_reports_undefined_not_zero` | 0% reads as "always wrong"; the model was never asked a question it answered. |
+| `test_aggregating_no_cases_does_not_divide_by_zero` | Aggregating no cases does not divide by zero. |
+| `test_trait_buckets_are_scored_independently` | Trait buckets are scored independently. |
+| `test_expected_skills_are_read_from_the_eval_set_shape` | Expected skills are read from the eval set shape. |
+| `test_predictions_are_read_from_the_service_response_shape` | Predictions are read from the service response shape. |
+| `test_empty_inputs_read_as_empty_lists` | Empty inputs read as empty lists. |
+| `test_a_missing_confidence_does_not_break_reading_a_prediction` | A missing confidence does not break reading a prediction. |
+
+> 21 test functions expand to 22 cases through parametrisation.
 
 ### `test_skill_suggestion.py`
 
