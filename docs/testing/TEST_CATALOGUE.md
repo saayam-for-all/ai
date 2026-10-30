@@ -31,6 +31,7 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_client_imports.py`](../../tests/test_client_imports.py) | Integration | #154 | `utils/client.py` | 2 |
 | [`tests/test_emergency_dataset.py`](../../tests/test_emergency_dataset.py) | Dataset | #146 | `services/emergency_numbers.json` | 17 |
 | [`tests/test_emergency_locale.py`](../../tests/test_emergency_locale.py) | Unit | #146 | `services/emergency.py` | 67 |
+| [`tests/test_emergency_logging.py`](../../tests/test_emergency_logging.py) | Unit | #146 | `services/emergency.py logging` | 42 |
 | [`tests/test_emergency_s3_reader.py`](../../tests/test_emergency_s3_reader.py) | Unit | #334 | `services/emergency.py S3 reader` | 23 |
 | [`tests/test_generate_answer.py`](../../tests/test_generate_answer.py) | Contract | #169 | `generate_answer_handler` | 50 |
 | [`tests/test_import_blast_radius.py`](../../tests/test_import_blast_radius.py) | Integration | #169, #171 | `module-scope imports` | 4 |
@@ -41,7 +42,7 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_router.py`](../../tests/test_router.py) | Integration | #171 | `lambda_function.lambda_handler` | 34 |
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
 | [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 57 |
-| | | | **Total** | **422** |
+| | | | **Total** | **464** |
 
 ## Every test
 
@@ -195,6 +196,43 @@ Behaviour tests for issue #146 - Emergency Contacts must never show a user a num
 | `test_place_search_with_nothing_to_search_makes_no_request` | Place search with nothing to search makes no request. |
 
 > 39 test functions expand to 67 cases through parametrisation.
+
+### `test_emergency_logging.py`
+
+*Unit · issue #146 · 42 tests*
+
+Logging for the Emergency Contacts Lambda (follow-up to issue #146).
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_gps_request_logs_what_was_sent_how_it_was_found_and_what_came_back` | Gps request logs what was sent how it was found and what came back. |
+| `test_exact_coordinates_and_full_ip_never_reach_the_log` | Exact coordinates and full ip never reach the log. |
+| `test_gps_that_does_not_resolve_says_the_ip_was_used_instead` | The Prague report: a position was sent, but the answer came from the IP. |
+| `test_a_rate_limited_lookup_is_named_as_one` | A rate limited lookup is named as one. |
+| `test_ip_only_request_is_logged_with_the_ip_as_its_source` | Ip only request is logged with the ip as its source. |
+| `test_country_parameter_is_logged_as_the_source_without_any_lookup` | Country parameter is logged as the source without any lookup. |
+| `test_place_search_without_a_match_is_logged` | Place search without a match is logged. |
+| `test_failed_place_search_is_logged_with_the_reason` | Failed place search is logged with the reason. |
+| `test_ipinfo_answer_without_a_country_is_a_warning` | Ipinfo answer without a country is a warning. |
+| `test_a_position_with_no_country_is_a_warning` | A point at sea: Nominatim answers, but with no country in it. |
+| `test_every_parameter_name_is_logged_but_not_its_value` | A client sending "latitude" instead of "lat" is visible as the reason GPS was ignored. |
+| `test_the_response_line_names_the_services_filled_with_the_general_number` | The response line names the services filled with the general number. |
+| `test_a_city_in_several_countries_is_logged_as_not_guessed` | A city in several countries is logged as not guessed. |
+| `test_a_handler_failure_prints_its_traceback` | A handler failure prints its traceback. |
+| `test_an_invalid_caller_ip_is_logged_without_the_value` | An invalid caller ip is logged without the value. |
+| `test_unusable_coordinates_are_logged` | Unusable coordinates are logged. |
+| `test_a_404_logs_why` | A 404 logs why. |
+| `test_an_unexpected_error_is_logged_with_its_traceback` | An unexpected error is logged with its traceback. |
+| `test_the_handler_never_logs_the_login_token` | The handler never logs the login token. |
+| `test_logging_does_not_change_the_response_the_web_client_reads` | Logging does not change the response the web client reads. |
+| `test_info_lines_are_emitted_even_though_the_root_logger_is_at_warning` | The Lambda runtime leaves root at WARNING; the module's own level must let INFO through. |
+| `test_log_level_comes_from_the_environment_and_a_typo_falls_back_to_info` | Log level comes from the environment and a typo falls back to info. |
+| `test_ip_addresses_are_masked` | Ip addresses are masked. |
+| `test_lookup_failures_are_described_in_a_few_words` | Lookup failures are described in a few words. |
+| `test_a_refused_connection_is_a_network_error` | A refused connection is a network error. |
+| `test_location_description_skips_empty_parts` | Location description skips empty parts. |
+
+> 26 test functions expand to 42 cases through parametrisation.
 
 ### `test_emergency_s3_reader.py`
 

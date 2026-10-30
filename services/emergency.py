@@ -14,7 +14,11 @@ Two rules govern everything in this module, both from issue #146:
 import hashlib
 import ipaddress
 import json
+import logging
 import os
+import socket
+import time
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -28,6 +32,84 @@ DATA_FILE = os.path.join(BASE_DIR, "emergency_numbers.json")
 
 # Module-level cache: reused across Lambda invocations in the same warm container.
 _emergency_numbers_cache = None
+
+logger = logging.getLogger(__name__)
+
+
+def _log_level(name):
+    """Level named by EMERGENCY_LOG_LEVEL, INFO by default.
+
+    A typo in the variable must not stop the module importing, so anything that
+    is not a level name falls back to INFO.
+    """
+    level = logging.getLevelName(str(name or "INFO").strip().upper())
+    return level if isinstance(level, int) else logging.INFO
+
+
+# The Lambda runtime leaves the root logger at WARNING. Without a level on this
+# logger the INFO lines below - one per request, the lines that explain why a
+# user saw the numbers they saw - would never reach CloudWatch.
+logger.setLevel(_log_level(os.environ.get("EMERGENCY_LOG_LEVEL")))
+
+
+def _mask_ip(ip):
+    """An IP with the host part removed, for logs.
+
+    Enough to see which network and country a lookup was made for, not enough
+    to identify the person: 74.102.193.3 becomes 74.102.193.x.
+    """
+    if not ip:
+        return "none"
+    try:
+        addr = ipaddress.ip_address(str(ip).strip())
+    except ValueError:
+        return "invalid"
+    if addr.version == 4:
+        return str(addr).rsplit(".", 1)[0] + ".x"
+    return str(ipaddress.ip_network(f"{addr}/48", strict=False).network_address) + "/48"
+
+
+def _coarse(value):
+    """A coordinate rounded to one decimal (about 11 km), or None.
+
+    Enough to tell Prague from Houston in a log, not enough to locate a person.
+    """
+    try:
+        return round(float(value), 1)
+    except (TypeError, ValueError):
+        return None
+
+
+def _describe(location):
+    """'city, state, country' from whichever of those a location has."""
+    parts = [location.get(k) for k in ("city", "state", "country")] if location else []
+    return ", ".join(str(p) for p in parts if p) or "unknown"
+
+
+def _lookup_failure_reason(error):
+    """Why a call to ipinfo or Nominatim failed, in a few words.
+
+    These lookups used to fail silently, which left the logs unable to say
+    whether a wrong country came from a timeout, a rate limit or a refusal.
+    """
+    if isinstance(error, urllib.error.HTTPError):
+        if error.code == 429:
+            return "HTTP 429 (rate limited)"
+        return f"HTTP {error.code}"
+    if isinstance(error, urllib.error.URLError):
+        reason = error.reason
+        if isinstance(reason, (socket.timeout, TimeoutError)) or "timed out" in str(reason).lower():
+            return "timeout"
+        return f"network error ({type(reason).__name__}: {reason})"
+    if isinstance(error, (socket.timeout, TimeoutError)) or "timed out" in str(error).lower():
+        return "timeout"
+    if isinstance(error, json.JSONDecodeError):
+        return "response was not JSON"
+    return f"{type(error).__name__}: {error}"
+
+
+def _elapsed_ms(started):
+    return int((time.monotonic() - started) * 1000)
 
 # S3 is read inside the first request a container serves, and the function's
 # timeout is 3 s. One attempt only: botocore's legacy `max_attempts` counts
@@ -291,6 +373,10 @@ class LocalizationService:
 class LocationResolver:
     def __init__(self, client_ip):
         self.client_ip = client_ip
+        # How the last resolve() found the country: gps, place, city_directory,
+        # country_param, ip or none. Logged rather than returned, so the
+        # response the web client reads keeps its shape.
+        self.source = "none"
 
     def _get_location_from_ip(self, ip):
         # The IP arrives from a request header and is interpolated into a URL,
@@ -299,11 +385,13 @@ class LocationResolver:
         try:
             ipaddress.ip_address(str(ip).strip())
         except ValueError:
+            logger.warning("ipinfo lookup skipped: client IP is not a valid address (%s)", _mask_ip(ip))
             return {}
+        started = time.monotonic()
         try:
             with urllib.request.urlopen(f"https://ipinfo.io/{ip}/json", timeout=3) as r:
                 data = json.load(r)
-                return {
+                location = {
                     "zip": data.get("postal"),
                     "city": data.get("city"),
                     "state": data.get("region"),
@@ -311,8 +399,23 @@ class LocationResolver:
                     # country must not silently inherit US emergency numbers.
                     "country": data.get("country")
                 }
-        except Exception:
+        except Exception as e:
+            logger.warning(
+                "ipinfo lookup failed for ip=%s: %s (%d ms)",
+                _mask_ip(ip), _lookup_failure_reason(e), _elapsed_ms(started),
+            )
             return {}
+        if location["country"]:
+            logger.info(
+                "ipinfo lookup: ip=%s -> %s (%d ms)",
+                _mask_ip(ip), _describe(location), _elapsed_ms(started),
+            )
+        else:
+            logger.warning(
+                "ipinfo lookup for ip=%s returned no country (%d ms)",
+                _mask_ip(ip), _elapsed_ms(started),
+            )
+        return location
 
     def _reverse_geocode(self, lat, lng):
         # lat/lng come straight off the query string. Coercing to float both
@@ -321,9 +424,12 @@ class LocationResolver:
             lat = float(lat)
             lng = float(lng)
         except (TypeError, ValueError):
+            logger.warning("GPS coordinates ignored: lat/lng are not numbers")
             return None
         if not (-90 <= lat <= 90 and -180 <= lng <= 180):
+            logger.warning("GPS coordinates ignored: lat/lng out of range")
             return None
+        started = time.monotonic()
         try:
             query = urllib.parse.urlencode({"format": "json", "lat": lat, "lon": lng})
             req = urllib.request.Request(
@@ -333,7 +439,7 @@ class LocationResolver:
             with urllib.request.urlopen(req, timeout=4) as r:
                 data = json.load(r)
                 addr = data.get("address", {})
-                return {
+                location = {
                     "zip": addr.get("postcode"),
                     "city": (
                         addr.get("city")
@@ -343,8 +449,23 @@ class LocationResolver:
                     "state": addr.get("state"),
                     "country": addr.get("country_code", "").upper()
                 }
-        except Exception:
+        except Exception as e:
+            logger.warning(
+                "Nominatim reverse lookup failed for lat~%s lng~%s: %s (%d ms)",
+                _coarse(lat), _coarse(lng), _lookup_failure_reason(e), _elapsed_ms(started),
+            )
             return None
+        if location["country"]:
+            logger.info(
+                "Nominatim reverse lookup: lat~%s lng~%s -> %s (%d ms)",
+                _coarse(lat), _coarse(lng), _describe(location), _elapsed_ms(started),
+            )
+        else:
+            logger.warning(
+                "Nominatim reverse lookup for lat~%s lng~%s returned no country (%d ms)",
+                _coarse(lat), _coarse(lng), _elapsed_ms(started),
+            )
+        return location
 
     def _geocode_place(self, zip_code=None, city=None, state=None, country=None):
         # Place names are user text, so they are percent-encoded rather than
@@ -353,22 +474,31 @@ class LocationResolver:
         parts = [str(p).strip() for p in (zip_code, city, state, country) if p]
         if not parts:
             return None
+        text = ", ".join(parts)
+        started = time.monotonic()
         try:
-            query = urllib.parse.urlencode(
-                {"format": "json", "limit": 1, "q": ", ".join(parts)}
-            )
+            query = urllib.parse.urlencode({"format": "json", "limit": 1, "q": text})
             req = urllib.request.Request(
                 f"https://nominatim.openstreetmap.org/search?{query}",
                 headers={"User-Agent": "saayam-emergency-api"},
             )
             with urllib.request.urlopen(req, timeout=4) as r:
                 results = json.load(r)
-                if not results:
-                    return None
-                place = results[0]
-                return self._reverse_geocode(place["lat"], place["lon"])
-        except Exception:
+            if not results:
+                logger.warning(
+                    "Nominatim place search found no match for %r (%d ms)",
+                    text, _elapsed_ms(started),
+                )
+                return None
+            place = results[0]
+            lat, lon = place["lat"], place["lon"]
+        except Exception as e:
+            logger.warning(
+                "Nominatim place search failed for %r: %s (%d ms)",
+                text, _lookup_failure_reason(e), _elapsed_ms(started),
+            )
             return None
+        return self._reverse_geocode(lat, lon)
 
     def _infer_state_country_from_city(self, city, data):
         """Locate a bare city name in the directory.
@@ -390,11 +520,17 @@ class LocationResolver:
                         "country": country_code,
                     })
         if len(matches) != 1:
+            if matches:
+                logger.info(
+                    "city %r is in the directory for %d countries (%s); not guessing which",
+                    city_norm, len(matches), ", ".join(sorted(m["country"] for m in matches)),
+                )
             return None
         return matches[0]
 
     def resolve(self, params, data):
         location = {}
+        source = "none"
         lat = params.get("lat")
         lng = params.get("lng")
         zip_code = params.get("zip")
@@ -406,6 +542,7 @@ class LocationResolver:
             geo = self._reverse_geocode(lat, lng)
             if geo:
                 location.update(geo)
+                source = "gps"
         elif zip_code or city or state:
             geo = self._geocode_place(
                 zip_code=zip_code, city=city,
@@ -413,11 +550,13 @@ class LocationResolver:
             )
             if geo:
                 location.update(geo)
+                source = "place"
 
         if city and not location.get("country"):
             inferred = self._infer_state_country_from_city(city, data)
             if inferred:
                 location.update(inferred)
+                source = "city_directory"
 
         if country_override:
             # An explicit country wins. The finer-grained fields resolved from
@@ -427,13 +566,25 @@ class LocationResolver:
             if location.get("country") and location["country"] != country_override:
                 location = {}
             location["country"] = country_override
+            source = "country_param"
 
         if not location.get("country") and self.client_ip:
+            if lat and lng:
+                # The case behind the Prague report: the browser sent a
+                # position, but it did not resolve to a country, so the answer
+                # now depends on where the caller's network appears to be.
+                logger.warning(
+                    "GPS coordinates did not resolve to a country; using the caller's IP (%s) instead",
+                    _mask_ip(self.client_ip),
+                )
             ip_loc = self._get_location_from_ip(self.client_ip)
             for k, v in ip_loc.items():
                 if v:
                     location.setdefault(k, v)
+            if location.get("country"):
+                source = "ip"
 
+        self.source = source if location.get("country") else "none"
         return location
 
 
@@ -556,7 +707,28 @@ class EmergencyServiceResolver:
         )
 
 
+def _log_request(params, client_ip):
+    """One line describing what the caller sent, before anything is resolved.
+
+    Coordinates are rounded and the IP is masked; the login token and other
+    headers never reach this function.
+    """
+    lat, lng = params.get("lat"), params.get("lng")
+    logger.info(
+        "emergency request: gps=%s lat~%s lng~%s zip=%s city=%s state=%s country=%s "
+        "service=%s language=%s ip=%s params=%s",
+        bool(lat and lng), _coarse(lat), _coarse(lng),
+        params.get("zip"), params.get("city"), params.get("state"), params.get("country"),
+        params.get("service"), params.get("language"), _mask_ip(client_ip),
+        # Names only, never values: a client that sends "latitude" instead of
+        # "lat" shows up here as the reason a position was ignored.
+        sorted(str(k) for k in params),
+    )
+
+
 def get_emergency_services(params, client_ip):
+    started = time.monotonic()
+    _log_request(params, client_ip)
     try:
         service_resolver = EmergencyServiceResolver()
         data = service_resolver.load_data()
@@ -569,11 +741,33 @@ def get_emergency_services(params, client_ip):
         )
 
         if not services:
+            country = _normalize_country(location.get("country"))
+            if not country:
+                reason = "no country could be resolved"
+            elif params.get("service"):
+                reason = f"no {params.get('service')} number for {country}"
+            else:
+                reason = f"no numbers for {country}"
+            logger.warning(
+                "emergency response: status=404 reason=%s source=%s area=%s (%d ms)",
+                reason, location_resolver.source, _describe(location), _elapsed_ms(started),
+            )
             return {"status": 404, "body": {"error": "Emergency services not found"}}
 
         language = params.get("language") or "en"
         localization = LocalizationService()
         localized = localization.localize_services(services, language)
+
+        logger.info(
+            "emergency response: status=200 country=%s match_level=%s source=%s area=%s "
+            "numbers=%s general_fallback=%s for %s (%d ms)",
+            _normalize_country(location.get("country")), level, location_resolver.source,
+            _describe(location),
+            {k: v["dial_number"] for k, v in localized.items() if not v["is_fallback"]},
+            next((v["dial_number"] for v in localized.values() if v["is_fallback"]), None),
+            sorted(k for k, v in localized.items() if v["is_fallback"]),
+            _elapsed_ms(started),
+        )
 
         return {
             "status": 200,
@@ -587,4 +781,7 @@ def get_emergency_services(params, client_ip):
             }
         }
     except Exception as e:
+        logger.exception(
+            "emergency response: status=500 (%s) after %d ms", type(e).__name__, _elapsed_ms(started)
+        )
         return {"status": 500, "body": {"error": str(e)}}
