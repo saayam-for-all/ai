@@ -11,7 +11,7 @@ from utils.predict_category_list import (
     get_category_hierarchy,
 )
 from utils.routing_for_categories import is_elderly_context
-from utils import classification_telemetry, token_usage
+from utils import classification_telemetry, guardrails, token_usage
 
 
 class GroqClassificationService:
@@ -237,6 +237,7 @@ class GroqClassificationService:
             return []
 
         ranked_results = []
+        not_offered = 0
         for item in categories:
             if isinstance(item, dict):
                 category_id = item.get("category")
@@ -252,8 +253,16 @@ class GroqClassificationService:
                 ranked_results.append(
                     {"category": normalized_id, "confidence": confidence}
                 )
+            else:
+                not_offered += 1
 
-        return ranked_results
+        # Outbound guardrails (utils/guardrails.py): an id that was not offered
+        # is dropped above and recorded here; a repeated id is removed.
+        if not_offered:
+            guardrails.record(
+                "predict_category", "unoffered_category", "dropped", dropped=not_offered
+            )
+        return guardrails.dedupe_ranked(ranked_results, service="predict_category")
 
     def _predict_one_level(
         self, description: str, candidates: list[str], accumulator: dict, depth: int
@@ -310,6 +319,8 @@ class GroqClassificationService:
         usage_accumulator = token_usage.new_accumulator()
         started = time.perf_counter()
         results, error = None, None
+        # Inbound guardrail: records a suspected prompt injection, changes nothing.
+        guardrails.check_description(description or "", service="predict_category")
         try:
             results, _ = self._walk_taxonomy(description, usage_accumulator)
             return results, usage_accumulator

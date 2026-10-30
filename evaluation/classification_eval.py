@@ -28,6 +28,7 @@ Scoring uses two measures, because they fail for different reasons:
 from __future__ import annotations
 
 import hashlib
+import inspect
 import json
 from collections import Counter
 from collections.abc import Callable, Iterable
@@ -250,9 +251,17 @@ def _classifier_inputs() -> dict:
     * the sampling settings the service is constructed with;
     * the model chain, which decides which model answers;
     * the elderly routing word lists, which decide where the walk starts;
+    * the source of the code that turns a model reply into the ranked
+      answer (parsing, id normalisation, de-duplication, the walk itself),
+      because changing it changes answers without touching any prompt;
     * the golden set itself, so a relabelled case also needs a fresh run.
+
+    The source is hashed as written, so an edit to a comment inside one of
+    those functions also asks for a fresh run. That is the safe direction to
+    be wrong in.
     """
     from services.classification_service import GroqClassificationService
+    from utils import guardrails
 
     service = GroqClassificationService()
     placeholder = "<DESCRIPTION>"
@@ -275,6 +284,16 @@ def _classifier_inputs() -> dict:
         "elderly_routing": {
             name: list(getattr(routing_for_categories, name))
             for name in ("STRONG_ELDERLY_TRIGGERS", "WEAK_ELDERLY_TRIGGERS", "ELDERLY_CONTEXT_CUES")
+        },
+        "answer_shaping_code": {
+            function.__qualname__: inspect.getsource(function).replace("\r\n", "\n")
+            for function in (
+                GroqClassificationService._normalize_confidence,
+                GroqClassificationService._normalize_category_id,
+                GroqClassificationService._parse_ranked_categories,
+                GroqClassificationService._walk_taxonomy,
+                guardrails.dedupe_ranked,
+            )
         },
         "golden_set": GOLDEN_SET_PATH.read_text(encoding="utf-8").replace("\r\n", "\n"),
     }

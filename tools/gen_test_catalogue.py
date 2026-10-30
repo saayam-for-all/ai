@@ -53,6 +53,7 @@ FILE_META = {
     "test_classification_eval.py": ("#197", "evaluation/ scoring, gate, fingerprint"),
     "test_classification_eval_gate.py": ("#197", "classification quality gate"),
     "test_classification_telemetry.py": ("#197", "utils/classification_telemetry.py, tools/setup_observability.py"),
+    "test_guardrails.py": ("#197", "utils/guardrails.py"),
 }
 
 HEADER = """# Test catalogue

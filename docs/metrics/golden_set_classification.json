@@ -1,15 +1,16 @@
 {
-  "measured_at": "2026-10-19T20:59:35+00:00",
-  "fingerprint": "5170ad9c60ac",
+  "measured_at": "2026-10-29T20:30:19+00:00",
+  "fingerprint": "c19aa21aa2e7",
   "pass_mark": 0.9,
   "passed": false,
   "scored_cases": 41,
-  "top_level_accuracy": 0.8537,
-  "path_accuracy": 0.8049,
+  "top_level_accuracy": 0.878,
+  "path_accuracy": 0.8293,
   "errors": 0,
-  "total_tokens": 54999,
+  "total_tokens": 54427,
   "models": {
-    "groq/openai/gpt-oss-20b": 89
+    "groq/openai/gpt-oss-20b": 84,
+    "groq/openai/gpt-oss-120b": 3
   },
   "results": [
     {
@@ -30,7 +31,7 @@
         "groq/openai/gpt-oss-20b",
         "groq/openai/gpt-oss-20b"
       ],
-      "total_tokens": 1128
+      "total_tokens": 1123
     },
     {
       "id": "food-02",
@@ -58,9 +59,9 @@
       "expected": "NUTRITIONAL_MEAL_PLANNING",
       "scored": true,
       "predicted": [
-        "4.7",
-        "4.1",
-        "4.4"
+        "5.5",
+        "5.1",
+        "5.3"
       ],
       "top_level_ok": false,
       "path_ok": false,
@@ -70,7 +71,7 @@
         "groq/openai/gpt-oss-20b",
         "groq/openai/gpt-oss-20b"
       ],
-      "total_tokens": 1307
+      "total_tokens": 1352
     },
     {
       "id": "food-04",
@@ -91,7 +92,7 @@
         "groq/openai/gpt-oss-20b",
         "groq/openai/gpt-oss-20b"
       ],
-      "total_tokens": 1639
+      "total_tokens": 1543
     },
     {
       "id": "food-05",
@@ -131,7 +132,7 @@
         "groq/openai/gpt-oss-20b",
         "groq/openai/gpt-oss-20b"
       ],
-      "total_tokens": 1170
+      "total_tokens": 1148
     },
     {
       "id": "clothing-02",
@@ -151,7 +152,7 @@
         "groq/openai/gpt-oss-20b",
         "groq/openai/gpt-oss-20b"
       ],
-      "total_tokens": 1226
+      "total_tokens": 1225
     },
     {
       "id": "clothing-03",
@@ -180,8 +181,8 @@
       "scored": true,
       "predicted": [
         "2.2",
-        "2.1",
-        "2.4"
+        "2.4",
+        "2.1"
       ],
       "top_level_ok": true,
       "path_ok": true,
@@ -191,7 +192,7 @@
         "groq/openai/gpt-oss-20b",
         "groq/openai/gpt-oss-20b"
       ],
-      "total_tokens": 1099
+      "total_tokens": 1075
     },
     {
       "id": "clothing-05",
@@ -211,7 +212,7 @@
         "groq/openai/gpt-oss-20b",
         "groq/openai/gpt-oss-20b"
       ],
-      "total_tokens": 1119
+      "total_tokens": 1111
     },
     {
       "id": "housing-01",
@@ -232,7 +233,7 @@
         "groq/openai/gpt-oss-20b",
         "groq/openai/gpt-oss-20b"
       ],
-      "total_tokens": 1721
+      "total_tokens": 1728
     },
     {
       "id": "housing-02",
@@ -253,7 +254,7 @@
         "groq/openai/gpt-oss-20b",
         "groq/openai/gpt-oss-20b"
       ],
-      "total_tokens": 1766
+      "total_tokens": 1802
     },
     {
       "id": "housing-03",
@@ -273,7 +274,7 @@
         "groq/openai/gpt-oss-20b",
         "groq/openai/gpt-oss-20b"
       ],
-      "total_tokens": 1201
+      "total_tokens": 1207
     },
     {
       "id": "housing-04",
@@ -294,7 +295,7 @@
         "groq/openai/gpt-oss-20b",
         "groq/openai/gpt-oss-20b"
       ],
-      "total_tokens": 1781
+      "total_tokens": 1803
     },
     {
       "id": "housing-05",
@@ -302,9 +303,7 @@
       "expected": "LOCKSMITH",
       "scored": true,
       "predicted": [
-        "3.1",
-        "3.2",
-        "3.3"
+        "3.1"
       ],
       "top_level_ok": true,
       "path_ok": false,
@@ -314,7 +313,7 @@
         "groq/openai/gpt-oss-20b",
         "groq/openai/gpt-oss-20b"
       ],
-      "total_tokens": 1211
+      "total_tokens": 1240
     },
     {
       "id": "housing-06",
@@ -324,7 +323,7 @@
       "predicted": [
         "3.5",
         "3.2",
-        "3.1"
+        "3.7"
       ],
       "top_level_ok": true,
       "path_ok": true,
@@ -334,7 +333,7 @@
         "groq/openai/gpt-oss-20b",
         "groq/openai/gpt-oss-20b"
       ],
-      "total_tokens": 1229
+      "total_tokens": 1232
     },
     {
       "id": "housing-07",
@@ -354,7 +353,7 @@
         "groq/openai/gpt-oss-20b",
         "groq/openai/gpt-oss-20b"
       ],
-      "total_tokens": 1426
+      "total_tokens": 1348
     },
     {
       "id": "housing-08",
@@ -363,7 +362,7 @@
       "scored": true,
       "predicted": [
         "3.4",
-        "3.7",
+        "3.1",
         "3.8"
       ],
       "top_level_ok": true,
@@ -374,7 +373,7 @@
         "groq/openai/gpt-oss-20b",
         "groq/openai/gpt-oss-20b"
       ],
-      "total_tokens": 1157
+      "total_tokens": 1183
     },
     {
       "id": "housing-09",
@@ -413,7 +412,7 @@
       "models": [
         "groq/openai/gpt-oss-20b"
       ],
-      "total_tokens": 537
+      "total_tokens": 697
     },
     {
       "id": "housing-11",
@@ -421,7 +420,9 @@
       "expected": "REPAIR_MAINTENANCE_SUPPORT",
       "scored": true,
       "predicted": [
-        "6.5"
+        "6.5",
+        "6.7",
+        "6.1"
       ],
       "top_level_ok": false,
       "path_ok": false,
@@ -430,7 +431,7 @@
       "models": [
         "groq/openai/gpt-oss-20b"
       ],
-      "total_tokens": 614
+      "total_tokens": 613
     },
     {
       "id": "education-01",
@@ -451,7 +452,7 @@
         "groq/openai/gpt-oss-20b",
         "groq/openai/gpt-oss-20b"
       ],
-      "total_tokens": 2087
+      "total_tokens": 1679
     },
     {
       "id": "education-02",
@@ -471,7 +472,7 @@
         "groq/openai/gpt-oss-20b",
         "groq/openai/gpt-oss-20b"
       ],
-      "total_tokens": 1317
+      "total_tokens": 1122
     },
     {
       "id": "education-03",
@@ -480,8 +481,8 @@
       "scored": true,
       "predicted": [
         "4.3.5",
-        "4.3.6",
-        "4.3.1"
+        "4.3.1",
+        "4.3.2"
       ],
       "top_level_ok": true,
       "path_ok": true,
@@ -492,7 +493,7 @@
         "groq/openai/gpt-oss-20b",
         "groq/openai/gpt-oss-20b"
       ],
-      "total_tokens": 1601
+      "total_tokens": 2437
     },
     {
       "id": "education-04",
@@ -512,7 +513,7 @@
         "groq/openai/gpt-oss-20b",
         "groq/openai/gpt-oss-20b"
       ],
-      "total_tokens": 1122
+      "total_tokens": 1157
     },
     {
       "id": "education-05",
@@ -530,9 +531,9 @@
       "error": null,
       "models": [
         "groq/openai/gpt-oss-20b",
-        "groq/openai/gpt-oss-20b"
+        "groq/openai/gpt-oss-120b"
       ],
-      "total_tokens": 1264
+      "total_tokens": 1648
     },
     {
       "id": "education-06",
@@ -542,7 +543,7 @@
       "predicted": [
         "4.3.4",
         "4.3.6",
-        "4.3.5"
+        "4.3.1"
       ],
       "top_level_ok": true,
       "path_ok": true,
@@ -553,7 +554,7 @@
         "groq/openai/gpt-oss-20b",
         "groq/openai/gpt-oss-20b"
       ],
-      "total_tokens": 1951
+      "total_tokens": 1733
     },
     {
       "id": "education-07",
@@ -572,7 +573,7 @@
       "models": [
         "groq/openai/gpt-oss-20b"
       ],
-      "total_tokens": 547
+      "total_tokens": 545
     },
     {
       "id": "health-01",
@@ -593,7 +594,7 @@
         "groq/openai/gpt-oss-20b",
         "groq/openai/gpt-oss-20b"
       ],
-      "total_tokens": 2486
+      "total_tokens": 2208
     },
     {
       "id": "health-02",
@@ -614,7 +615,7 @@
         "groq/openai/gpt-oss-20b",
         "groq/openai/gpt-oss-20b"
       ],
-      "total_tokens": 1996
+      "total_tokens": 2018
     },
     {
       "id": "health-03",
@@ -632,9 +633,9 @@
       "error": null,
       "models": [
         "groq/openai/gpt-oss-20b",
-        "groq/openai/gpt-oss-20b"
+        "groq/openai/gpt-oss-120b"
       ],
-      "total_tokens": 1253
+      "total_tokens": 1896
     },
     {
       "id": "health-04",
@@ -654,7 +655,7 @@
         "groq/openai/gpt-oss-20b",
         "groq/openai/gpt-oss-20b"
       ],
-      "total_tokens": 1348
+      "total_tokens": 1371
     },
     {
       "id": "health-05",
@@ -672,10 +673,10 @@
       "error": null,
       "models": [
         "groq/openai/gpt-oss-20b",
-        "groq/openai/gpt-oss-20b",
+        "groq/openai/gpt-oss-120b",
         "groq/openai/gpt-oss-20b"
       ],
-      "total_tokens": 2106
+      "total_tokens": 2139
     },
     {
       "id": "health-06",
@@ -695,7 +696,7 @@
         "groq/openai/gpt-oss-20b",
         "groq/openai/gpt-oss-20b"
       ],
-      "total_tokens": 1362
+      "total_tokens": 1267
     },
     {
       "id": "elderly-01",
@@ -798,19 +799,18 @@
       "expected": "GENERAL_CATEGORY",
       "scored": true,
       "predicted": [
-        "5.3",
-        "5.5",
-        "5.1"
+        "0.0.0.0.0",
+        "5",
+        "6"
       ],
-      "top_level_ok": false,
-      "path_ok": false,
+      "top_level_ok": true,
+      "path_ok": true,
       "elderly_routed": false,
       "error": null,
       "models": [
-        "groq/openai/gpt-oss-20b",
         "groq/openai/gpt-oss-20b"
       ],
-      "total_tokens": 1542
+      "total_tokens": 690
     },
     {
       "id": "general-02",
@@ -829,7 +829,7 @@
       "models": [
         "groq/openai/gpt-oss-20b"
       ],
-      "total_tokens": 641
+      "total_tokens": 642
     },
     {
       "id": "gap-01",
@@ -837,19 +837,18 @@
       "expected": null,
       "scored": false,
       "predicted": [
-        "3.4",
-        "3.2",
-        "3.1"
+        "0.0.0.0.0",
+        "5",
+        "3"
       ],
       "top_level_ok": false,
       "path_ok": false,
       "elderly_routed": false,
       "error": null,
       "models": [
-        "groq/openai/gpt-oss-20b",
         "groq/openai/gpt-oss-20b"
       ],
-      "total_tokens": 1301
+      "total_tokens": 725
     },
     {
       "id": "gap-02",
@@ -857,8 +856,6 @@
       "expected": null,
       "scored": false,
       "predicted": [
-        "0.0.0.0.0",
-        "0.0.0.0.0",
         "0.0.0.0.0"
       ],
       "top_level_ok": false,
@@ -868,7 +865,7 @@
       "models": [
         "groq/openai/gpt-oss-20b"
       ],
-      "total_tokens": 699
+      "total_tokens": 689
     },
     {
       "id": "gap-03",
@@ -888,7 +885,7 @@
         "groq/openai/gpt-oss-20b",
         "groq/openai/gpt-oss-20b"
       ],
-      "total_tokens": 1217
+      "total_tokens": 1223
     },
     {
       "id": "gap-04",
@@ -896,9 +893,7 @@
       "expected": null,
       "scored": false,
       "predicted": [
-        "0.0.0.0.0",
-        "4",
-        "5"
+        "0.0.0.0.0"
       ],
       "top_level_ok": false,
       "path_ok": false,
@@ -907,7 +902,7 @@
       "models": [
         "groq/openai/gpt-oss-20b"
       ],
-      "total_tokens": 703
+      "total_tokens": 683
     }
   ]
 }

@@ -240,6 +240,20 @@ def test_any_prompt_edit_changes_the_fingerprint(monkeypatch):
     assert ev.fingerprint() != before
 
 
+def test_answer_shaping_code_is_part_of_the_fingerprint(monkeypatch):
+    """Changing how a model reply becomes the ranked answer needs a fresh run.
+
+    De-duplicating categories changed live answers without touching any
+    prompt; before this was fingerprinted, the old score would still have
+    been accepted.
+    """
+    before = ev.fingerprint()
+    def reparsed(self, response_data, candidate_set):
+        return []
+    monkeypatch.setattr(cs.GroqClassificationService, "_parse_ranked_categories", reparsed)
+    assert ev.fingerprint() != before
+
+
 def test_router_word_lists_are_part_of_the_fingerprint(monkeypatch):
     """Changing where the walk starts changes answers, so it needs a fresh run."""
     before = ev.fingerprint()
