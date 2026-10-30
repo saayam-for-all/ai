@@ -41,10 +41,10 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_router.py`](../../tests/test_router.py) | Integration | #171 | `lambda_function.lambda_handler` | 34 |
 | [`tests/test_skill_eval_dataset.py`](../../tests/test_skill_eval_dataset.py) | Dataset | #216 | `docs/metrics/volunteer_skills_eval_set.json` | 24 |
 | [`tests/test_skill_eval_scoring.py`](../../tests/test_skill_eval_scoring.py) | Unit | #216 | `tools/skill_eval_scoring.py` | 22 |
-| [`tests/test_skill_suggestion.py`](../../tests/test_skill_suggestion.py) | Unit | #216 | `services/skill_suggestion_service.py` | 50 |
+| [`tests/test_skill_suggestion.py`](../../tests/test_skill_suggestion.py) | Unit | #216 | `services/skill_suggestion_service.py` | 75 |
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
 | [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 57 |
-| | | | **Total** | **518** |
+| | | | **Total** | **543** |
 
 ## Every test
 
@@ -517,7 +517,7 @@ How volunteer skill suggestions are scored (issue #216).
 
 ### `test_skill_suggestion.py`
 
-*Unit · issue #216 · 50 tests*
+*Unit · issue #216 · 75 tests*
 
 Volunteer skill suggestions: predict_category_api with mode "volunteer_skills" (issue #216).
 
@@ -558,8 +558,27 @@ Volunteer skill suggestions: predict_category_api with mode "volunteer_skills" (
 | `test_description_and_evidence_are_not_logged_on_success` | Description and evidence are not logged on success. |
 | `test_description_is_not_logged_when_models_fail` | Failover warnings quote the exception; ours must not quote the text. |
 | `test_provider_error_text_quoting_the_output_is_not_logged` | Groq's json_validate_failed error carries the model's partial output. |
+| `test_session_text_is_not_logged` | The session carries earlier descriptions; they are no more loggable. |
+| `test_hints_name_only_selectable_leaves` | Hints name only selectable leaves. |
+| `test_prompt_stays_within_its_size_budget` | The category list is most of every call's tokens, on every call. |
+| `test_shared_paths_are_written_once_per_group` | Shared paths are written once per group. |
+| `test_each_suggestion_says_what_was_written_what_matched_and_why` | Each suggestion says what was written what matched and why. |
+| `test_a_quote_the_volunteer_did_not_write_is_not_shown` | A quote the volunteer did not write is not shown. |
+| `test_quotes_match_across_case_spacing_and_punctuation` | Quotes match across case spacing and punctuation. |
+| `test_medical_skill_is_suggested_with_its_quote` | Medical skill is suggested with its quote. |
+| `test_medical_skill_without_a_real_quote_is_not_suggested` | Medical skill without a real quote is not suggested. |
+| `test_wellbeing_skills_outside_medical_consultation_need_no_quote` | Wellbeing skills outside medical consultation need no quote. |
+| `test_first_call_starts_a_session_holding_the_text` | First call starts a session holding the text. |
+| `test_repeating_a_description_costs_no_tokens` | Repeating a description costs no tokens. |
+| `test_only_the_new_text_is_sent_and_results_are_merged` | Only the new text is sent and results are merged. |
+| `test_a_skill_named_twice_keeps_its_most_confident_suggestion` | A skill named twice keeps its most confident suggestion. |
+| `test_a_session_from_the_client_is_revalidated_not_trusted` | A session from the client is revalidated not trusted. |
+| `test_a_missing_or_malformed_session_is_a_fresh_one` | A missing or malformed session is a fresh one. |
+| `test_a_session_remembers_its_latest_entries_only` | A session remembers its laentries only. |
+| `test_merged_results_are_capped` | Merged results are capped. |
+| `test_handler_round_trips_the_session` | Handler round trips the session. |
 
-> 35 test functions expand to 50 cases through parametrisation.
+> 54 test functions expand to 75 cases through parametrisation.
 
 ### `test_subject_generator.py`
 

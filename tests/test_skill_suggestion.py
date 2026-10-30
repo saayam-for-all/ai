@@ -126,11 +126,17 @@ def _primary_returns(monkeypatch, payload):
     return groq
 
 
-def _skill(category, confidence, evidence=None):
+def _skill(category, confidence, evidence=None, reason=None):
     item = {"category": category, "confidence": confidence}
     if evidence is not None:
         item["evidence"] = evidence
+    if reason is not None:
+        item["reason"] = reason
     return item
+
+
+def _explained(hierarchy, evidence=None, why=None):
+    return {"user_said": evidence, "matched_to": hierarchy, "why": why}
 
 
 def _volunteer_event(description, **extra):
@@ -214,6 +220,9 @@ def test_skills_from_several_areas_are_all_returned(monkeypatch):
             "confidence": 0.93,
             "hierarchy": "Education Career Support > Tutoring > Math",
             "evidence": "math teacher",
+            "explanation": _explained(
+                "Education Career Support > Tutoring > Math", "math teacher"
+            ),
         },
         {
             "category_number": "3.3.5",
@@ -221,6 +230,9 @@ def test_skills_from_several_areas_are_all_returned(monkeypatch):
             "confidence": 0.88,
             "hierarchy": "Housing Assistance > Repair Maintenance Support > Garden",
             "evidence": "gardening",
+            "explanation": _explained(
+                "Housing Assistance > Repair Maintenance Support > Garden", "gardening"
+            ),
         },
         {
             "category_number": "5.3",
@@ -228,6 +240,10 @@ def test_skills_from_several_areas_are_all_returned(monkeypatch):
             "confidence": 0.81,
             "hierarchy": "Healthcare And Wellness > Mental Wellbeing Support",
             "evidence": "listen to people who are struggling",
+            "explanation": _explained(
+                "Healthcare And Wellness > Mental Wellbeing Support",
+                "listen to people who are struggling",
+            ),
         },
     ]
     assert unmatched == []
@@ -296,6 +312,9 @@ def test_confidence_is_clamped_and_unparseable_values_are_dropped(monkeypatch):
             "category_name": "PLUMBING",
             "confidence": 1.0,
             "hierarchy": "Housing Assistance > Repair Maintenance Support > Plumbing",
+            "explanation": _explained(
+                "Housing Assistance > Repair Maintenance Support > Plumbing"
+            ),
         }
     ]
 
@@ -510,12 +529,16 @@ def test_volunteer_mode_response_envelope(monkeypatch):
 
     assert response["statusCode"] == 200
     body = response["body"]
-    assert set(body) == {"categories", "unmatched_skills", "token_usage"}
+    assert set(body) == {"categories", "unmatched_skills", "token_usage", "cached", "session"}
     assert [c["category_number"] for c in body["categories"]] == ["3.3.3", "3.3.1"]
     for item in body["categories"]:
         assert {"category_number", "category_name", "confidence", "hierarchy"} <= set(item)
     assert body["unmatched_skills"] == []
     assert body["token_usage"]["total_calls"] == 1
+    assert body["cached"] is False
+    assert [e["text"] for e in body["session"]["entries"]] == [
+        "I'm a licensed electrician and I also do some plumbing on weekends."
+    ]
 
 
 @pytest.mark.parametrize("mode", ["volunteer_skills", "VOLUNTEER_SKILLS", " volunteer_skills "])
@@ -746,3 +769,253 @@ def test_provider_error_text_quoting_the_output_is_not_logged(monkeypatch, capsy
     assert "json_validate_failed" in caplog.text
     assert "400" in caplog.text
     _assert_not_logged(capsys, caplog)
+
+
+def test_session_text_is_not_logged(monkeypatch, capsys, caplog):
+    """The session carries earlier descriptions; they are no more loggable."""
+    caplog.set_level(logging.DEBUG)
+    _primary_returns(monkeypatch, {"skills": [_skill("3.3.1", 0.9, "plumbing")]})
+    session = {"entries": [{"text": _SECRET, "skills": [_skill("2.4", 0.9, "knitting")]}]}
+
+    response = LF.predict_category_handler(
+        _volunteer_event("I also do plumbing", session=session), None
+    )
+
+    assert response["statusCode"] == 200
+    _assert_not_logged(capsys, caplog)
+
+
+# ---------------------------------------------------------------------------
+# Token cost: the prompt stays small
+# ---------------------------------------------------------------------------
+
+def test_hints_name_only_selectable_leaves():
+    assert set(ss.SKILL_HINTS) <= set(ss.LEAF_CATEGORY_IDS)
+
+
+def test_prompt_stays_within_its_size_budget():
+    """The category list is most of every call's tokens, on every call.
+
+    The help-request descriptions it used to carry made the prompt ~11,900
+    characters. Growing it back should be a deliberate choice, not an accident.
+    """
+    assert len(ss.SYSTEM_PROMPT) <= 5000
+
+
+def test_shared_paths_are_written_once_per_group():
+    lines = ss.SYSTEM_PROMPT.splitlines()
+    assert "# Housing Assistance > Repair Maintenance Support" in lines
+    assert "3.3.1 | Plumbing" in lines
+    assert not any(" > " in line for line in lines if " | " in line)
+
+
+# ---------------------------------------------------------------------------
+# Explanations, and the evidence rule for medical skills
+# ---------------------------------------------------------------------------
+
+def test_each_suggestion_says_what_was_written_what_matched_and_why(monkeypatch):
+    _primary_returns(monkeypatch, {
+        "skills": [_skill("3.3.3", 0.95, "licensed electrician", "states they are an electrician")],
+    })
+
+    categories, _, _ = ss.suggest_skills("I'm a licensed electrician.")
+
+    assert categories[0]["explanation"] == {
+        "user_said": "licensed electrician",
+        "matched_to": "Housing Assistance > Repair Maintenance Support > Electrician",
+        "why": "states they are an electrician",
+    }
+
+
+def test_a_quote_the_volunteer_did_not_write_is_not_shown(monkeypatch):
+    _primary_returns(monkeypatch, {"skills": [_skill("3.3.1", 0.9, "expert pipe fitter")]})
+
+    categories, _, _ = ss.suggest_skills("I do plumbing")
+
+    assert [c["category_number"] for c in categories] == ["3.3.1"]
+    assert "evidence" not in categories[0]
+    assert categories[0]["explanation"]["user_said"] is None
+
+
+def test_quotes_match_across_case_spacing_and_punctuation(monkeypatch):
+    _primary_returns(monkeypatch, {"skills": [_skill("5.1.3", 0.95, "  i'm a   DENTIST. ")]})
+
+    categories, _, _ = ss.suggest_skills("I'm a dentist")
+
+    assert categories[0]["evidence"] == "i'm a DENTIST."
+
+
+def test_medical_skill_is_suggested_with_its_quote(monkeypatch):
+    _primary_returns(monkeypatch, {
+        "skills": [_skill("5.1.1", 0.9, "registered nurse", "nursing is general medical care")],
+    })
+
+    categories, _, _ = ss.suggest_skills("I'm a registered nurse on night shifts.")
+
+    assert [c["category_number"] for c in categories] == ["5.1.1"]
+    assert categories[0]["explanation"]["user_said"] == "registered nurse"
+
+
+@pytest.mark.parametrize("evidence", [None, "", "board-certified physician"])
+def test_medical_skill_without_a_real_quote_is_not_suggested(monkeypatch, evidence):
+    _primary_returns(monkeypatch, {
+        "skills": [_skill("5.1.1", 0.95, evidence), _skill("6.6", 0.9, "drive people")],
+    })
+
+    categories, _, _ = ss.suggest_skills("I can drive people to appointments.")
+
+    assert [c["category_number"] for c in categories] == ["6.6"]
+
+
+def test_wellbeing_skills_outside_medical_consultation_need_no_quote(monkeypatch):
+    _primary_returns(monkeypatch, {"skills": [_skill("5.3", 0.9)]})
+
+    categories, _, _ = ss.suggest_skills("I am a good listener")
+
+    assert [c["category_number"] for c in categories] == ["5.3"]
+
+
+# ---------------------------------------------------------------------------
+# Session memory
+# ---------------------------------------------------------------------------
+
+def _session_call(monkeypatch, description, session=None, payload=None):
+    groq = _primary_returns(monkeypatch, payload or {"skills": []})
+    body = ss.suggest_skills_for_session(description, session)
+    return body, groq
+
+
+def test_first_call_starts_a_session_holding_the_text(monkeypatch):
+    body, groq = _session_call(
+        monkeypatch, "I'm a licensed electrician.",
+        payload={"skills": [_skill("3.3.3", 0.95, "licensed electrician", "electrician")]},
+    )
+
+    assert len(groq.calls) == 1
+    assert body["cached"] is False
+    assert body["session"] == {"entries": [{
+        "text": "I'm a licensed electrician.",
+        "skills": [{
+            "category": "3.3.3", "confidence": 0.95,
+            "evidence": "licensed electrician", "reason": "electrician",
+        }],
+        "unmatched_skills": [],
+    }]}
+
+
+def test_repeating_a_description_costs_no_tokens(monkeypatch):
+    first, _ = _session_call(
+        monkeypatch, "I'm a licensed electrician.",
+        payload={"skills": [_skill("3.3.3", 0.95, "licensed electrician")]},
+    )
+
+    again, groq = _session_call(monkeypatch, "  i'm a LICENSED   electrician. ", first["session"])
+
+    assert groq.calls == []
+    assert again["cached"] is True
+    assert again["token_usage"]["total_tokens"] == 0
+    assert [c["category_number"] for c in again["categories"]] == ["3.3.3"]
+    assert again["session"] == first["session"]
+
+
+def test_only_the_new_text_is_sent_and_results_are_merged(monkeypatch):
+    first, _ = _session_call(
+        monkeypatch, "I'm a licensed electrician.",
+        payload={"skills": [_skill("3.3.3", 0.95, "licensed electrician")],
+                 "unmatched_skills": ["accounting"]},
+    )
+
+    second, groq = _session_call(
+        monkeypatch, "I also tutor maths at weekends.", first["session"],
+        payload={"skills": [_skill("4.3.1", 0.9, "tutor maths")],
+                 "unmatched_skills": ["Accounting", "photography"]},
+    )
+
+    user_message = groq.calls[0]["messages"][1]["content"]
+    assert "tutor maths" in user_message
+    assert "electrician" not in user_message
+    assert [c["category_number"] for c in second["categories"]] == ["3.3.3", "4.3.1"]
+    assert second["unmatched_skills"] == ["accounting", "photography"]
+    assert [e["text"] for e in second["session"]["entries"]] == [
+        "I'm a licensed electrician.", "I also tutor maths at weekends.",
+    ]
+
+
+def test_a_skill_named_twice_keeps_its_most_confident_suggestion(monkeypatch):
+    session = {"entries": [{"text": "some gardening", "skills": [_skill("3.3.5", 0.6, "gardening")]}]}
+
+    body, _ = _session_call(
+        monkeypatch, "I'm a professional landscaper", session,
+        payload={"skills": [_skill("3.3.5", 0.95, "professional landscaper")]},
+    )
+
+    assert len(body["categories"]) == 1
+    assert body["categories"][0]["confidence"] == 0.95
+    assert body["categories"][0]["evidence"] == "professional landscaper"
+
+
+def test_a_session_from_the_client_is_revalidated_not_trusted(monkeypatch):
+    session = {"entries": [
+        {"text": "I volunteer a lot", "skills": [
+            _skill("0.0.0.0.0", 0.99),                    # General
+            _skill("4.3", 0.99),                          # parent
+            _skill("9.9", 0.99),                          # unknown
+            _skill("5.1.1", 0.99, "surgeon"),             # medical, quote not in text
+            _skill("3.7", 7, "volunteer"),                # confidence out of range
+        ]},
+        "not an entry",
+        {"text": "   ", "skills": [_skill("3.3.1", 0.9)]},
+        {"text": "I sew", "skills": "not a list"},
+    ]}
+
+    body, _ = _session_call(monkeypatch, "I can paint", session)
+
+    assert [c["category_number"] for c in body["categories"]] == ["3.7"]
+    assert body["categories"][0]["confidence"] == 1.0
+    assert [e["text"] for e in body["session"]["entries"]] == [
+        "I volunteer a lot", "I sew", "I can paint",
+    ]
+
+
+@pytest.mark.parametrize("session", [None, "x", [], {"entries": "x"}, {"other": []}])
+def test_a_missing_or_malformed_session_is_a_fresh_one(monkeypatch, session):
+    body, groq = _session_call(monkeypatch, "I can paint", session)
+
+    assert len(groq.calls) == 1
+    assert [e["text"] for e in body["session"]["entries"]] == ["I can paint"]
+
+
+def test_a_session_remembers_its_latest_entries_only(monkeypatch):
+    session = {"entries": [{"text": f"entry {n}", "skills": []} for n in range(15)]}
+
+    body, _ = _session_call(monkeypatch, "I can paint", session)
+
+    texts = [e["text"] for e in body["session"]["entries"]]
+    assert len(texts) == ss.MAX_SESSION_ENTRIES
+    assert texts[-1] == "I can paint"
+    assert texts[0] == "entry 6"
+
+
+def test_merged_results_are_capped(monkeypatch):
+    monkeypatch.setenv("SKILL_SUGGESTION_MAX_SESSION_RESULTS", "2")
+    session = {"entries": [{"text": "plumbing, painting, roofing", "skills": [
+        _skill("3.3.1", 0.9), _skill("3.3.9", 0.8), _skill("3.3.7", 0.7),
+    ]}]}
+
+    body, _ = _session_call(monkeypatch, "plumbing, painting, roofing", session)
+
+    assert [c["category_number"] for c in body["categories"]] == ["3.3.1", "3.3.9"]
+
+
+def test_handler_round_trips_the_session(monkeypatch):
+    _primary_returns(monkeypatch, {"skills": [_skill("2.4", 0.9, "alterations")]})
+    first = LF.predict_category_handler(_volunteer_event("I do alterations"), None)["body"]
+
+    with mock.patch.object(LF, "suggest_skills", side_effect=AssertionError("no model call")):
+        again = LF.predict_category_handler(
+            _volunteer_event("I do alterations", session=first["session"]), None
+        )
+
+    assert again["statusCode"] == 200
+    assert again["body"]["cached"] is True
+    assert again["body"]["categories"] == first["categories"]

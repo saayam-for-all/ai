@@ -45,6 +45,31 @@ team works and reviews in.
   live models and writes `docs/metrics/volunteer_skills_eval.json`; the
   counting rules live in `tools/skill_eval_scoring.py` and are unit tested.
   Findings are written up in `docs/metrics/VOLUNTEER_SKILLS_EVAL.md`.
+- **Session memory.** The request may carry a `session`, and every response
+  returns the updated one for the web app to send back next time, the same
+  client-held pattern as `conversation_history` in Generate Answer. It holds
+  the free text the volunteer has written in this sitting and what was
+  suggested for each piece; nothing is stored server-side. A description
+  already in the session is answered with no model call (`"cached": true`,
+  zero tokens), and a new one sends only the new text to the model and merges
+  its suggestions with the earlier ones (at most 12, highest first). A session
+  coming back from the client is re-validated like model output.
+- **An explanation on every suggestion**: `explanation.user_said` (the quote
+  from the volunteer's text), `explanation.matched_to` (the category path) and
+  `explanation.why` (the model's reason, at most about ten words). A quote that
+  is not actually in the text is not shown. Medical consultation categories
+  (`5.1.*`) are suggested automatically, but only with such a quote; without
+  one the suggestion is dropped.
+
+**Changed**
+
+- **The prompt is 60% smaller** (4,808 characters, from 11,897). The category
+  list was 86% of it: a full path and the help-request description for every
+  leaf, and the medical descriptions are long symptom-triage text that does not
+  help match a skill. It now writes each group's path once and a short
+  skill-side hint per leaf (`SKILL_HINTS`). A test holds the prompt under 5,000
+  characters. The accuracy figures above were measured on the old prompt and
+  must be re-run on this one.
 
 **Unchanged**
 

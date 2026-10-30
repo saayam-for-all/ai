@@ -1,7 +1,11 @@
 import json
 from utils.subject_generator import generate_subject_from_description
 from services.classification_service import predict_categories
-from services.skill_suggestion_service import MAX_DESCRIPTION_CHARS, suggest_skills
+from services.skill_suggestion_service import (
+    MAX_DESCRIPTION_CHARS,
+    suggest_skills,
+    suggest_skills_for_session,
+)
 from utils.categories import help_categories
 from utils.generate_answer_service import generate_ai_answer
 from utils.model_fallback import ModelChainExhausted
@@ -258,8 +262,9 @@ def _suggest_skills_response(body):
     """Suggest skill categories for a parsed request body.
 
     The description is the volunteer's own account of themselves, and the
-    `evidence` quotes in the result are copied from it. Neither is logged:
-    only the body's keys and the description's length.
+    `evidence` quotes in the result are copied from it. Neither is logged, and
+    nor is the `session`, which carries earlier descriptions: only the body's
+    keys, the description's length and the number of session entries.
     """
     try:
         description = body.get("description")
@@ -267,22 +272,20 @@ def _suggest_skills_response(body):
             return _response(400, {"error": "Description is required"})
         description = description.strip()[:MAX_DESCRIPTION_CHARS]
 
+        session = body.get("session")
+        session_entries = session.get("entries") if isinstance(session, dict) else None
         print(
             "LOG: suggest_skills invoked, body keys:", sorted(body.keys()),
             "description_chars:", len(description),
+            "session_entries:", len(session_entries) if isinstance(session_entries, list) else 0,
         )
 
-        categories, unmatched_skills, token_usage = suggest_skills(description)
-
         # Same item fields the client already reads for help requests, plus
-        # the optional `evidence`. Every category_number is a selectable leaf.
+        # `evidence` and `explanation`. Every category_number is a selectable
+        # leaf. The client sends `session` back unchanged on its next call.
         return _response(
             200,
-            {
-                "categories": categories,
-                "unmatched_skills": unmatched_skills,
-                "token_usage": token_usage,
-            },
+            suggest_skills_for_session(description, session, suggest=suggest_skills),
         )
 
     except ModelChainExhausted:

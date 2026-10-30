@@ -108,11 +108,18 @@ someone who needs care.
         "category_name": "ELECTRICIAN",
         "confidence": 0.95,
         "hierarchy": "Housing Assistance > Repair Maintenance Support > Electrician",
-        "evidence": "licensed electrician"
+        "evidence": "licensed electrician",
+        "explanation": {
+          "user_said": "licensed electrician",
+          "matched_to": "Housing Assistance > Repair Maintenance Support > Electrician",
+          "why": "states a licensed electrical trade"
+        }
       }
     ],
     "unmatched_skills": [],
-    "token_usage": { "...": "..." }
+    "token_usage": { "...": "..." },
+    "cached": false,
+    "session": { "entries": [ "..." ] }
   }
 }
 ```
@@ -121,9 +128,37 @@ someone who needs care.
 | :--- | :--- |
 | `category_number` | Always a leaf in `utils/predict_category_list.py`. Never General (`0.0.0.0.0`), never a parent such as `4.3`, never repeated. |
 | Size and order | At most 6 items with confidence ≥ 0.5, highest first. Override with the `SKILL_SUGGESTION_MAX_RESULTS` and `SKILL_SUGGESTION_MIN_CONFIDENCE` environment variables. |
-| `evidence` | Optional. The phrase from the description that supports the suggestion. |
+| `evidence` | Optional. The phrase from the description that supports the suggestion, shown only if it is really in the text. |
+| `explanation` | Always present: `user_said` (the quote, or null), `matched_to` (the category path) and `why` (the model's short reason, or null). |
+| Medical (`5.1.*`) | Suggested only with a quote from the volunteer's own text; otherwise dropped. |
 | `unmatched_skills` | Always a list. Skills the volunteer stated that fit no category, e.g. `["accounting"]`. |
 | `categories: []` | A valid `200`: nothing matched. The web app keeps its manual picker. |
+| `session` | Always returned. Send it back unchanged with the next description from the same volunteer. |
+| `cached` | `true` when the description was already in the session: answered with no model call. |
+
+**Session memory.** The web app keeps the returned `session` for as long as
+the volunteer is in the wizard (component state or `sessionStorage`) and sends
+it with each call, as it already does with `conversation_history` for Generate
+Answer. Nothing is stored server-side. A repeated description costs no tokens;
+a new one sends only the new text to the model, and `categories` merges every
+description in the session (at most 12, `SKILL_SUGGESTION_MAX_SESSION_RESULTS`).
+
+```json
+{
+  "description": "I also tutor maths at weekends.",
+  "mode": "volunteer_skills",
+  "session": {
+    "entries": [
+      {
+        "text": "I'm a licensed electrician.",
+        "skills": [{"category": "3.3.3", "confidence": 0.95,
+                    "evidence": "licensed electrician", "reason": "states a licensed trade"}],
+        "unmatched_skills": []
+      }
+    ]
+  }
+}
+```
 
 | Status | Body | When |
 | :--- | :--- | :--- |
