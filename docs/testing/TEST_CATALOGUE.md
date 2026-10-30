@@ -26,7 +26,7 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | File | Kind | Issue | Covers | Tests |
 | --- | --- | --- | --- | ---: |
 | [`tests/test_answer_conversation.py`](../../tests/test_answer_conversation.py) | Unit | #183 | `utils/__init__.py prompt assembly` | 24 |
-| [`tests/test_classification_eval.py`](../../tests/test_classification_eval.py) | Unit | #197 | `evaluation/ scoring, gate, fingerprint` | 37 |
+| [`tests/test_classification_eval.py`](../../tests/test_classification_eval.py) | Unit | #197 | `evaluation/ scoring, gate, fingerprint` | 38 |
 | [`tests/test_classification_eval_gate.py`](../../tests/test_classification_eval_gate.py) | Integration | #197 | `classification quality gate` | 4 |
 | [`tests/test_classification_resilience.py`](../../tests/test_classification_resilience.py) | Unit | - | `services/classification_service.py` | 10 |
 | [`tests/test_classification_telemetry.py`](../../tests/test_classification_telemetry.py) | Unit | #197 | `utils/classification_telemetry.py, tools/setup_observability.py` | 36 |
@@ -46,7 +46,7 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_router.py`](../../tests/test_router.py) | Integration | #171 | `lambda_function.lambda_handler` | 34 |
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
 | [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 57 |
-| | | | **Total** | **658** |
+| | | | **Total** | **659** |
 
 ## Every test
 
@@ -83,7 +83,7 @@ What the model is actually asked, turn by turn - issue #183.
 
 ### `test_classification_eval.py`
 
-*Unit · issue #197 · 37 tests*
+*Unit · issue #197 · 38 tests*
 
 Scoring, gating, fingerprinting and reporting in evaluation/ (issue #197, stack 5).
 
@@ -107,6 +107,7 @@ Scoring, gating, fingerprinting and reporting in evaluation/ (issue #197, stack 
 | `test_any_error_fails_the_gate_even_above_the_mark` | An unanswered case is not a correct case, whatever the rest scored. |
 | `test_known_gaps_are_run_but_never_scored` | A gap case changes neither the score nor the gate. |
 | `test_by_branch_counts_correct_and_total_per_expected_branch` | The per-branch table counts by the label's branch, not the answer's. |
+| `test_by_branch_names_the_general_branch` | General's id is 0.0.0.0.0, so its branch must not be reported as "?". |
 | `test_report_serialises_to_json_with_its_summary` | The committed JSON carries the numbers check_results reads. |
 | `test_markdown_lists_misses_and_gaps` | The human report names each miss, why it missed, and where gaps landed. |
 | `test_fingerprint_is_stable_between_calls` | Same code, same fingerprint; otherwise every run would look stale. |
@@ -117,7 +118,7 @@ Scoring, gating, fingerprinting and reporting in evaluation/ (issue #197, stack 
 | `test_check_results_reports_a_missing_result` | No committed result is itself a failure, with the command to fix it. |
 | `test_check_results_reports_a_stale_and_a_failed_result` | A result measured elsewhere, that also failed, yields both problems. |
 
-> 27 test functions expand to 37 cases through parametrisation.
+> 28 test functions expand to 38 cases through parametrisation.
 
 ### `test_classification_eval_gate.py`
 

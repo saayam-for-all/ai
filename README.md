@@ -41,7 +41,13 @@ ai/
 │   ├── generate_answer_service.py # Core answer generation service
 │   ├── request_db.py              # Database request details fetcher
 │   ├── search_orgs.py             # More Organizations (search nonprofits/for-profits)
-│   └── subject_generator.py       # Subject line generation service
+│   ├── subject_generator.py       # Subject line generation service
+│   ├── classification_telemetry.py # CLASSIFICATION_OUTCOME metrics line (#197)
+│   └── guardrails.py              # Inbound/outbound classification guardrails (#197)
+├── evaluation/                    # Classification golden set, scoring and quality gate (#197)
+├── tools/
+│   ├── run_golden_set.py          # Live golden-set run; writes docs/metrics/ (#197)
+│   └── setup_observability.py     # CloudWatch alarms and saved queries, dry run by default (#197)
 ├── lambda_function.py             # Entry points for all AWS Lambda functions
 ├── requirements.txt               # Pipeline dependencies
 └── README.md                      # This file
@@ -460,6 +466,61 @@ curl -X POST https://<api-gateway-url>/more-organizations \
 
 ---
 
+## AI Tech Stack: Evaluation, Observability and Guardrails
+
+Issue [#197](https://github.com/saayam-for-all/ai/issues/197), stack 5. Tests
+check that our code does what it was written to do. These three parts check
+the *model*, driven by our prompts, for the Predict Category service.
+
+| Part | What it is | Where |
+| --- | --- | --- |
+| **Evaluation** | A golden set of 45 hand-labelled requests (41 scored, 4 known taxonomy gaps), scored against the real classifier with a 90% pass mark on top-level accuracy. A fingerprint of everything that decides the answer - prompts, model chain, sampling, elderly routing, answer-parsing code, labels - is stored with each live result, so a change to any of them makes the result stale and fails the suite. | `evaluation/`, `tools/run_golden_set.py`, `docs/metrics/GOLDEN_SET_CLASSIFICATION.md` |
+| **Observability** | Every prediction, including a failed one, prints one `CLASSIFICATION_OUTCOME` line in CloudWatch Embedded Metric Format: categorised, general, empty or error, with fallback, latency, calls and tokens. CloudWatch turns it into metrics in the `Saayam/GenAI` namespace with no extra AWS call. Three alarms and five Logs Insights queries are defined on top. The description is never logged. | `utils/classification_telemetry.py`, `tools/observability/classification.json`, `tools/setup_observability.py` |
+| **Guardrails** | Outbound: repeated categories are removed, and ids that were not offered are dropped. Inbound: descriptions that look like prompt injection are recorded, not blocked. Each firing prints a `GUARDRAIL` metrics line. | `utils/guardrails.py`, `services/classification_service.py` |
+
+**Install.** Nothing beyond the normal setup:
+`pip install -r requirements.txt -r requirements-dev.txt`.
+
+**Run the live evaluation.** It needs `GROQ_API_KEY` (and optionally
+`GEMINI_API_KEY`) in `.env`, and costs about 90 model calls (~55k tokens):
+
+```bash
+python tools/run_golden_set.py            # full run; writes docs/metrics/golden_set_classification.json and .md
+python tools/run_golden_set.py --limit 5  # cheap smoke run; writes nothing
+python tools/run_golden_set.py --check    # offline: is the committed result current, and did it pass?
+```
+
+Rerun it, and commit both files in `docs/metrics/`, whenever a prompt, the
+model chain, the elderly routing, the answer-parsing code or the golden set
+changes. Until then `test_live_result_was_measured_on_the_current_classifier`
+fails.
+
+**Create the alarms and queries.** Dry run by default; `--apply` needs AWS
+credentials allowed to call `cloudwatch:PutMetricAlarm` and
+`logs:PutQueryDefinition`:
+
+```bash
+python tools/setup_observability.py
+python tools/setup_observability.py --apply --log-group /aws/lambda/<predict-category-function> --sns-topic <arn>
+```
+
+**Tests.** Offline by default; one live smoke test is marked `needs_network`:
+
+```bash
+python -m pytest tests/test_golden_set.py tests/test_classification_eval.py \
+  tests/test_classification_eval_gate.py tests/test_classification_telemetry.py tests/test_guardrails.py
+python -m pytest -m needs_network tests/test_classification_eval_gate.py
+```
+
+**Current result: below the pass mark, on purpose.** The latest live run
+scored 36/41 (88%). Three of the misses are caused by the elderly router in
+`utils/routing_for_categories.py`, which matches substrings ("senior" in high
+school, "aging" roof, "fall" in "falling") and then offers the model only
+Elderly sub-categories. `test_live_result_passes_the_pass_mark` is a strict
+`xfail` that names this; remove the marker once a fixed router passes.
+
+---
+
 ## Testing
 
 The suite is hermetic: no API keys, no AWS credentials, and no network access.
@@ -469,7 +530,8 @@ pip install -r requirements.txt -r requirements-dev.txt
 python -m pytest
 ```
 
-A clean run is **63 tests** in about a second. Run one slice with a marker —
+A clean run takes about ten seconds; the current count per file is in
+[`docs/testing/TEST_CATALOGUE.md`](docs/testing/TEST_CATALOGUE.md). Run one slice with a marker —
 `python -m pytest -m contract` is the one to start from for any web-client bug
 report, because contract tests mirror what the browser actually sees.
 

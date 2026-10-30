@@ -143,7 +143,9 @@ class EvalReport:
         totals: Counter = Counter()
         correct: Counter = Counter()
         for result in self.scored:
-            branch = help_categories.get(_branch_id(result.expected), "?")
+            branch_id = _branch_id(result.expected)
+            # General's id is 0.0.0.0.0, so its branch "0" has no entry of its own.
+            branch = help_categories.get(GENERAL_ID if branch_id == "0" else branch_id, "?")
             totals[branch] += 1
             correct[branch] += result.top_level_ok
         return {branch: (correct[branch], totals[branch]) for branch in totals}

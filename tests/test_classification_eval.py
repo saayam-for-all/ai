@@ -198,6 +198,12 @@ def test_by_branch_counts_correct_and_total_per_expected_branch():
     assert report.by_branch() == {"HOUSING_ASSISTANCE": (1, 1), "FOOD_AND_ESSENTIALS": (0, 1)}
 
 
+def test_by_branch_names_the_general_branch():
+    """General's id is 0.0.0.0.0, so its branch must not be reported as "?"."""
+    report = ev.evaluate([_case(expected="GENERAL_CATEGORY")], _answers("0.0.0.0.0"))
+    assert report.by_branch() == {"GENERAL_CATEGORY": (1, 1)}
+
+
 def test_report_serialises_to_json_with_its_summary():
     """The committed JSON carries the numbers check_results reads."""
     data = json.loads(json.dumps(ev.evaluate([_case()], _answers("3.3.1")).to_dict()))

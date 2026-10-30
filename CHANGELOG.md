@@ -10,6 +10,35 @@ team works and reviews in.
 
 ## Unreleased
 
+### AI tech stack: evaluation, observability and guardrails — [#197](https://github.com/saayam-for-all/ai/issues/197) (stack 5)
+
+Lives on `ai-tech-stack/issue-197/eval-guardrails`, not `dev`.
+
+**Added**
+
+- **Classification golden set and quality gate.** `evaluation/golden/classification.jsonl`
+  holds 45 hand-labelled requests across every branch. `tools/run_golden_set.py` runs them
+  through the real classifier and commits the score to `docs/metrics/`. The suite fails when
+  that score was measured on different prompts, models, routing, parsing code or labels than
+  the code now has.
+- **`CLASSIFICATION_OUTCOME` line.** One CloudWatch EMF line per prediction, saying whether it
+  was categorised, General, empty or an error, and whether a fallback model answered.
+  Alarm and Logs Insights query definitions, and `tools/setup_observability.py` to create them.
+- **Guardrails.** Repeated categories are removed from the ranked answer; suspected prompt
+  injection in a description is recorded (not blocked). Each firing prints a `GUARDRAIL` line.
+
+**Behaviour a tester can observe**
+
+- Predict Category no longer returns the same category twice. A reply of
+  `[General, General, General]` is now `[General]`.
+- CloudWatch logs for Predict Category gain a `CLASSIFICATION_OUTCOME` JSON line per request,
+  and a `GUARDRAIL` line when a guardrail fires. Response bodies are unchanged.
+- **Editing the classification prompt, `config/model_routing.json`, the elderly routing words
+  or the golden set now fails the suite** until `python tools/run_golden_set.py` is rerun and
+  its output committed.
+- `test_live_result_passes_the_pass_mark` is a strict `xfail`: the latest score is 36/41
+  (88%) against a 90% mark, held down by the elderly router's substring matches.
+
 ### Token usage tracking & reasoning effort — [#194](https://github.com/saayam-for-all/ai/issues/194)
 
 **Fixed**

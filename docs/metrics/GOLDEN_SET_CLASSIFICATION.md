@@ -14,11 +14,11 @@ next to this file is what `tests/test_classification_eval.py` checks.
 
 | Expected branch | Correct |
 | --- | ---: |
-| ? | 2/2 |
 | CLOTHING_ASSISTANCE | 4/5 |
 | EDUCATION_CAREER_SUPPORT | 6/7 |
 | ELDERLY_COMMUNITY_ASSISTANCE | 5/5 |
 | FOOD_AND_ESSENTIALS | 4/5 |
+| GENERAL_CATEGORY | 2/2 |
 | HEALTHCARE_AND_WELLNESS | 6/6 |
 | HOUSING_ASSISTANCE | 9/11 |
 
