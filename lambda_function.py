@@ -1,4 +1,5 @@
 import json
+import traceback
 from utils.subject_generator import generate_subject_from_description
 from services.classification_service import predict_categories
 from utils.categories import help_categories
@@ -311,7 +312,7 @@ def emergency_contacts_handler(event, context):
         # the response and the page saw a 502 with no diagnosis - the failure
         # mode reported in issue #146. The detail goes to CloudWatch rather than
         # to the caller.
-        print(f"ERROR: emergency_contacts failed: {type(e).__name__}: {e}")
+        print(f"ERROR: emergency_contacts failed: {type(e).__name__}: {e}\n{traceback.format_exc()}")
         return _proxy_response(500, {"error": "Emergency services lookup failed"})
 
 
