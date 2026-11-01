@@ -7,7 +7,7 @@ per-service budget targets.
 - **Counting util:** `utils/token_usage.py`
 - **Measurement harness:** `tools/measure_token_baseline.py`
 - **Raw results:** `docs/metrics/token_baseline.json`
-- **Measured:** 2026-09-06, `openai/gpt-oss-20b` (Groq) + `gemini-2.5-flash`
+- **Measured:** 2026-10-31 (re-measured on `dev` at `271a402`, post-#212 & #213), `openai/gpt-oss-20b` (Groq) + `gemini-2.5-flash`
 - **Corpus:** 8 fixed help requests spanning six categories and 31-500 character
   descriptions, defined in the harness so two runs stay comparable
 
@@ -59,14 +59,17 @@ Both current models bill reasoning tokens as output. In raw `google.genai`, thin
 
 | Service | Calls/req | Prompt | Completion | **Total** | Median | Range |
 |---|---:|---:|---:|---:|---:|---:|
-| `search_orgs` | 1.12 | 1,363 | 2,347 | **3,710** | 2,206 | 2,112-14,355 |
-| `generate_subject` | 1.00 | 523 | 1,515 | **2,038** | 1,241 | 667-4,691 |
-| `predict_category` | 2.25 | 1,172 | 258 | **1,430** | 1,422 | 527-2,167 |
-| `generate_answer` | 1.00 | 528 | 410 | **938** | 817 | 714-1,299 |
-| **All four** | | | | **8,116** | | |
+| `search_orgs` | 1.25 | 1,509 | 2,117 | **3,626** | 2,201 | 2,062-8,492 |
+| `predict_category` | 2.25 | 1,172 | 253 | **1,426** | 1,426 | 526-2,167 |
+| `generate_subject` | 1.00 | 523 | 110 | **634** | 564 | 525-934 |
+| `generate_answer` | 1.00 | 528 | 101 | **628** | 619 | 573-708 |
+| **All four (Measured Mean)** | | | | **6,314** | | |
+| **All four (Groq-Only)** | | | | **4,851** | | |
 
 A user who files one request and opens the Organizations tab costs about
-**8,100 tokens**.
+**6,300 tokens** (~**4,850 tokens** under normal Groq-only operation without fallbacks).
+In `search_orgs`, 6 of 8 runs completed on Groq at a mean of **2,163 tokens**; 2 runs
+fell back to Gemini due to empty result lists, pulling the service mean to 3,626 tokens.
 
 ### What the shape of each service tells you
 
@@ -243,9 +246,12 @@ CloudWatch Logs Insights:
 
 ```
 fields @timestamp, @message
-| filter @message like /TOKEN_USAGE/
-| parse @message "TOKEN_USAGE *" as body
-| stats avg(total_tokens), max(total_tokens), count(*) by service
+| filter @message like /^TOKEN_USAGE /
+| parse @message /"service": "(?<service>[^"]+)"/
+| parse @message /"total_tokens": (?<total_tokens>\d+)/
+| stats count(*) as requests, avg(total_tokens) as avg_tokens,
+        max(total_tokens) as max_tokens, sum(total_tokens) as sum_tokens
+  by service
 ```
 
 Usage is reported to logs only, deliberately. `search_orgs` returns a body the

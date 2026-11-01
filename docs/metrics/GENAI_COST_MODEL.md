@@ -1,8 +1,8 @@
 # GenAI Cost Model
 
-**Rates Verified On:** 28 October 2026  
-**Last Reviewed:** 28 October 2026  
-**Model Currency Check:** 28 October 2026 (Live Audit)  
+**Rates Verified On:** 31 October 2026  
+**Last Reviewed:** 31 October 2026  
+**Model Currency Check:** 31 October 2026 (Live Audit)  
 **Status:** Active  
 
 ---
@@ -18,14 +18,14 @@ Following the telemetry double-counting fix and reasoning effort pin (PR #212) a
 
 | Metric | Initial Estimate (16 Sep) | Pre-Fix Ceiling (#189) | Measured Baseline (`271a402` Mean)* | Groq-Only (Normal Operation) | Impact / Implication |
 | :--- | :---: | :---: | :---: | :---: | :--- |
-| **Tokens per Help Request** | 3,434 | 8,116 | **6,405** | **4,800** | Telemetry inflation corrected; Groq effort pinned to `low`. |
-| **Cost per Help Request (Groq)** | $0.000433 | ~$0.00163 | **~$0.00108** | **~$0.00067** | Highly cost-effective (~$1.08 per 1,000 requests at mean). |
-| **Cost per 1,000 Help Requests** | $0.43 | ~$1.63 | **$1.08** | **$0.67** | Predictable, low-cost scaling. |
-| **Free-Tier Daily Capacity** | 58 / day | ~24 / day | **~31 / day** | **~41 / day** | **Strictly token-bound (200k TPD). Limits trigger failover.** |
-| **Failover Multiplier (Gemini)** | 6.34× | Up to 15×+ | **~7.2× (Mean)** | **~6.8× (Lower Bound)** | Empty results in `search_orgs` trigger costly Gemini fallback. |
-| **Self-Hosting Breakeven** | ~875,000 / mo | ~233,000 / mo | **~350,000 / mo** | **~565,000 / mo** | Fixed EC2 GPU instance remains unviable vs serverless API. |
+| **Tokens per Help Request** | 3,434 | 8,116 | **~6,300–6,400** | **4,800** | Telemetry inflation corrected; Groq effort pinned to `low`. |
+| **Cost per Help Request** | $0.000433 | ~$0.00163 | **~$0.0046** | **~$0.00067** | Per-provider pricing: primary Groq + 25% Gemini org search fallback. |
+| **Cost per 1,000 Help Requests** | $0.43 | ~$1.63 | **~$4.60** | **~$0.67** | Org search empty-result fallback rate dominates overall spend. |
+| **Free-Tier Daily Capacity** | 58 / day | ~24 / day | **~41 / day** | **~41 / day** | **Groq limit is 200k TPD. Gemini tokens do not count against Groq.** |
+| **Failover Multiplier (Gemini)** | 6.34× | Up to 15×+ | **~6.9× (Mean vs Groq)** | **~6.8× (Lower Bound)** | Gemini output ($2.50/M) makes fallback runs cost ~10× to 15×+ per call. |
+| **Self-Hosting Breakeven** | ~875,000 / mo | ~233,000 / mo | **~82,000 / mo** | **~565,000 / mo** | At 25% fallback breakeven is ~82k/mo; on Groq-only it is ~565k/mo. |
 
-*\*Note: The Measured Baseline Mean reflects a 25% Gemini fallback rate on `search_orgs` in the benchmark corpus due to empty results. In normal operation where all primary calls succeed, token usage is 4,800 tokens at $0.00067 per request.*
+*\*Note: The Measured Baseline Mean (~6,300–6,400 tokens at ~$0.0046 per request) reflects pricing each call at its actual provider: primary calls on Groq ($0.075 / $0.30 per 1M) and the 25% empty-result fallback runs in `search_orgs` on Gemini 2.5 Flash ($0.30 / $2.50 per 1M). In normal operation where all primary calls succeed, token usage is ~4,800 tokens at $0.00067 per request ($0.67 per 1,000 requests).*
 
 ---
 
@@ -67,7 +67,7 @@ Tokens are measured against live model calls in `docs/metrics/token_baseline.jso
 | **Groq** | `openai/gpt-oss-20b` | Primary (All Services) | **$0.075** | **$0.30** | 30 req/min, 1,000 req/day, 8,000 tok/min, 200,000 tok/day |
 | **Groq** | `openai/gpt-oss-120b` | Tier 2 (Chain Fallback) | **$0.150** | **$0.60** | 30 req/min, 1,000 req/day, 8,000 tok/min, 200,000 tok/day |
 | **Groq** | `openai/gpt-oss-safeguard-20b`| Tier 3 (Chain Fallback, **Preview**) | **$0.075** | **$0.30** | Evaluation preview; subject to withdrawal at short notice. |
-| **Google Gemini** | `gemini-2.5-flash` | Fallback Tier | **$0.300** | **$2.50** | 15 req/min, 1,500 req/day, 1,000,000 tok/min *(Gemini API)* |
+| **Google Gemini** | `gemini-2.5-flash` | Fallback Tier | **$0.300** | **$2.50** | Free: 10 RPM, 250 RPD, 250k TPM; Pay-As-You-Go: 1,000 RPM, 4M TPM *(Gemini API)* |
 
 *Note on Groq Prompt Caching:* Prompt caching is automatic on GPT-OSS 20B, 120B, and Safeguard 20B with a 50% discount on cached inputs ($0.0375/M). Cached tokens do not count against rate limits.
 
@@ -87,26 +87,40 @@ Following PR #199 and PR #213, fallback routing is organized as follows:
 ### Cost Calculation per Help Request (Reproducible Arithmetic)
 
 ```text
-1. Measured Baseline Mean (3,732 Prompt / 2,673 Completion tokens):
-   Prompt Cost:     3,732 tokens × ($0.075 / 1,000,000) = $0.0002799
-   Completion Cost: 2,673 tokens × ($0.300 / 1,000,000) = $0.0008019
-   ------------------------------------------------------------------
-   Total Measured Mean Cost (Groq Primary):             = $0.0010818 ≈ $0.00108 / request ($1.08 / 1k reqs)
+1. Measured Baseline Mean Cost (Per-Provider Pricing: Groq Primary + Gemini Fallbacks):
+   In the 8 benchmark runs on 271a402, all primary calls run on Groq ($0.075 / $0.30 per 1M tokens),
+   while 2 of 8 search_orgs runs fell back to Gemini 2.5 Flash ($0.300 / $2.500 per 1M tokens) due to empty Groq lists.
+   
+   Groq Primary Component (averaged across 8 requests):
+     Prompt Cost:     ~3,432 tokens × ($0.075 / 1,000,000) = $0.000257
+     Completion Cost: ~1,390 tokens × ($0.300 / 1,000,000) = $0.000417
+     Groq Base Cost:                                      = $0.000674 ≈ $0.00067 / request
+   
+   Gemini Fallback Component (search_orgs fallback in 25% of cases):
+     Gemini Prompt:   ~294 tokens × ($0.300 / 1,000,000)   = $0.000088
+     Gemini Output:   ~1,450 tokens × ($2.500 / 1,000,000) = $0.003625
+     Gemini Fallback Cost:                                = $0.003713 ≈ $0.00371 / request
+   ---------------------------------------------------------------------------------------
+   Total Measured Mean Cost per Request:                  = $0.004387 ≈ $0.0046 / request ($4.60 / 1k reqs)
+   
+   Note: Billed purely at Groq rates, ~6,300–6,400 tokens would appear to cost $0.00108. However, because
+   Gemini output ($2.50/M) is 8.3× Groq output ($0.30/M), the 25% fallback rate in search_orgs accounts
+   for over 80% of total platform model expenditure (~$0.0037 out of $0.0046).
 
-2. Groq-Only Normal Operation (3,424 Prompt / 1,376 Completion tokens):
+2. Groq-Only Normal Operation (3,424 Prompt / 1,376 Completion tokens = 4,800 tokens):
    Prompt Cost:     3,424 tokens × ($0.075 / 1,000,000) = $0.0002568
    Completion Cost: 1,376 tokens × ($0.300 / 1,000,000) = $0.0004128
    ------------------------------------------------------------------
    Total Groq-Only Cost:                                = $0.0006696 ≈ $0.00067 / request ($0.67 / 1k reqs)
 
-3. Gemini Sustained Fallback Cost (Priced at Measured Mean Tokens):
-   Prompt Cost:     3,732 tokens × ($0.300 / 1,000,000) = $0.0011196
-   Completion Cost: 2,673 tokens × ($2.500 / 1,000,000) = $0.0066825
+3. Sustained 100% Gemini Fallback Cost (Priced at Normal Groq-Only Tokens: 3,424 / 1,376 = 4,800 tokens):
+   Prompt Cost:     3,424 tokens × ($0.300 / 1,000,000) = $0.0010272
+   Completion Cost: 1,376 tokens × ($2.500 / 1,000,000) = $0.0034400
    ------------------------------------------------------------------
-   Total Gemini Fallback Cost (at Mean Tokens):         = $0.0078021 ≈ $0.00780 / request
-   Nominal Multiplier at Mean: $0.0078021 / $0.0010818 ≈ 7.21x (~7.2x)
+   Total Gemini Fallback Cost (at 4,800 tokens):        = $0.0044672 ≈ $0.00447 / request
+   Nominal Multiplier vs Groq-Only: $0.0044672 / $0.0006696 ≈ 6.67x (~6.7x)
 
-4. Gemini Sustained Fallback Cost (Lower Bound Basis: 3,442 Prompt / 1,548 Completion):
+4. Historical Lower Bound Basis (16 Sep Review Estimate: 3,442 Prompt / 1,548 Completion = 4,990 tokens):
    Prompt Cost:     3,442 tokens × ($0.300 / 1,000,000) = $0.0010326
    Completion Cost: 1,548 tokens × ($2.500 / 1,000,000) = $0.0038700
    ------------------------------------------------------------------
@@ -123,14 +137,14 @@ Following PR #199 and PR #213, fallback routing is organized as follows:
 
 Monthly model expenditure projected across representative user volumes:
 
-| Monthly Help Requests | Spend on Groq-Only ($0.00067) | Spend on Measured Mean ($0.00108) | Spend on Sustained Gemini Fallback ($0.00780) | Implied Active Users (at 1 req/user/mo)* |
+| Monthly Help Requests | Spend on Groq-Only ($0.00067) | Spend on Measured Mean ($0.0046) | Spend on Sustained Gemini Fallback ($0.0045–$0.0078) | Implied Active Users (at 1 req/user/mo)* |
 | ---: | ---: | ---: | ---: | ---: |
-| **1,000** | $0.67 | $1.08 | $7.80 | 1,000 |
-| **10,000** | $6.70 | $10.82 | $78.02 | 10,000 |
-| **50,000** | $33.48 | $54.09 | $390.11 | 50,000 |
-| **100,000** | $66.96 | $108.18 | $780.21 | 100,000 |
-| **500,000** | $334.80 | $540.90 | $3,901.05 | 500,000 |
-| **1,000,000** | $669.60 | $1,081.80 | $7,802.10 | 1,000,000 |
+| **1,000** | $0.67 | $4.60 | $4.50 – $7.80 | 1,000 |
+| **10,000** | $6.70 | $46.00 | $44.70 – $78.00 | 10,000 |
+| **50,000** | $33.48 | $230.00 | $223.50 – $390.10 | 50,000 |
+| **100,000** | $66.96 | $460.00 | $447.00 – $780.20 | 100,000 |
+| **500,000** | $334.80 | $2,300.00 | $2,235.00 – $3,901.05 | 500,000 |
+| **1,000,000** | $669.60 | $4,600.00 | $4,470.00 – $7,802.10 | 1,000,000 |
 
 *\*Note: 1.0 request per active user per month is a documented placeholder pending empirical user analytics from the Product and Request teams.*
 
@@ -142,11 +156,11 @@ Monthly model expenditure projected across representative user volumes:
 * **Daily Token Limit:** Groq's free tier permits 200,000 tokens/day organization-wide.
 * **Effective Daily Platform Capacity:**
   ```text
-  Daily Capacity (Measured Mean): 200,000 tokens/day ÷ 6,405 tokens/req ≈ 31 help requests/day
   Daily Capacity (Groq-Only):     200,000 tokens/day ÷ 4,800 tokens/req ≈ 41 help requests/day
   ```
-* **Operational Behavior of the Cliff:** Groq SDK errors (`HTTP 429` rate limit exceeded) are caught by upstream exception guards (`_try_groq`). Therefore, **reaching the free-tier limit does not fail the user's request; it silently migrates traffic to Gemini at ~7× the cost**.
-* **Mitigation:** Upgrade to Groq's Pay-As-You-Go tier prior to public launch. At 5,000–10,000 requests/month, total primary spend is **under ~$11 to ~$17/month**, completely removing the capacity cliff.
+  *Note on Fallbacks:* Tokens served by Gemini fallbacks do not count against Groq's 200k TPD quota. Therefore, **~41 help requests/day** is the true platform ceiling on Groq's free tier before rate limits begin shifting subsequent traffic onto Gemini.
+* **Operational Behavior of the Cliff:** Groq SDK errors (`HTTP 429` rate limit exceeded) are caught by upstream exception guards (`_try_groq`). Therefore, **reaching the free-tier limit does not fail the user's request; it silently migrates traffic to Gemini at ~7× nominal cost**.
+* **Mitigation:** Upgrade to Groq's Pay-As-You-Go tier prior to public launch. At 5,000–10,000 requests/month, total spend on Groq is **under ~$7.00/month** (or ~$23–$46/month under the empirical mean including fallbacks), completely removing the capacity cliff.
 
 ### 5.2 Caller-Controlled Follow-up Transcripts
 * `generate_answer` supports multi-turn follow-ups bounded by `MAX_HISTORY_MESSAGES = 20` and `MAX_MESSAGE_CHARS = 4000` (`utils/__init__.py`).
@@ -167,8 +181,8 @@ Issue #23 proposed self-hosting open models (e.g., on AWS EC2) to eliminate per-
 * **EC2 GPU Instance (`g4dn.xlarge` - 1x NVIDIA T4, 16GB VRAM):** On-demand price is ~$0.526/hour in `us-east-1`, totaling **~$378.72/month** regardless of traffic volume.
 * **Breakeven Calculation:**
   ```text
-  Breakeven Volume (Measured Mean: $0.0010818/req):
-    $378.72 / $0.0010818 ≈ 350,074 requests/month (~11,670 requests/day)
+  Breakeven Volume (Measured Mean: $0.0046/req):
+    $378.72 / $0.0046 ≈ 82,330 requests/month (~2,750 requests/day)
 
   Breakeven Volume (Groq-Only: $0.0006696/req):
     $378.72 / $0.0006696 ≈ 565,591 requests/month (~18,850 requests/day)
@@ -176,7 +190,7 @@ Issue #23 proposed self-hosting open models (e.g., on AWS EC2) to eliminate per-
   Historical Baseline Comparison ($0.00043305/req):
     $378.72 / $0.00043305 ≈ 874,541 requests/month (~29,150 requests/day)
   ```
-* **Conclusion:** Self-hosting remains substantially more expensive than serverless API calls until platform traffic surpasses **~350,000 to ~565,000 help requests per month**. Furthermore, self-hosting introduces cold starts, GPU driver patching, auto-scaling overhead, and high-availability management that is impractical for a non-profit engineering team.
+* **Conclusion:** Self-hosting on dedicated EC2 GPU infrastructure remains substantially more expensive than serverless API calls until platform traffic surpasses **~82,000 requests/month** (if the 25% fallback rate persists) or **~565,000 requests/month** (under normal Groq-only operation). Furthermore, fixing the `search_orgs` empty-result fallback pushes breakeven toward the ~565k mark. Self-hosting also introduces cold starts, GPU driver patching, auto-scaling overhead, and high-availability management that is impractical for a non-profit engineering team.
 
 ---
 
@@ -193,6 +207,8 @@ Frontier models cost substantially more (10× to 50×) than open-weight lightwei
 | `emergency_contacts`| Country directory lookup | **No LLM** | Deterministic static dataset (zero hallucination risk). |
 | `search_orgs` | Structured organization extraction | **No** | Small open-weights with retrieval grounding. |
 | `generate_answer` | Empathetic, nuanced guidance | **Yes (conditional)** | Frontier or mid-tier model with reasoning capabilities. |
+
+*(Note on `generate_answer`: In production today, `generate_answer` runs on `gpt-oss-20b` via the 4-model chain. Exploring frontier models like Gemini 1.5 Pro or Claude is a future consideration strictly conditional on quality and empathy evaluations against beneficiary golden sets).*
 
 **Standing Policy:**
 > Route each microservice to the lowest-cost model that satisfies its deterministic quality bar. Reserve frontier models strictly for services where reasoning and empathy directly touch the beneficiary (`generate_answer`).
@@ -261,9 +277,9 @@ The following optimization candidates are tracked. Reference the companion wiki 
 | Optimization Candidate | Expected Impact | Status | Notes |
 | :--- | :--- | :---: | :--- |
 | **Pin `reasoning_effort="low"` on Groq** | Eliminates reasoning token runaway | **Implemented (PR #212)** | Landed in production; contributing to ~21% whole-request token savings. |
-| **Fix Empty-Result Fallback in `search_orgs`** | Reduces `search_orgs` mean from 3,767 to 2,163 tokens (~4× cost drop) | **Top Measured Target** | 25% of benchmark runs fell back to Gemini due to empty Groq result lists rather than API failure. |
+| **Fix Empty-Result Fallback in `search_orgs`** | Reduces `search_orgs` mean from ~3,626 to 2,163 tokens (~4× service cost drop) | **Top Measured Target** | 25% of benchmark runs fell back to Gemini due to empty Groq result lists rather than API failure. Priced at Gemini output rates, eliminating empty results saves ~$0.0037/req. |
 | **Trim Organization Description Fields** | Reduces 20–40% of `search_orgs` completion tokens | **Unmeasured** | Requires cross-team alignment on the `ORGANIZATION_FIELDS` contract (#170). |
-| **Enforce `MAX_MESSAGE_CHARS` Server-Side** | Prevents 25× caller-controlled prompt ballooning | **Risk measured, change pending** | Worst-case prompt turn measured at 16,781 tokens. Boundary check in `utils/__init__.py` pending. |
+| **Evaluate `MAX_MESSAGE_CHARS` / History Limits** | Prevents caller-controlled prompt spikes from exceeding Groq's 8k TPM | **Enforced server-side; policy review open** | Already enforced at `utils/__init__.py:114` (4,000 chars) and line 121 (20 turns). Open evaluation is whether the 20 × 4,000 bound should be tightened to prevent single-turn 16k prompt spikes that immediately trigger Groq rate limits. |
 | **Deterministic Pre-Routing Expansion** | Cuts 2–3 model calls down to 1 call | **Unmeasured** | Measured on `elderly-medium` (1 call, 527 tokens). Can expand to other unambiguous domain terms. |
 | **Groq Prompt Caching on Classification** | 50% discount on cached input ($0.075 → $0.0375/M) | **Unmeasured** | Automatic on `gpt-oss-20b`. Level-1 prompt (~330 tokens) exceeds minimum cacheable threshold. |
 
@@ -275,10 +291,11 @@ Token metrics are written to CloudWatch Logs under the `TOKEN_USAGE` prefix by `
 
 ```sql
 fields @timestamp, @message
-| filter @message like /TOKEN_USAGE/
-| parse @message "TOKEN_USAGE *" as body
+| filter @message like /^TOKEN_USAGE /
+| parse @message /"service": "(?<service>[^"]+)"/
+| parse @message /"total_tokens": (?<total_tokens>\d+)/
 | stats 
-    count(*) as total_requests,
+    count(*) as requests,
     avg(total_tokens) as avg_tokens,
     max(total_tokens) as max_tokens,
     sum(total_tokens) as sum_tokens
