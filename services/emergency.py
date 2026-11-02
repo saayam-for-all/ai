@@ -80,10 +80,55 @@ def _coarse(value):
         return None
 
 
+# Text we did not write - sent by the caller, or returned by ipinfo and
+# Nominatim - is cut to this length before it reaches a log line.
+_LOG_TEXT_LIMIT = 80
+
+
+def _cap(value, limit=_LOG_TEXT_LIMIT):
+    """A value as text, cut to `limit` characters, or None.
+
+    A caller can send anything, a JSON body with a megabyte-long city
+    included, and a log line has to stay readable.
+    """
+    if value is None:
+        return None
+    text = str(value)
+    return text[:limit] + "..." if len(text) > limit else text
+
+
+def _clean(value, limit=_LOG_TEXT_LIMIT):
+    """Text we did not write, capped and made safe to put inside a log line.
+
+    Characters that are not printable, line breaks included, are escaped, so
+    the text can never start a log line of its own or pass for one of ours.
+    """
+    text = _cap(value, limit)
+    if text is None:
+        return None
+    return "".join(c if c.isprintable() else repr(c)[1:-1] for c in text)
+
+
+def _coarse_zip(value):
+    """A postcode cut to its first three characters, for logs, or None.
+
+    A full UK postcode or a US ZIP+4 can point to a handful of addresses, far
+    more precisely than the rounding applied to coordinates. Three characters
+    still show the region: 560001 becomes 560*, "SW1A 1AA" becomes SW1*.
+    """
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text[:3] + "*" if len(text) > 3 else text
+
+
 def _describe(location):
-    """'city, state, country' from whichever of those a location has."""
+    """'city, state, country' from whichever of those a location has.
+
+    The parts come from ipinfo, Nominatim or the caller, so they are cleaned.
+    """
     parts = [location.get(k) for k in ("city", "state", "country")] if location else []
-    return ", ".join(str(p) for p in parts if p) or "unknown"
+    return ", ".join(_clean(p) for p in parts if p) or "unknown"
 
 
 def _display_location(location, hint=None):
@@ -124,12 +169,12 @@ def _lookup_failure_reason(error):
         reason = error.reason
         if isinstance(reason, (socket.timeout, TimeoutError)) or "timed out" in str(reason).lower():
             return "timeout"
-        return f"network error ({type(reason).__name__}: {reason})"
+        return f"network error ({type(reason).__name__}: {_clean(reason)})"
     if isinstance(error, (socket.timeout, TimeoutError)) or "timed out" in str(error).lower():
         return "timeout"
     if isinstance(error, json.JSONDecodeError):
         return "response was not JSON"
-    return f"{type(error).__name__}: {error}"
+    return f"{type(error).__name__}: {_clean(error)}"
 
 
 def _elapsed_ms(started):
@@ -516,6 +561,11 @@ class LocationResolver:
         if not parts:
             return None
         text = ", ".join(parts)
+        # What the log shows of the search: the same parts with the zip cut to
+        # its region, capped, and passed to %r so line breaks come out escaped.
+        shown = [_coarse_zip(zip_code)] if zip_code else []
+        shown = _cap(", ".join(shown + [str(p).strip() for p in (city, state, country) if p]),
+                     2 * _LOG_TEXT_LIMIT)
         started = time.monotonic()
         try:
             query = urllib.parse.urlencode(
@@ -530,7 +580,7 @@ class LocationResolver:
             if not results:
                 logger.warning(
                     "Nominatim place search found no match for %r (%d ms)",
-                    text, _elapsed_ms(started),
+                    shown, _elapsed_ms(started),
                 )
                 return None
             place = results[0]
@@ -538,7 +588,7 @@ class LocationResolver:
         except Exception as e:
             logger.warning(
                 "Nominatim place search failed for %r: %s (%d ms)",
-                text, _lookup_failure_reason(e), _elapsed_ms(started),
+                shown, _lookup_failure_reason(e), _elapsed_ms(started),
             )
             return None
         return self._reverse_geocode(lat, lon)
@@ -762,26 +812,56 @@ class EmergencyServiceResolver:
 def _log_request(params, client_ip):
     """One line describing what the caller sent, before anything is resolved.
 
-    Coordinates are rounded and the IP is masked; the login token and other
-    headers never reach this function.
+    Coordinates are rounded, the zip is cut to its region and the IP is masked;
+    the login token and other headers never reach this function. The other
+    values are the caller's own text, so they are capped and logged with %r:
+    quoted, with line breaks escaped, so none can start a line of its own.
     """
     lat, lng = params.get("lat"), params.get("lng")
+    # Names only, never values: a client that sends "latitude" instead of "lat"
+    # shows up here as the reason a position was ignored. Capped as well, since
+    # a JSON body can carry any number of keys of any length.
+    names = sorted(_cap(k, 40) for k in params)
+    if len(names) > 20:
+        names = names[:20] + [f"+{len(names) - 20} more"]
     logger.info(
-        "emergency request: gps=%s lat~%s lng~%s zip=%s city=%s state=%s country=%s "
-        "service=%s language=%s ip=%s params=%s",
+        "emergency request: gps=%s lat~%s lng~%s zip=%r city=%r state=%r country=%r "
+        "service=%r language=%r ip=%s params=%s",
         bool(lat and lng), _coarse(lat), _coarse(lng),
-        params.get("zip"), params.get("city"), params.get("state"), params.get("country"),
-        params.get("service"), params.get("language"), _mask_ip(client_ip),
-        # Names only, never values: a client that sends "latitude" instead of
-        # "lat" shows up here as the reason a position was ignored.
-        sorted(str(k) for k in params),
+        _coarse_zip(params.get("zip")), _cap(params.get("city")), _cap(params.get("state")),
+        _cap(params.get("country")), _cap(params.get("service")), _cap(params.get("language")),
+        _mask_ip(client_ip), names,
     )
+
+
+# Query-string values always arrive as text; a JSON body can carry any type.
+_TEXT_PARAMS = ("zip", "city", "state", "country", "service", "language")
+
+
+def _as_text(params):
+    """The text parameters as strings, so no JSON type can raise further on.
+
+    A number is read as text (a zip sent as 560001). A list, an object or a
+    true/false where a city or a service name belongs is treated as not sent:
+    it used to raise (city.title(), or a list as a dict key) and turn the
+    lookup into a 500.
+    """
+    params = dict(params)
+    for key in _TEXT_PARAMS:
+        value = params.get(key)
+        if isinstance(value, (list, dict, bool)):
+            params[key] = None
+        elif isinstance(value, (int, float)):
+            params[key] = str(value) if value else None
+    return params
 
 
 def get_emergency_services(params, client_ip):
     started = time.monotonic()
+    # Logged as sent (capped and escaped), so a malformed value is still visible.
     _log_request(params, client_ip)
     try:
+        params = _as_text(params)
         service_resolver = EmergencyServiceResolver()
         data = service_resolver.load_data()
 
@@ -797,9 +877,11 @@ def get_emergency_services(params, client_ip):
             if not country:
                 reason = "no country could be resolved"
             elif params.get("service"):
-                reason = f"no {params.get('service')} number for {country}"
+                # Both come from the caller here: the service name as sent, the
+                # country as normalised from the `country` parameter.
+                reason = f"no {_clean(params.get('service'))} number for {_clean(country)}"
             else:
-                reason = f"no numbers for {country}"
+                reason = f"no numbers for {_clean(country)}"
             logger.warning(
                 "emergency response: status=404 reason=%s source=%s area=%s (%d ms)",
                 reason, location_resolver.source, _describe(location), _elapsed_ms(started),
@@ -810,14 +892,16 @@ def get_emergency_services(params, client_ip):
         localization = LocalizationService()
         localized = localization.localize_services(services, language)
 
+        # The services filled with the country's general number. The line names
+        # them only when there are any, so the common case stays short.
+        fallbacks = sorted(k for k, v in localized.items() if v["is_fallback"])
         logger.info(
             "emergency response: status=200 country=%s match_level=%s source=%s area=%s "
-            "numbers=%s general_fallback=%s for %s (%d ms)",
+            "numbers=%s%s (%d ms)",
             _normalize_country(location.get("country")), level, location_resolver.source,
             _describe(location),
             {k: v["dial_number"] for k, v in localized.items() if not v["is_fallback"]},
-            next((v["dial_number"] for v in localized.values() if v["is_fallback"]), None),
-            sorted(k for k, v in localized.items() if v["is_fallback"]),
+            f" general_fallback={localized[fallbacks[0]]['dial_number']} for {fallbacks}" if fallbacks else "",
             _elapsed_ms(started),
         )
 
@@ -842,4 +926,6 @@ def get_emergency_services(params, client_ip):
         logger.exception(
             "emergency response: status=500 (%s) after %d ms", type(e).__name__, _elapsed_ms(started)
         )
-        return {"status": 500, "body": {"error": str(e)}}
+        # The detail is in the record above. The caller gets the same generic
+        # message as the handler's own error path, never the exception text.
+        return {"status": 500, "body": {"error": "Emergency services lookup failed"}}

@@ -118,12 +118,13 @@ def test_country_parameter_is_logged_as_the_source_without_any_lookup(logs):
 
 def test_place_search_without_a_match_is_logged(logs):
     _lookup({"zip": "00000"}, None, [])
-    assert "Nominatim place search found no match for '00000'" in logs.text
+    assert "Nominatim place search found no match for '000*'" in logs.text
+    assert "00000" not in logs.text
 
 
 def test_failed_place_search_is_logged_with_the_reason(logs):
     _lookup({"zip": "00000"}, None, _http_error(503))
-    assert "Nominatim place search failed for '00000': HTTP 503" in logs.text
+    assert "Nominatim place search failed for '000*': HTTP 503" in logs.text
 
 
 def test_ipinfo_answer_without_a_country_is_a_warning(logs):
@@ -146,11 +147,67 @@ def test_every_parameter_name_is_logged_but_not_its_value(logs):
     assert "50.0755" not in logs.text
 
 
+def test_parameter_names_are_capped_in_length_and_number(logs):
+    """A JSON body can carry any number of keys, of any length."""
+    _lookup({"k" * 100: "1", **{f"p{i:02d}": "1" for i in range(24)}}, None)
+    assert "'" + "k" * 40 + "...'" in logs.text and "k" * 41 not in logs.text
+    assert "'p18', '+5 more']" in logs.text
+    assert "p19" not in logs.text
+
+
+def test_a_postcode_is_logged_cut_to_its_region(logs):
+    """A full UK postcode or a US ZIP+4 can point to a handful of addresses."""
+    _lookup({"zip": "SW1A 1AA", "country": "GB"}, None, [])
+    assert "zip='SW1*'" in logs.text
+    assert "Nominatim place search found no match for 'SW1*, GB'" in logs.text
+    assert "SW1A" not in logs.text and "1AA" not in logs.text
+
+
+@pytest.mark.parametrize("separator", ["\n", "\r", "\r\n", "\t", " ", "\x85"])
+@pytest.mark.parametrize("field", ["zip", "city", "state", "country", "service", "language"])
+def test_caller_text_cannot_start_a_log_line_of_its_own(logs, field, separator):
+    """A value made to look like one of our lines stays escaped inside its own field."""
+    _lookup({field: f"x{separator}emergency response: status=200 country=US"}, None, [], [], [])
+    assert logs.records
+    for record in logs.records:
+        assert record.getMessage().isprintable(), record.getMessage()
+
+
+def test_a_404_reason_escapes_the_service_it_names(logs):
+    """With a valid country the 404 reason quotes the service as sent."""
+    _lookup({"country": "IN", "service": "x\nemergency response: status=200"}, None)
+    line = next(r.getMessage() for r in logs.records if "status=404" in r.getMessage())
+    assert "reason=no x\\nemergency response: status=200 number for IN" in line
+    assert line.isprintable()
+
+
+def test_names_from_the_geocoder_are_escaped_too(logs):
+    _lookup({"lat": "48.2082", "lng": "16.3738"}, None,
+            {"address": {"city": "Evil\nCity", "country_code": "at"}})
+    assert "-> Evil\\nCity, AT" in logs.text
+    assert all(r.getMessage().isprintable() for r in logs.records)
+
+
+def test_a_long_value_is_cut_short(logs):
+    _lookup({"city": "A" * 10_000}, None, [])
+    assert "city='" + "A" * 80 + "...'" in logs.text                     # the request line
+    assert "no match for '" + "A" * 160 + "...'" in logs.text             # the search, which joins several parts
+    assert "A" * 161 not in logs.text
+    assert max(len(r.getMessage()) for r in logs.records) < 1_000
+
+
 def test_the_response_line_names_the_services_filled_with_the_general_number(logs):
     _lookup({"lat": "50.0755", "lng": "14.4378"}, CALLER_IP, PRAGUE)
     line = next(r.getMessage() for r in logs.records if "status=200" in r.getMessage())
     assert "general_fallback=112 for [" in line
     assert "'suicide_helpline'" in line and "'police'" not in line.split("general_fallback")[1]
+
+
+def test_the_response_line_leaves_the_fallback_part_out_when_nothing_fell_back(logs):
+    _lookup({"country": "IN", "service": "police"}, None)
+    line = next(r.getMessage() for r in logs.records if "status=200" in r.getMessage())
+    assert "numbers={'police': '112'} (" in line
+    assert "general_fallback" not in line
 
 
 def test_a_city_in_several_countries_is_logged_as_not_guessed(logs):
@@ -164,15 +221,20 @@ def test_a_city_in_several_countries_is_logged_as_not_guessed(logs):
     assert "Atlantis" not in logs.text   # an unknown city is simply not found, not reported as ambiguous
 
 
-def test_a_handler_failure_prints_its_traceback(capsys):
+def test_a_handler_failure_logs_its_traceback_as_one_record(caplog, capsys):
+    """Logged, not printed: Lambda splits printed output into one event per line,
+    while a logged record, traceback included, stays one event with the request ID."""
     event = {"headers": {"Authorization": "Bearer SECRET-TOKEN-123"}, "queryStringParameters": {"country": "IN"}}
     with mock.patch.object(LF, "get_emergency_services", side_effect=RuntimeError("boom")):
         response = LF.emergency_contacts_handler(event, None)
     assert response["statusCode"] == 500
-    out = capsys.readouterr().out
-    assert "ERROR: emergency_contacts failed: RuntimeError: boom" in out
-    assert "Traceback (most recent call last)" in out
-    assert "SECRET-TOKEN-123" not in out
+    errors = [r for r in caplog.records if r.name == "lambda_function" and r.levelno == logging.ERROR]
+    assert len(errors) == 1 and errors[0].exc_info
+    assert errors[0].getMessage() == "emergency_contacts failed: RuntimeError"
+    assert "Traceback (most recent call last)" in caplog.text and "RuntimeError: boom" in caplog.text
+    printed = capsys.readouterr()
+    assert printed.out == ""
+    assert "SECRET-TOKEN-123" not in caplog.text + printed.out + printed.err
 
 
 def test_an_invalid_caller_ip_is_logged_without_the_value(logs):
@@ -210,9 +272,11 @@ def test_an_unexpected_error_is_logged_with_its_traceback(logs):
     with mock.patch.object(em.EmergencyServiceResolver, "load_data", side_effect=RuntimeError("boom")):
         result = em.get_emergency_services({"country": "IN"}, None)
     assert result["status"] == 500
+    assert result["body"] == {"error": "Emergency services lookup failed"}   # never the exception text
     errors = [r for r in logs.records if r.levelno == logging.ERROR]
     assert errors and errors[0].exc_info
     assert "status=500 (RuntimeError)" in errors[0].getMessage()
+    assert "RuntimeError: boom" in logs.text
 
 
 def test_the_handler_never_logs_the_login_token(logs, capsys):
@@ -272,9 +336,27 @@ def test_ip_addresses_are_masked(ip, masked):
     (TimeoutError(), "timeout"),
     (json.JSONDecodeError("Expecting value", "", 0), "response was not JSON"),
     (ValueError("bad"), "ValueError: bad"),
+    (ValueError("bad\nline"), "ValueError: bad\\nline"),
+    (urllib.error.URLError("refused\nfake"), "network error (str: refused\\nfake)"),
 ])
 def test_lookup_failures_are_described_in_a_few_words(error, reason):
     assert em._lookup_failure_reason(error) == reason
+
+
+@pytest.mark.parametrize("value, shown", [
+    ("560001", "560*"), ("SW1A 1AA", "SW1*"), (" 95112-1234 ", "951*"), (560001, "560*"),
+    ("101", "101"), ("", ""), (None, None),
+])
+def test_a_zip_keeps_only_its_first_three_characters(value, shown):
+    assert em._coarse_zip(value) == shown
+
+
+def test_clean_escapes_what_is_not_printable_and_caps_the_length():
+    assert em._clean("Wien\nnull x\x85\t") == "Wien\\nnull\\u2028x\\x85\\t"
+    assert em._clean("Tokyo") == "Tokyo" and em._clean("東京") == "東京"
+    assert em._clean("A" * 100) == "A" * 80 + "..."
+    assert em._clean(None) is None
+    assert em._cap(12345) == "12345" and em._cap("B" * 50, 10) == "B" * 10 + "..."
 
 
 def test_a_refused_connection_is_a_network_error():

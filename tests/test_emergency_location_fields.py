@@ -255,6 +255,35 @@ def test_display_location_uses_only_the_parts_that_exist(location, hint, expecte
 
 
 # -------------------------------------------------------------------------
+# A JSON body with values that are not text
+# -------------------------------------------------------------------------
+
+@pytest.mark.parametrize("value", [["a", "b"], {"k": "v"}, True, False])
+@pytest.mark.parametrize("field", ["zip", "city", "state", "country", "service", "language"])
+def test_a_json_value_that_is_not_text_is_treated_as_not_sent(field, value):
+    """Only a JSON body can carry these types. A list or object used to raise
+    (city.title(), or a list as a dict key) and turn the lookup into a 500."""
+    body = {field: value} if field == "country" else {field: value, "country": "IN"}
+    event = {"body": json.dumps(body), "requestContext": {"identity": {"sourceIp": CALLER_IP}}}
+    with mock.patch("urllib.request.urlopen",
+                    side_effect=lambda req, timeout=None: io.BytesIO(json.dumps(HOUSTON_IP).encode())):
+        response = LF.emergency_contacts_handler(event, None)
+    assert response["statusCode"] == 200, response
+    answer = json.loads(response["body"])
+    # Answered as if the field had not been sent.
+    assert answer["country"] == ("US" if field == "country" else "IN")
+    assert answer["location_source"] == ("ip" if field == "country" else "country_param")
+
+
+def test_a_number_where_text_belongs_is_read_as_text():
+    search = [{"lat": "12.9784", "lon": "77.5996"}]
+    result, _ = _lookup({"zip": 560001, "country": "IN"}, search, BENGALURU, ip=None)
+    assert result["status"] == 200 and result["body"]["match_level"] == "zip"
+    result, _ = _lookup({"city": 12345, "country": "IN"}, [], ip=None)   # used to raise in city.title()
+    assert result["status"] == 200
+
+
+# -------------------------------------------------------------------------
 # The web page keeps working
 # -------------------------------------------------------------------------
 

@@ -18,8 +18,11 @@ team works and reviews in.
   reports could only be diagnosed from Lambda durations: the location lookups
   failed silently, and nothing recorded what the browser had sent. Each request
   now logs what was sent, how the location was found, why a lookup failed, and
-  what was returned. Coordinates are rounded, the IP is masked, and tokens are
-  never logged. The level comes from `EMERGENCY_LOG_LEVEL` (default INFO).
+  what was returned. Coordinates are rounded, a zip keeps only its first three
+  characters, the IP is masked, and tokens are never logged. Text from the
+  caller or a geocoder is quoted or escaped and capped, so it cannot break a
+  log line. A crash in the handler is logged with its traceback as one record.
+  The level comes from `EMERGENCY_LOG_LEVEL` (default INFO).
   *Observable difference:* CloudWatch shows `emergency request:` and
   `emergency response: status=...` lines, with the request ID, for every call.
 - **`location_source` in the response** (`gps`, `place`, `city_directory`,
@@ -46,6 +49,16 @@ team works and reviews in.
   got a `404` although ipinfo had answered.
   *Observable difference:* `lat=30&lng=-40` from a US IP returns US numbers with
   `"location_source": "ip"` instead of a `404`.
+- A `500` from the lookup sent the internal exception text to the browser,
+  although the README documents a generic message. It now returns
+  `{"error": "Emergency services lookup failed"}`, the same as the handler's
+  own error path; the detail is in CloudWatch.
+  *Observable difference:* forcing an internal error returns that generic body.
+- A JSON body with a list, an object or `true`/`false` where text belongs (for
+  example `"city": ["a"]`) made the lookup a `500`. Such a value is now treated
+  as not sent, and a number is read as text.
+  *Observable difference:* `{"city": ["a"], "country": "IN"}` returns India's
+  numbers instead of a `500`.
 
 ### Token usage tracking & reasoning effort — [#194](https://github.com/saayam-for-all/ai/issues/194)
 

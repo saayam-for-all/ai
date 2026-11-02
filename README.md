@@ -298,6 +298,10 @@ For a browser position in Vienna the last three fields read:
   `general_emergency`, `police`, `ambulance`, `fire`, `disaster_management`,
   `women_helpline`, `suicide_helpline`, `child_helpline`, `coastguard`,
   `traffic_police`, `gendarmerie`, `gas_leak` and `general_emergency_alternate`.
+- In a JSON body, a list, an object or `true`/`false` where text belongs
+  (`zip`, `city`, `state`, `country`, `service`, `language`) is treated as not
+  sent, and a number is read as text, so a malformed body cannot turn a lookup
+  into a `500`.
 
 Provenance for the numbers in `services/emergency_numbers.json` is recorded in
 [`docs/emergency_numbers_provenance.md`](docs/emergency_numbers_provenance.md).
@@ -328,6 +332,10 @@ finer-grained fields resolved elsewhere, so a city belonging to a different
 country cannot match by coincidence. A `country` that only confirms the
 position's own country changes nothing, and `location_source` stays `gps`.
 
+Within a country: the requested state or city entry, else that **same
+country's** `general_emergency` line, marked `is_fallback: true`. There is no
+step that leaves the country.
+
 #### Logs
 
 Every request writes these lines to CloudWatch (log group
@@ -338,17 +346,24 @@ Every request writes these lines to CloudWatch (log group
   failed (`timeout`, `HTTP 429 (rate limited)`, `HTTP 503`, `network error`);
 - `emergency response:` the status, country, `match_level`, how the location was
   found (`source=`) and the numbers returned, or why it was a `404`. A `500`
-  logs its traceback.
+  logs its traceback as one record, so CloudWatch shows it as one event.
 
-Coordinates are rounded to one decimal (about 11 km), an IPv4 address loses its
-last part (`203.0.113.x`) and an IPv6 address is cut to its `/48`, and headers
-and login tokens are never logged. The
-level is INFO; set the environment variable `EMERGENCY_LOG_LEVEL` (e.g.
+What is kept out of the logs:
+- **Coordinates** are rounded to one decimal (about 11 km).
+- **A zip code** keeps only its first three characters (`560*`): a full UK
+  postcode or a US ZIP+4 can point to a handful of addresses.
+- **An IP address** loses its last part (`203.0.113.x`); IPv6 is cut to its
+  `/48`.
+- **Headers and login tokens** are never logged.
+
+Everything else the caller sends (city, state, country, service, language) is
+logged in quotes, cut after 80 characters, with line breaks and other
+invisible characters escaped, so a value can never start a log line of its own
+or pass for one of ours. Place names from OpenStreetMap and ipinfo are escaped
+the same way.
+
+The level is INFO; set the environment variable `EMERGENCY_LOG_LEVEL` (e.g.
 `WARNING`) to change it. A value that is not a level name falls back to INFO.
-
-Within a country: the requested state or city entry, else that **same
-country's** `general_emergency` line, marked `is_fallback: true`. There is no
-step that leaves the country.
 
 #### Known limitation
 
@@ -367,7 +382,7 @@ the alpha-2 code. Widening this is tracked as remaining work on issue #146.
 | `test_emergency_locale.py` | Resolution order, within-country fallback, `is_fallback` flagging, per-service match level, and numeral localisation. |
 | `test_response_contract.py` | The proxy envelope, including on the error paths, so the `502` cannot come back. |
 | `test_emergency_s3_reader.py` | Loading the directory from S3: one attempt that fits the function timeout, the warm-container cache, and the fallback to the bundled copy when S3 fails or returns a malformed or incomplete object. |
-| `test_emergency_logging.py` | What each request logs, and that exact coordinates, full IP addresses and login tokens never reach the log. |
+| `test_emergency_logging.py` | What each request logs, that exact coordinates, full IP addresses, full zip codes and login tokens never reach the log, and that text from a caller or a geocoder cannot break a log line. |
 | `test_emergency_location_fields.py` | `location_source` and `display_location`, English place names, the IP fallback for a position with no country, and that the older fields keep their shape. |
 
 ---
