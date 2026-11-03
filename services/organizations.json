@@ -1,0 +1,399 @@
+{
+  "_readme": "PROXY DATA. Every record here is made up so the Stack 3 experiment (issue #197) can run end to end. verified_by is 'proxy-data' because no person checked these against a real source. Replace with verified records before any real use. See docs/organizations_provenance.md.",
+  "organizations": [
+    {
+      "source_id": "proxy-001",
+      "organization_name": "Sample Chicago Food Pantry (proxy data)",
+      "org_type": "nonprofit",
+      "size": "",
+      "rating": 0.0,
+      "location": "Placeholder address, Chicago, IL",
+      "contact": "+1-555-0101",
+      "email": "proxy-001@example.org",
+      "web_url": "https://example.org/proxy/proxy-001",
+      "mission": "A made-up organization that gives out groceries and hot meals. Placeholder text for the issue #197 experiment. Not a real organization.",
+      "description": "Placeholder text for the issue #197 experiment. Not a real organization.",
+      "causes": [
+        "Food Security"
+      ],
+      "categories": [
+        "1.1"
+      ],
+      "service_area": [
+        "Chicago, IL"
+      ],
+      "keywords": [
+        "food",
+        "pantry",
+        "meals"
+      ],
+      "sources": {
+        "organization_name": "https://example.org/proxy/proxy-001",
+        "org_type": "https://example.org/proxy/proxy-001",
+        "location": "https://example.org/proxy/proxy-001",
+        "contact": "https://example.org/proxy/proxy-001",
+        "email": "https://example.org/proxy/proxy-001",
+        "web_url": "https://example.org/proxy/proxy-001",
+        "mission": "https://example.org/proxy/proxy-001",
+        "description": "https://example.org/proxy/proxy-001"
+      },
+      "verified_by": "proxy-data",
+      "verified_on": "2026-10-21"
+    },
+    {
+      "source_id": "proxy-002",
+      "organization_name": "Sample Chicago Clothing Closet (proxy data)",
+      "org_type": "nonprofit",
+      "size": "",
+      "rating": 0.0,
+      "location": "Placeholder address, Chicago, IL",
+      "contact": "+1-555-0102",
+      "email": "proxy-002@example.org",
+      "web_url": "https://example.org/proxy/proxy-002",
+      "mission": "A made-up organization that accepts donated clothing and passes it on. Placeholder text for the issue #197 experiment. Not a real organization.",
+      "description": "Placeholder text for the issue #197 experiment. Not a real organization.",
+      "causes": [
+        "Clothing"
+      ],
+      "categories": [
+        "2.1"
+      ],
+      "service_area": [
+        "Chicago, IL"
+      ],
+      "keywords": [
+        "clothes",
+        "clothing",
+        "donate"
+      ],
+      "sources": {
+        "organization_name": "https://example.org/proxy/proxy-002",
+        "org_type": "https://example.org/proxy/proxy-002",
+        "location": "https://example.org/proxy/proxy-002",
+        "contact": "https://example.org/proxy/proxy-002",
+        "email": "https://example.org/proxy/proxy-002",
+        "web_url": "https://example.org/proxy/proxy-002",
+        "mission": "https://example.org/proxy/proxy-002",
+        "description": "https://example.org/proxy/proxy-002"
+      },
+      "verified_by": "proxy-data",
+      "verified_on": "2026-10-21"
+    },
+    {
+      "source_id": "proxy-003",
+      "organization_name": "Sample Chicago Shelter Network (proxy data)",
+      "org_type": "nonprofit",
+      "size": "",
+      "rating": 0.0,
+      "location": "Placeholder address, Chicago, IL",
+      "contact": "+1-555-0103",
+      "email": "proxy-003@example.org",
+      "web_url": "https://example.org/proxy/proxy-003",
+      "mission": "A made-up organization that helps people find a place to stay. Placeholder text for the issue #197 experiment. Not a real organization.",
+      "description": "Placeholder text for the issue #197 experiment. Not a real organization.",
+      "causes": [
+        "Housing",
+        "Shelter"
+      ],
+      "categories": [
+        "3"
+      ],
+      "service_area": [
+        "Chicago, IL"
+      ],
+      "keywords": [
+        "shelter",
+        "housing",
+        "homeless"
+      ],
+      "sources": {
+        "organization_name": "https://example.org/proxy/proxy-003",
+        "org_type": "https://example.org/proxy/proxy-003",
+        "location": "https://example.org/proxy/proxy-003",
+        "contact": "https://example.org/proxy/proxy-003",
+        "email": "https://example.org/proxy/proxy-003",
+        "web_url": "https://example.org/proxy/proxy-003",
+        "mission": "https://example.org/proxy/proxy-003",
+        "description": "https://example.org/proxy/proxy-003"
+      },
+      "verified_by": "proxy-data",
+      "verified_on": "2026-10-21"
+    },
+    {
+      "source_id": "proxy-004",
+      "organization_name": "Sample Houston Food Pantry (proxy data)",
+      "org_type": "nonprofit",
+      "size": "",
+      "rating": 0.0,
+      "location": "Placeholder address, Houston, TX",
+      "contact": "+1-555-0104",
+      "email": "proxy-004@example.org",
+      "web_url": "https://example.org/proxy/proxy-004",
+      "mission": "A made-up organization that gives out groceries and hot meals. Placeholder text for the issue #197 experiment. Not a real organization.",
+      "description": "Placeholder text for the issue #197 experiment. Not a real organization.",
+      "causes": [
+        "Food Security"
+      ],
+      "categories": [
+        "1.1"
+      ],
+      "service_area": [
+        "Houston, TX"
+      ],
+      "keywords": [
+        "food",
+        "pantry",
+        "meals"
+      ],
+      "sources": {
+        "organization_name": "https://example.org/proxy/proxy-004",
+        "org_type": "https://example.org/proxy/proxy-004",
+        "location": "https://example.org/proxy/proxy-004",
+        "contact": "https://example.org/proxy/proxy-004",
+        "email": "https://example.org/proxy/proxy-004",
+        "web_url": "https://example.org/proxy/proxy-004",
+        "mission": "https://example.org/proxy/proxy-004",
+        "description": "https://example.org/proxy/proxy-004"
+      },
+      "verified_by": "proxy-data",
+      "verified_on": "2026-10-21"
+    },
+    {
+      "source_id": "proxy-005",
+      "organization_name": "Sample Houston Clothing Closet (proxy data)",
+      "org_type": "nonprofit",
+      "size": "",
+      "rating": 0.0,
+      "location": "Placeholder address, Houston, TX",
+      "contact": "+1-555-0105",
+      "email": "proxy-005@example.org",
+      "web_url": "https://example.org/proxy/proxy-005",
+      "mission": "A made-up organization that accepts donated clothing and passes it on. Placeholder text for the issue #197 experiment. Not a real organization.",
+      "description": "Placeholder text for the issue #197 experiment. Not a real organization.",
+      "causes": [
+        "Clothing"
+      ],
+      "categories": [
+        "2.1"
+      ],
+      "service_area": [
+        "Houston, TX"
+      ],
+      "keywords": [
+        "clothes",
+        "clothing",
+        "donate"
+      ],
+      "sources": {
+        "organization_name": "https://example.org/proxy/proxy-005",
+        "org_type": "https://example.org/proxy/proxy-005",
+        "location": "https://example.org/proxy/proxy-005",
+        "contact": "https://example.org/proxy/proxy-005",
+        "email": "https://example.org/proxy/proxy-005",
+        "web_url": "https://example.org/proxy/proxy-005",
+        "mission": "https://example.org/proxy/proxy-005",
+        "description": "https://example.org/proxy/proxy-005"
+      },
+      "verified_by": "proxy-data",
+      "verified_on": "2026-10-21"
+    },
+    {
+      "source_id": "proxy-006",
+      "organization_name": "Sample Houston Shelter Network (proxy data)",
+      "org_type": "nonprofit",
+      "size": "",
+      "rating": 0.0,
+      "location": "Placeholder address, Houston, TX",
+      "contact": "+1-555-0106",
+      "email": "proxy-006@example.org",
+      "web_url": "https://example.org/proxy/proxy-006",
+      "mission": "A made-up organization that helps people find a place to stay. Placeholder text for the issue #197 experiment. Not a real organization.",
+      "description": "Placeholder text for the issue #197 experiment. Not a real organization.",
+      "causes": [
+        "Housing",
+        "Shelter"
+      ],
+      "categories": [
+        "3"
+      ],
+      "service_area": [
+        "Houston, TX"
+      ],
+      "keywords": [
+        "shelter",
+        "housing",
+        "homeless"
+      ],
+      "sources": {
+        "organization_name": "https://example.org/proxy/proxy-006",
+        "org_type": "https://example.org/proxy/proxy-006",
+        "location": "https://example.org/proxy/proxy-006",
+        "contact": "https://example.org/proxy/proxy-006",
+        "email": "https://example.org/proxy/proxy-006",
+        "web_url": "https://example.org/proxy/proxy-006",
+        "mission": "https://example.org/proxy/proxy-006",
+        "description": "https://example.org/proxy/proxy-006"
+      },
+      "verified_by": "proxy-data",
+      "verified_on": "2026-10-21"
+    },
+    {
+      "source_id": "proxy-007",
+      "organization_name": "Sample Seattle Food Pantry (proxy data)",
+      "org_type": "nonprofit",
+      "size": "",
+      "rating": 0.0,
+      "location": "Placeholder address, Seattle, WA",
+      "contact": "+1-555-0107",
+      "email": "proxy-007@example.org",
+      "web_url": "https://example.org/proxy/proxy-007",
+      "mission": "A made-up organization that gives out groceries and hot meals. Placeholder text for the issue #197 experiment. Not a real organization.",
+      "description": "Placeholder text for the issue #197 experiment. Not a real organization.",
+      "causes": [
+        "Food Security"
+      ],
+      "categories": [
+        "1.1"
+      ],
+      "service_area": [
+        "Seattle, WA"
+      ],
+      "keywords": [
+        "food",
+        "pantry",
+        "meals"
+      ],
+      "sources": {
+        "organization_name": "https://example.org/proxy/proxy-007",
+        "org_type": "https://example.org/proxy/proxy-007",
+        "location": "https://example.org/proxy/proxy-007",
+        "contact": "https://example.org/proxy/proxy-007",
+        "email": "https://example.org/proxy/proxy-007",
+        "web_url": "https://example.org/proxy/proxy-007",
+        "mission": "https://example.org/proxy/proxy-007",
+        "description": "https://example.org/proxy/proxy-007"
+      },
+      "verified_by": "proxy-data",
+      "verified_on": "2026-10-21"
+    },
+    {
+      "source_id": "proxy-008",
+      "organization_name": "Sample Seattle Clothing Closet (proxy data)",
+      "org_type": "nonprofit",
+      "size": "",
+      "rating": 0.0,
+      "location": "Placeholder address, Seattle, WA",
+      "contact": "+1-555-0108",
+      "email": "proxy-008@example.org",
+      "web_url": "https://example.org/proxy/proxy-008",
+      "mission": "A made-up organization that accepts donated clothing and passes it on. Placeholder text for the issue #197 experiment. Not a real organization.",
+      "description": "Placeholder text for the issue #197 experiment. Not a real organization.",
+      "causes": [
+        "Clothing"
+      ],
+      "categories": [
+        "2.1"
+      ],
+      "service_area": [
+        "Seattle, WA"
+      ],
+      "keywords": [
+        "clothes",
+        "clothing",
+        "donate"
+      ],
+      "sources": {
+        "organization_name": "https://example.org/proxy/proxy-008",
+        "org_type": "https://example.org/proxy/proxy-008",
+        "location": "https://example.org/proxy/proxy-008",
+        "contact": "https://example.org/proxy/proxy-008",
+        "email": "https://example.org/proxy/proxy-008",
+        "web_url": "https://example.org/proxy/proxy-008",
+        "mission": "https://example.org/proxy/proxy-008",
+        "description": "https://example.org/proxy/proxy-008"
+      },
+      "verified_by": "proxy-data",
+      "verified_on": "2026-10-21"
+    },
+    {
+      "source_id": "proxy-009",
+      "organization_name": "Sample Seattle Shelter Network (proxy data)",
+      "org_type": "nonprofit",
+      "size": "",
+      "rating": 0.0,
+      "location": "Placeholder address, Seattle, WA",
+      "contact": "+1-555-0109",
+      "email": "proxy-009@example.org",
+      "web_url": "https://example.org/proxy/proxy-009",
+      "mission": "A made-up organization that helps people find a place to stay. Placeholder text for the issue #197 experiment. Not a real organization.",
+      "description": "Placeholder text for the issue #197 experiment. Not a real organization.",
+      "causes": [
+        "Housing",
+        "Shelter"
+      ],
+      "categories": [
+        "3"
+      ],
+      "service_area": [
+        "Seattle, WA"
+      ],
+      "keywords": [
+        "shelter",
+        "housing",
+        "homeless"
+      ],
+      "sources": {
+        "organization_name": "https://example.org/proxy/proxy-009",
+        "org_type": "https://example.org/proxy/proxy-009",
+        "location": "https://example.org/proxy/proxy-009",
+        "contact": "https://example.org/proxy/proxy-009",
+        "email": "https://example.org/proxy/proxy-009",
+        "web_url": "https://example.org/proxy/proxy-009",
+        "mission": "https://example.org/proxy/proxy-009",
+        "description": "https://example.org/proxy/proxy-009"
+      },
+      "verified_by": "proxy-data",
+      "verified_on": "2026-10-21"
+    },
+    {
+      "source_id": "proxy-010",
+      "organization_name": "Sample National Housing Helpline (proxy data)",
+      "org_type": "nonprofit",
+      "size": "",
+      "rating": 0.0,
+      "location": "Placeholder address, United States",
+      "contact": "+1-555-0110",
+      "email": "proxy-010@example.org",
+      "web_url": "https://example.org/proxy/proxy-010",
+      "mission": "A made-up organization that gives housing advice by phone anywhere in the US. Placeholder text for the issue #197 experiment. Not a real organization.",
+      "description": "Placeholder text for the issue #197 experiment. Not a real organization.",
+      "causes": [
+        "Housing",
+        "Shelter"
+      ],
+      "categories": [
+        "3"
+      ],
+      "service_area": [
+        "US"
+      ],
+      "keywords": [
+        "shelter",
+        "housing",
+        "homeless"
+      ],
+      "sources": {
+        "organization_name": "https://example.org/proxy/proxy-010",
+        "org_type": "https://example.org/proxy/proxy-010",
+        "location": "https://example.org/proxy/proxy-010",
+        "contact": "https://example.org/proxy/proxy-010",
+        "email": "https://example.org/proxy/proxy-010",
+        "web_url": "https://example.org/proxy/proxy-010",
+        "mission": "https://example.org/proxy/proxy-010",
+        "description": "https://example.org/proxy/proxy-010"
+      },
+      "verified_by": "proxy-data",
+      "verified_on": "2026-10-21"
+    }
+  ]
+}
