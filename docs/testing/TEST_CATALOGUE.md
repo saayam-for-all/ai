@@ -1,0 +1,529 @@
+# Test catalogue
+
+**Generated from the suite by `tools/gen_test_catalogue.py`. Do not edit by
+hand.** A catalogue maintained separately from the tests goes stale, and a
+stale catalogue is worse than none, because it is believed.
+
+This is the document to read when deciding whether a behaviour is adequately
+covered. Each row names the behaviour a test protects, not merely what it
+calls.
+
+## Test kinds
+
+| Kind | Meaning | Trust it for |
+| --- | --- | --- |
+| **Unit** | One function, collaborators mocked, no I/O. | Internal logic: fallback selection, field normalisation. |
+| **Contract** | The shape of what crosses a boundary - the Lambda event in, the JSON envelope out. | Whether the web client will break. **These mirror what the browser actually sees, so trust these most.** |
+| **Dataset** | Assertions over shipped data files. | Data quality, independent of code. |
+| **Integration** | Several modules together, still hermetic. | Wiring, and blast radius between services. |
+
+No test in the default run touches the network: `tests/conftest.py` fails any
+unmarked test that opens a URL. Anything that genuinely needs the network must
+be marked `needs_network`, which is excluded from the default run and from CI.
+
+## Files
+
+| File | Kind | Issue | Covers | Tests |
+| --- | --- | --- | --- | ---: |
+| [`tests/test_answer_conversation.py`](../../tests/test_answer_conversation.py) | Unit | #183 | `utils/__init__.py prompt assembly` | 24 |
+| [`tests/test_classification_resilience.py`](../../tests/test_classification_resilience.py) | Unit | - | `services/classification_service.py` | 10 |
+| [`tests/test_client_factory.py`](../../tests/test_client_factory.py) | Unit | #193 | `utils/client.py create_chat_model` | 9 |
+| [`tests/test_client_imports.py`](../../tests/test_client_imports.py) | Integration | #154 | `utils/client.py` | 2 |
+| [`tests/test_emergency_dataset.py`](../../tests/test_emergency_dataset.py) | Dataset | #146 | `services/emergency_numbers.json` | 17 |
+| [`tests/test_emergency_locale.py`](../../tests/test_emergency_locale.py) | Unit | #146 | `services/emergency.py` | 67 |
+| [`tests/test_emergency_s3_reader.py`](../../tests/test_emergency_s3_reader.py) | Unit | #334 | `services/emergency.py S3 reader` | 23 |
+| [`tests/test_generate_answer.py`](../../tests/test_generate_answer.py) | Contract | #169 | `generate_answer_handler` | 50 |
+| [`tests/test_import_blast_radius.py`](../../tests/test_import_blast_radius.py) | Integration | #169, #171 | `module-scope imports` | 4 |
+| [`tests/test_model_fallback.py`](../../tests/test_model_fallback.py) | Unit | #193 | `utils/model_fallback.py` | 24 |
+| [`tests/test_org_search_contract.py`](../../tests/test_org_search_contract.py) | Contract | #170 | `utils/search_orgs.py` | 24 |
+| [`tests/test_request_db_schema.py`](../../tests/test_request_db_schema.py) | Unit | #169 | `utils/request_db.py` | 54 |
+| [`tests/test_response_contract.py`](../../tests/test_response_contract.py) | Contract | #146, #169, #170 | `response envelopes` | 10 |
+| [`tests/test_router.py`](../../tests/test_router.py) | Integration | #171 | `lambda_function.lambda_handler` | 34 |
+| [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
+| [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 57 |
+| | | | **Total** | **422** |
+
+## Every test
+
+### `test_answer_conversation.py`
+
+*Unit · issue #183 · 24 tests*
+
+What the model is actually asked, turn by turn - issue #183.
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_the_follow_up_question_is_what_the_model_is_asked` | The regression test for #183. This fails against the previous code. |
+| `test_the_request_is_still_given_to_the_model_as_background` | Answering the question must not mean losing what it is about. |
+| `test_the_turns_before_the_question_are_kept_in_order` | A follow-up only makes sense against what was already said. |
+| `test_a_single_shot_call_is_untouched` | No history: the description is the question, exactly as before. |
+| `test_a_single_shot_call_gets_no_request_context_block` | The block exists to keep the request out of the question position. |
+| `test_anything_that_is_not_a_transcript_is_a_single_shot_call` | Anything that is not a transcript is a single shot call. |
+| `test_a_transcript_ending_in_an_assistant_turn_has_no_pending_question` | A resumed session, or a client that posts our reply back to us. |
+| `test_entries_that_are_not_messages_are_dropped` | Entries that are not messages are dropped. |
+| `test_a_blank_turn_is_not_a_question` | Whitespace is not something to ask a model to answer. |
+| `test_a_system_turn_in_the_transcript_never_becomes_a_system_message` | The transcript is user input; the system prompt is ours. |
+| `test_only_the_most_recent_turns_are_forwarded` | An unbounded transcript is an unbounded prompt and an unbounded bill. |
+| `test_the_question_survives_the_cap` | Trimming the oldest turns must never trim the thing being asked. |
+| `test_an_oversized_message_is_truncated_rather_than_forwarded_whole` | The 250-character limit is enforced in the browser, which is not a limit. |
+| `test_a_follow_up_still_falls_back_to_gemini_when_groq_is_down` | Fallback works and every model receives the same conversation history. |
+| `test_primary_success_does_not_invoke_fallback` | A valid primary answer returns without trying another model. |
+| `test_empty_primary_answers_fall_back_to_gemini` | An empty primary answer should trigger fallback. |
+| `test_all_answer_models_failing_raises_model_chain_exhausted` | Raise the chain exhaustion error when every answer model fails. |
+| `test_a_missing_subject_or_description_does_not_break_the_context_block` | The degraded path in #169 answers with neither, and must still work. |
+| `test_the_answer_is_returned_stripped` | The answer is returned stripped. |
+| `test_location_gender_and_age_still_reach_the_system_prompt` | Location gender and age still reach the system prompt. |
+
+> 20 test functions expand to 24 cases through parametrisation.
+
+### `test_classification_resilience.py`
+
+*Unit · issue - · 10 tests*
+
+Guards the two failure modes behind "every request lands in General".
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_classifier_does_not_own_hardcoded_model_ids` | Classifier does not own hardcoded model ids. |
+| `test_gpt_oss_uses_low_reasoning_effort` | Gpt oss uses low reasoning effort. |
+| `test_retired_model_error_does_not_crash_request` | Retired model error does not crash request. |
+| `test_json_validate_failed_does_not_crash_request` | Json validate failed does not crash request. |
+| `test_parsing_errors_still_handled` | Parsing errors still handled. |
+| `test_primary_failure_tries_secondary_groq_before_gemini` | Both raw classification calls must use the shared model chain. |
+| `test_healthy_primary_is_not_retried` | Healthy primary is not retried. |
+| `test_all_groq_failures_reach_the_configured_gemini_model` | All groq failures reach the configured gemini model. |
+| `test_total_chain_failure_is_a_clear_502` | Total chain failure is a clear 502. |
+
+> 9 test functions expand to 10 cases through parametrisation.
+
+### `test_client_factory.py`
+
+*Unit · issue #193 · 9 tests*
+
+Unit tests for target-aware LangChain client construction.
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_groq_factory_uses_the_target_model_temperature_and_credentials` | Groq factory uses the target model temperature and credentials. |
+| `test_groq_factory_omits_unconfigured_reasoning_effort` | Groq factory omits unconfigured reasoning effort. |
+| `test_gemini_factory_uses_the_target_model_temperature_and_credentials` | Gemini factory uses the target model temperature and credentials. |
+| `test_factory_rejects_a_target_whose_provider_has_no_key` | Factory rejects a target whose provider has no key. |
+| `test_factory_rejects_an_unsupported_provider` | Factory rejects an unsupported provider. |
+| `test_constructor_failure_can_fall_through_to_another_provider` | Constructor failure can fall through to another provider. |
+| `test_legacy_groq_defaults_include_low_reasoning_effort` | Legacy groq defaults include low reasoning effort. |
+| `test_shared_groq_model_is_built_with_low_reasoning_effort` | groq_llm serves subject and answer generation; it must request low effort. |
+
+> 8 test functions expand to 9 cases through parametrisation.
+
+### `test_client_imports.py`
+
+*Integration · issue #154 · 2 tests*
+
+Guard against the utils/client.py import regression that broke dev.
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_client_exports_all_required_names` | Client exports all required names. |
+| `test_core_modules_import` | Core modules import. |
+
+### `test_emergency_dataset.py`
+
+*Dataset · issue #146 · 17 tests*
+
+Integrity checks on services/emergency_numbers.json.
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_bundled_file_is_the_s3_ground_truth` | The fallback must say exactly what S3 says. |
+| `test_the_shipped_file_passes_the_loader_shape_check` | The loader rejects a misshapen dataset; the shipped one must not be. |
+| `test_the_file_is_not_empty` | The file is not empty. |
+| `test_country_keys_are_iso_alpha2` | Country keys are iso alpha2. |
+| `test_every_number_is_dialable` | No blanks, no prose, no truncated values. |
+| `test_no_us_only_number_appears_outside_the_us` | The core safety invariant of issue #146, asserted against the data. |
+| `test_every_country_can_answer_a_general_emergency` | Every country must have something for the fallback to reach for. |
+| `test_service_names_are_from_the_known_vocabulary` | An unmodelled service name is silently invisible to the client. |
+| `test_specific_corrected_values` | Specific corrected values. |
+
+> 9 test functions expand to 17 cases through parametrisation.
+
+### `test_emergency_locale.py`
+
+*Unit · issue #146 · 67 tests*
+
+Behaviour tests for issue #146 - Emergency Contacts must never show a user a number from another country, and must never leave a field empty for the web client to fill with a hardcoded US default (911 / 988).
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_india_fire_is_indian_not_911` | Reported symptom 1: the India Fire row showed US 911. |
+| `test_india_mental_health_is_indian_not_988` | Reported symptom 2: the India Mental Health row showed US 988. |
+| `test_india_returns_the_routes_the_ticket_asks_for` | India returns the routes the ticket asks for. |
+| `test_india_full_directory_has_no_us_numbers` | India full directory has no us numbers. |
+| `test_no_response_ever_contains_a_foreign_number` | Every number returned for a country appears in that country's own record. |
+| `test_every_country_answers_every_modelled_service` | No modelled service comes back empty for a country we know. |
+| `test_no_non_us_country_ever_shows_988` | 988 is the North American mental health line (legitimate in US and Canada). |
+| `test_missing_service_falls_back_to_the_countrys_own_general_line` | Missing service falls back to the countrys own general line. |
+| `test_a_fallback_is_labelled_as_one` | A general emergency line must not be passed off as the real service. |
+| `test_a_real_entry_is_never_overwritten_by_the_fallback` | A real entry is never overwritten by the fallback. |
+| `test_unmodelled_service_is_unavailable_not_the_general_line` | Asking for something we do not model must not be answered with 112. |
+| `test_no_service_filter_returns_the_whole_directory` | An absent or blank service parameter means "give me everything". |
+| `test_city_entry_inherits_the_services_it_does_not_list` | Bengaluru lists only police and ambulance. |
+| `test_single_service_reports_the_level_it_actually_came_from` | Bengaluru matches at city level but does not list a fire number. |
+| `test_more_specific_levels_override_broader_ones` | More specific levels override broader ones. |
+| `test_country_with_no_dialable_number_at_all_is_unavailable` | We report nothing rather than invent a fallback out of nothing. |
+| `test_country_name_normalizes_to_iso` | Country name normalizes to iso. |
+| `test_truly_unknown_country_is_unavailable_not_us` | A country we do not have is answered "unavailable", never with US numbers. |
+| `test_us_still_works` | Us still works. |
+| `test_a_foreign_state_name_does_not_leak_into_another_country` | "Karnataka" under "US" must not match anything US-side. |
+| `test_explicit_country_discards_a_contradicting_geocode` | Explicit country discards a contradicting geocode. |
+| `test_agreeing_country_override_keeps_the_finer_detail` | Agreeing country override keeps the finer detail. |
+| `test_ambiguous_bare_city_is_not_guessed` | A city name in two countries must not pick one of them. |
+| `test_is_dialable` | Is dialable. |
+| `test_a_non_ip_is_never_put_into_the_lookup_url` | The IP comes from a request header, so it is validated before use. |
+| `test_out_of_range_coordinates_are_rejected_before_any_request` | Out of range coordinates are rejected before any request. |
+| `test_display_number_is_localized_but_dial_number_stays_ascii` | Display number is localized but dial number stays ascii. |
+| `test_unknown_language_falls_back_to_the_ascii_digits` | Unknown language falls back to the ascii digits. |
+| `test_end_to_end_india_response` | End to end india response. |
+| `test_end_to_end_unknown_country_is_404_not_us_numbers` | End to end unknown country is 404 not us numbers. |
+| `test_end_to_end_with_nothing_to_go_on_is_404` | No parameters and no client IP: we say we do not know. |
+| `test_missing_language_defaults_to_english` | Missing language defaults to english. |
+| `test_ip_lookup_reads_ipinfo_and_never_assumes_a_country` | Ip lookup reads ipinfo and never assumes a country. |
+| `test_ip_lookup_failure_is_an_empty_location` | Ip lookup failure is an empty location. |
+| `test_reverse_geocode_reads_the_nominatim_address` | Reverse geocode reads the nominatim address. |
+| `test_reverse_geocode_failure_is_no_location` | Reverse geocode failure is no location. |
+| `test_place_search_encodes_the_name_then_reverse_geocodes_the_match` | A place name is user text: `&` must not split the query string. |
+| `test_place_search_without_a_match_is_no_location` | Place search without a match is no location. |
+| `test_place_search_with_nothing_to_search_makes_no_request` | Place search with nothing to search makes no request. |
+
+> 39 test functions expand to 67 cases through parametrisation.
+
+### `test_emergency_s3_reader.py`
+
+*Unit · issue #334 · 23 tests*
+
+Unit tests for issue #334 - S3 dataset loader with caching and zero-downtime fallback.
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_load_emergency_numbers_from_s3_success` | Verify that when S3 returns a valid JSON, it is loaded into the cache. |
+| `test_warm_container_caching_avoids_repeated_s3_calls` | Verify that once loaded, subsequent invocations read from the in-memory cache. |
+| `test_fallback_to_local_file_on_s3_error` | When S3 returns an error (e.g. AccessDenied, timeout), fall back to local file. |
+| `test_custom_environment_variables_for_bucket_and_key` | Verify that environment variables control S3 bucket and key. |
+| `test_runtime_error_when_both_s3_and_local_file_unavailable` | When both S3 and local file are absent, raise RuntimeError. |
+| `test_location_resolution_with_mocked_reverse_geocode` | Verify reverse geocoding path when lat and lng are provided. |
+| `test_location_resolution_with_mocked_geocode_place` | Verify geocode place path when city/state/zip is provided without lat/lng. |
+| `test_location_resolution_with_mocked_ip_lookup` | Verify fallback to client IP location when coordinate/place fields are absent. |
+| `test_location_resolution_inferred_city` | Verify city inference when city exists and no country was resolved. |
+| `test_s3_client_makes_one_attempt_that_fits_the_lambda_timeout` | An unreachable S3 must fail over well inside the 3 s function timeout. |
+| `test_misshapen_s3_object_falls_back_to_the_bundled_file` | Valid JSON of the wrong shape is treated like an unreadable object. |
+| `test_s3_load_logs_its_source_and_checksum` | CloudWatch must show that S3 answered, and which upload it served. |
+| `test_fallback_logs_that_the_bundled_file_answered` | Fallback logs that the bundled file answered. |
+| `test_incomplete_s3_object_falls_back_to_the_bundled_file` | Well formed but incomplete is treated like unreadable. |
+| `test_s3_that_differs_from_the_bundled_copy_is_served_and_flagged` | S3 is the ground truth, so it answers, but the drift is logged. |
+| `test_s3_is_used_as_is_when_no_bundled_copy_is_packaged` | Without a bundled copy there is nothing to compare against. |
+
+> 16 test functions expand to 23 cases through parametrisation.
+
+### `test_generate_answer.py`
+
+*Contract · issue #169 · 50 tests*
+
+Tests for the generate_answer endpoint - issue #169.
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_subject_and_description_answer_without_touching_the_database` | The whole point of the fix: no Postgres call when the caller has the text. |
+| `test_database_is_still_used_when_only_identifiers_are_supplied` | Database is still used when only identifiers are supplied. |
+| `test_lookup_fills_only_what_the_caller_did_not_send` | Lookup fills only what the caller did not send. |
+| `test_neither_text_nor_identifiers_is_a_400_that_names_both_options` | Neither text nor identifiers is a 400 that names both options. |
+| `test_request_details_page_payload_is_accepted` | RequestDetails.jsx holds `id`, not `req_id`, and `userDBid`, not `user_id`. |
+| `test_beneficiary_id_alias_is_accepted` | Beneficiary id alias is accepted. |
+| `test_canonical_names_still_win_over_aliases` | Canonical names still win over aliases. |
+| `test_missing_request_is_404` | Missing request is 404. |
+| `test_database_down_is_a_retryable_503_and_leaks_no_connection_detail` | Database down is a retryable 503 and leaks no connection detail. |
+| `test_a_schema_mismatch_is_not_reported_as_a_retryable_outage` | A renamed table is our defect, not an outage - issue #169. |
+| `test_an_empty_rebuilt_database_is_not_reported_as_an_outage` | During the rebuild the tables exist but hold no rows: that is a 404. |
+| `test_row_with_empty_description_is_400_not_a_generated_answer` | Row with empty description is 400 not a generated answer. |
+| `test_model_exception_is_a_502_not_a_200` | Model exception is a 502 not a 200. |
+| `test_empty_answer_is_a_502_not_a_200_with_an_empty_string` | Empty answer is a 502 not a 200 with an empty string. |
+| `test_no_success_response_ever_carries_an_error_string_as_the_answer` | The old handler returned 200 with answer='Error: Failed to generate answer'. |
+| `test_all_three_invocation_envelopes_work` | All three invocation envelopes work. |
+| `test_malformed_json_body_is_400_not_500` | Malformed json body is 400 not 500. |
+| `test_non_object_body_is_400_not_500` | Non object body is 400 not 500. |
+| `test_conversation_history_that_is_not_a_list_is_dropped` | Conversation history that is not a list is dropped. |
+| `test_conversation_history_list_is_passed_through` | Conversation history list is passed through. |
+| `test_category_id_from_the_row_is_mapped_to_a_category_name` | Category id from the row is mapped to a category name. |
+| `test_unknown_category_id_falls_back_to_general` | Unknown category id falls back to general. |
+| `test_caller_supplied_category_is_used_as_is` | Caller supplied category is used as is. |
+| `test_logging_records_the_shape_but_never_the_description` | Logging records the shape but never the description. |
+| `test_request_db_is_not_imported_at_module_scope` | A driver built for the wrong Python minor version used to fail the whole module, taking predict_category, generate_subject, emergency_contacts and search_orgs down with generate_answer. Only generate_answer needs it. |
+| `test_other_services_survive_a_broken_request_database` | A psycopg2 failure must not reach the four services that never use it. |
+| `test_an_unexpected_lookup_exception_is_a_500_with_no_internals` | An unexpected lookup exception is a 500 with no internals. |
+| `test_unified_router_reaches_generate_answer` | Unified router reaches generate answer. |
+| `test_a_follow_up_question_is_answered_when_the_request_store_is_down` | The person asked something answerable. An outage is not their problem. |
+| `test_a_follow_up_question_is_answered_when_the_schema_has_moved` | The failure this issue is about. It must not reach the beneficiary. |
+| `test_degrading_still_logs_the_failure_it_degraded_around` | A fallback that hides the outage from CloudWatch is how #169 lasted 13 days. |
+| `test_the_degraded_flag_is_absent_on_a_healthy_call` | Nothing that does not care about degradation has to learn a new key. |
+| `test_the_opening_call_has_no_question_to_fall_back_to_and_still_fails` | conversation_history is [] on the first click: there is nothing to answer. |
+| `test_a_history_with_no_user_turn_does_not_fabricate_a_question` | A history with no user turn does not fabricate a question. |
+| `test_a_blank_user_turn_is_not_a_question` | A blank user turn is not a question. |
+| `test_a_request_that_does_not_exist_is_never_answered_from_the_history` | The owner check is what makes 404 a 404. Degrading past it is a leak. |
+| `test_a_store_failure_carries_text_a_client_can_show` | So a dead end reads as "not right now" rather than as a broken page. |
+| `test_the_presentable_message_is_not_called_answer` | It is never advice, so it must never land in a field rendered as advice. |
+| `test_the_presentable_message_names_nothing_about_our_infrastructure` | The presentable message names nothing about our infrastructure. |
+| `test_additional_info_answers_reach_the_model` | The join has run on every lookup since this endpoint was written. |
+| `test_a_row_without_additional_info_leaves_the_description_untouched` | A row without additional info leaves the description untouched. |
+| `test_malformed_additional_info_is_ignored_rather_than_raised` | It comes from another team's tables, so nothing about it is guaranteed. |
+| `test_gender_and_age_are_passed_through_when_the_caller_sends_them` | The prompt builder has always accepted these; the handler never sent them. |
+| `test_absent_gender_and_age_stay_absent` | Absent gender and age stay absent. |
+
+> 44 test functions expand to 50 cases through parametrisation.
+
+### `test_import_blast_radius.py`
+
+*Integration · issue #169, #171 · 4 tests*
+
+Cross-service blast radius at import time - issue #171.
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_importing_the_handler_module_does_not_import_the_database_driver` | psycopg2 must be imported lazily, inside the lookup that needs it. |
+| `test_services_that_do_not_need_a_dependency_survive_it_being_broken` | Emergency Contacts must answer while the database driver is unusable. |
+| `test_the_module_imports_without_any_api_key_configured` | No key is present in CI, and import must not depend on one. |
+
+> 3 test functions expand to 4 cases through parametrisation.
+
+### `test_model_fallback.py`
+
+*Unit · issue #193 · 24 tests*
+
+Unit contract for the shared model fallback chain (issue #193).
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_checked_in_chain_is_bounded_groq_then_gemini` | Checked in chain is bounded groq then gemini. |
+| `test_gpt_oss_targets_request_low_reasoning_effort` | Gpt oss targets request low reasoning effort. |
+| `test_primary_success_stops_the_chain` | Primary success stops the chain. |
+| `test_primary_failure_tries_the_next_groq_model` | Primary failure tries the next groq model. |
+| `test_all_groq_models_failing_reaches_gemini` | All groq models failing reaches gemini. |
+| `test_empty_or_invalid_result_advances_the_chain` | Empty or invalid result advances the chain. |
+| `test_every_target_is_attempted_once_in_configured_order` | Every target is attempted once in configured order. |
+| `test_total_failure_raises_a_clear_error` | Total failure raises a clear error. |
+| `test_warning_names_the_failed_model_and_reason` | Warning names the failed model and reason. |
+| `test_an_invalid_routing_configuration_is_refused` | A bad model_routing.json fails the cold start, not a request later. |
+| `test_a_missing_routing_configuration_is_refused` | A missing routing configuration is refused. |
+| `test_a_duplicate_target_in_a_supplied_chain_is_tried_once` | The one-attempt-per-model bound also holds for a caller's own chain. |
+| `test_a_validator_that_raises_advances_the_chain` | A result that crashes validation is a failed attempt, not an outage. |
+
+> 13 test functions expand to 24 cases through parametrisation.
+
+### `test_org_search_contract.py`
+
+*Contract · issue #170 · 24 tests*
+
+Tests for More Organizations / the Organizations tab - issue #170.
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_body_stays_an_object_with_an_organizations_list` | Body stays an object with an organizations list. |
+| `test_every_column_the_aggregator_selects_is_present_on_every_row` | Every column the aggregator selects is present on every row. |
+| `test_every_column_the_organizations_tab_renders_is_present` | Every column the organizations tab renders is present. |
+| `test_a_row_missing_fields_from_the_model_is_still_complete` | The model does not always return every key. The aggregator builds a DataFrame from these rows, so a ragged row becomes NaN columns in a different repository. |
+| `test_direct_invoke_and_api_gateway_envelopes_agree` | Direct invoke and api gateway envelopes agree. |
+| `test_charity_navigator_style_score_is_converted_to_the_five_point_scale` | Charity navigator style score is converted to the five point scale. |
+| `test_rating_is_always_a_float_in_range` | Rating is always a float in range. |
+| `test_rating_keeps_one_decimal_place` | Rating keeps one decimal place. |
+| `test_size_is_one_of_the_three_values_or_empty` | Size is one of the three values or empty. |
+| `test_org_type_is_normalised_to_nonprofit_or_for_profit` | Org type is normalised to nonprofit or for profit. |
+| `test_a_bad_rating_from_the_model_does_not_reach_the_sortable_column` | A bad rating from the model does not reach the sortable column. |
+| `test_missing_location_falls_back_to_the_requested_location` | Missing location falls back to the requested location. |
+| `test_causes_is_seeded_from_the_category_when_the_model_omits_it` | Causes is seeded from the category when the model omits it. |
+| `test_the_real_provider_list_is_groq_then_gemini` | The loop above is patched, so pin the production list separately. |
+| `test_gemini_serves_the_request_when_groq_fails` | A Groq outage used to take the whole Organizations tab down. |
+| `test_groq_is_used_alone_when_it_succeeds` | Groq is used alone when it succeeds. |
+| `test_a_provider_returning_no_organizations_falls_through_to_the_next` | A provider returning no organizations falls through to the next. |
+| `test_an_unconfigured_provider_is_skipped_not_fatal` | An unconfigured provider is skipped not fatal. |
+| `test_every_provider_failing_raises_rather_than_returning_an_empty_success` | Every provider failing raises rather than returning an empty success. |
+| `test_total_provider_failure_is_a_502_with_a_code_and_a_list` | Total provider failure is a 502 with a code and a list. |
+| `test_description_is_required` | Description is required. |
+| `test_missing_location_defaults_and_missing_subject_is_tolerated` | Missing location defaults and missing subject is tolerated. |
+| `test_category_is_passed_through_to_the_search` | Category is passed through to the search. |
+| `test_unified_router_reaches_search_orgs` | Unified router reaches search orgs. |
+
+### `test_request_db_schema.py`
+
+*Unit · issue #169 · 54 tests*
+
+The SQL this service runs must match the live database - issue #169.
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_the_help_request_table_is_plural` | `request` was renamed to `requests` in the live database on 2026-08-17. |
+| `test_the_joined_tables_keep_their_singular_names` | Only the request table was in the rename set. |
+| `test_the_query_reads_no_table_that_is_not_declared_here` | The complete list of another team's tables that we depend on. |
+| `test_the_request_row_is_looked_up_by_its_current_owner_columns` | `req_user_id` became `creator_id`, and this is the test that caught it. |
+| `test_the_owner_predicate_is_never_dropped` | The only thing between a caller and somebody else's help request. |
+| `test_parameters_are_ordered_the_way_the_statement_names_them` | req_id first, then the user id once per owner column. |
+| `test_the_table_name_can_be_corrected_without_a_release` | The DDL repository lags the live database, so this has to be operable. |
+| `test_a_renamed_table_is_a_schema_mismatch_and_not_an_outage` | The distinction that would have caught this in a day instead of thirteen. |
+| `test_a_renamed_column_is_also_a_schema_mismatch` | The announced `req_user_id -> creator_id` rename must land in this branch. |
+| `test_a_database_that_is_down_is_still_a_retryable_outage` | The new branch must not swallow the case it was split out of. |
+| `test_the_connection_is_released_when_the_statement_fails` | A mismatch fires on every single call, so a leak here exhausts the pool. |
+| `test_the_live_layout_is_discovered_and_used` | The post-database#224 database: plural table, creator_id, beneficiary_id. |
+| `test_a_rolled_back_database_still_works` | The exact failure of 2026-08-17 and database#224, in reverse. |
+| `test_the_plural_table_wins_when_a_migration_leaves_both` | A rename done by hand can leave a backup of the old table behind. |
+| `test_a_column_we_do_not_need_disappearing_costs_only_that_column` | `iscalamity` or `req_loc` going away must not fail the whole statement. |
+| `test_losing_the_additional_info_tables_drops_the_join_not_the_answer` | Enrichment is enrichment. The request row alone still answers. |
+| `test_no_request_table_at_all_is_a_schema_mismatch` | Neither name present: this is our statement being wrong, not an outage. |
+| `test_a_table_with_no_owner_column_is_refused_rather_than_widened` | Never trade authorization for availability. |
+| `test_losing_the_text_the_answer_is_built_from_is_a_schema_mismatch` | Without req_subj/req_desc there is nothing to answer, so say so. |
+| `test_a_mismatch_is_not_cached_so_the_next_container_looks_again` | The database team applies DDL by hand; a mismatch is often minutes old. |
+| `test_introspection_that_is_not_permitted_falls_back_to_the_known_names` | Our database grants are managed by another team. |
+| `test_introspection_can_be_switched_off_without_a_release` | Introspection can be switched off without a release. |
+| `test_the_resolved_schema_is_cached_for_the_life_of_the_container` | One introspection per cold start, not one per invocation. |
+| `test_two_regions_do_not_share_one_resolved_layout` | Virginia is migrated; Ireland may not be. The cache is keyed by schema. |
+| `test_an_operator_can_pin_the_table_during_an_incident` | The pin wins over both candidates - but it is looked up like them. |
+| `test_a_pin_naming_a_table_that_is_not_there_degrades_to_what_is` | A pin set during an incident and forgotten must not become the next one. |
+| `test_a_name_that_is_not_an_identifier_never_reaches_the_statement` | Table and column names cannot be bound as parameters, so they are checked. |
+| `test_an_operator_can_pin_the_owner_columns` | Useful if the two ids ever stop meaning what we think they mean. |
+| `test_a_stale_pin_degrades_to_what_exists_rather_than_breaking` | A pin set during an incident and forgotten must not become the next one. |
+| `test_the_connection_is_released_after_a_successful_read` | The connection is released after a successful read. |
+| `test_the_connection_is_released_when_introspection_refuses` | A mismatch fires on every call, so a leak here exhausts the pool. |
+| `test_repeated_join_rows_are_grouped_into_one_entry_per_question` | The join repeats the request row once per answer; the caller wants one. |
+| `test_a_request_with_no_additional_info_still_returns_the_row` | LEFT JOIN gives one row with every metadata column NULL. |
+| `test_a_question_that_was_asked_but_not_answered_carries_no_answers` | Both answer columns NULL means the beneficiary skipped the field. |
+| `test_the_list_answer_wins_over_the_free_text_column` | A list-backed field stores its label in list_item_metadata, not field_value. |
+| `test_submission_date_is_stringified_and_a_missing_one_stays_none` | It is a timestamp on the way out of psycopg2 and JSON on the way to a client. |
+| `test_introspection_reads_tuple_rows_as_well_as_dict_rows` | The cursor factory is the caller's choice, not this function's business. |
+| `test_a_request_that_is_not_there_is_not_found_and_not_an_outage` | Zero rows after a healthy introspection means exactly one thing. |
+| `test_the_aws_region_follows_the_saayam_region` | The aws region follows the saayam region. |
+| `test_an_explicit_aws_region_wins` | An explicit aws region wins. |
+| `test_db_settings_are_read_from_the_region_and_role_parameter` | Db settings are read from the region and role parameter. |
+| `test_an_already_decoded_parameter_is_accepted` | An already decoded parameter is accepted. |
+| `test_an_ssm_failure_says_what_to_fix` | An ssm failure says what to fix. |
+| `test_an_empty_parameter_is_refused` | An empty parameter is refused. |
+| `test_connection_fills_missing_settings_from_db_environment_variables` | Connection fills missing settings from db environment variables. |
+
+> 45 test functions expand to 54 cases through parametrisation.
+
+### `test_response_contract.py`
+
+*Contract · issue #146, #169, #170 · 10 tests*
+
+Pin the response contract the deployed web client depends on.
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_response_body_stays_an_object` | Response body stays an object. |
+| `test_predict_returns_ranked_objects_under_categories` | Predict returns ranked objects under categories. |
+| `test_subject_is_readable_at_body_subject` | Subject is readable at body subject. |
+| `test_emergency_uses_the_proxy_contract_instead` | Emergency Contacts is the one endpoint on PROXY integration. |
+| `test_emergency_returns_indian_numbers_not_us_ones` | Emergency returns indian numbers not us ones. |
+| `test_emergency_error_bodies_use_the_proxy_shape_too` | A proxy method rejects an object body, and the caller sees a bare 502. |
+| `test_emergency_errors_through_the_router_use_the_proxy_shape` | Emergency errors through the router use the proxy shape. |
+| `test_a_malformed_body_does_not_break_an_emergency_lookup` | The query string alone is enough; a stray body must not cause a 500. |
+| `test_error_bodies_are_objects_too` | Error bodies are objects too. |
+| `test_router_error_path_keeps_the_proxy_envelope` | The router can fail before the handler is ever reached. |
+
+### `test_router.py`
+
+*Integration · issue #171 · 34 tests*
+
+Router-level regression tests - issue #171.
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_service_in_body_reaches_its_handler` | Service in body reaches its handler. |
+| `test_service_in_query_string_reaches_its_handler` | Service in query string reaches its handler. |
+| `test_service_name_is_case_and_whitespace_insensitive` | Service name is case and whitespace insensitive. |
+| `test_query_string_wins_over_body` | An explicit query parameter is the more specific instruction. |
+| `test_absent_service_defaults_to_predict_category` | Back-compat: the original single-service deployment had no `service`. |
+| `test_unknown_service_returns_the_documented_shape` | Unknown service returns the documented shape. |
+| `test_a_body_that_is_not_an_object_never_500s` | A malformed body is a client error, not a server error. |
+| `test_malformed_body_is_reported_as_400` | Malformed body is reported as 400. |
+| `test_malformed_body_still_routes_when_the_query_string_named_the_service` | The body is not the router's problem once the service is known. |
+| `test_an_empty_event_does_not_crash` | An empty event does not crash. |
+| `test_non_proxy_services_keep_an_object_body` | The mirror image: these clients read response.body.<field>. |
+| `test_a_handler_raising_does_not_leak_internals` | An unexpected error must not put a stack trace or a key in the body. |
+| `test_every_advertised_service_has_a_handler` | The router's error message lists the services it supports. |
+| `test_emergency_routed_by_query_string_resolves_the_country` | `?service=emergency_contacts&country=IN` answers with India's numbers. |
+| `test_emergency_routed_by_body_resolves_the_country` | Emergency routed by body resolves the country. |
+| `test_routed_emergency_can_still_ask_for_one_service` | Routing in the query string leaves the body free to name the service. |
+
+> 16 test functions expand to 34 cases through parametrisation.
+
+### `test_subject_generator.py`
+
+*Unit · issue - · 13 tests*
+
+Unit tests for the Generate Subject service.
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_clean_subject_strips_leading_label` | Clean subject strips leading label. |
+| `test_clean_subject_strips_surrounding_quotes` | Clean subject strips surrounding quotes. |
+| `test_clean_subject_strips_label_and_quotes_together` | Clean subject strips label and quotes together. |
+| `test_clean_subject_empty_falls_back` | Clean subject empty falls back. |
+| `test_truncate_enforces_max_length` | Truncate enforces max length. |
+| `test_generate_cleans_label_and_quotes` | Generate cleans label and quotes. |
+| `test_generate_enforces_max_length` | Generate enforces max length. |
+| `test_generate_empty_description_returns_fallback` | Generate empty description returns fallback. |
+| `test_generate_falls_back_to_description_when_no_llm` | Generate falls back to description when no llm. |
+| `test_prompt_keeps_concern_framing_rule` | Prompt keeps concern framing rule. |
+| `test_prompt_keeps_no_status_word_rule` | Prompt keeps no status word rule. |
+| `test_prompt_forbids_subject_label_in_output` | Prompt forbids subject label in output. |
+| `test_prompt_includes_the_description` | Prompt includes the description. |
+
+### `test_token_usage.py`
+
+*- · issue #159 · 57 tests*
+
+The shared token counter (issue #159).
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_groq_raw_sdk_shape` | Groq raw sdk shape. |
+| `test_gemini_raw_sdk_shape` | Gemini raw sdk shape. |
+| `test_langchain_message_shape` | Langchain message shape. |
+| `test_langchain_falls_back_to_response_metadata` | Older LangChain versions populate only the provider-shaped dict. |
+| `test_the_two_usage_metadata_shapes_do_not_collide` | A raw Gemini response and an AIMessage both have `.usage_metadata`. |
+| `test_gemini_thinking_tokens_count_as_completion` | Gemini 2.5 bills thoughts as output but reports them apart. |
+| `test_langchain_reasoning_tokens_count_as_completion` | Langchain reasoning tokens count as completion. |
+| `test_langchain_reasoning_already_included_in_output_tokens_is_not_double_counted` | In standard LangChain, output_tokens already includes reasoning tokens. |
+| `test_langchain_reasoning_edge_case_shapes` | Exercise LangChain reasoning token shapes and boundary conditions. |
+| `test_unknown_shapes_return_zeros_rather_than_raising` | Unknown shapes return zeros rather than raising. |
+| `test_a_provider_that_raises_on_attribute_access_returns_zeros` | A provider that raises on attribute access returns zeros. |
+| `test_none_counts_do_not_poison_the_accumulator` | A provider that reports None used to raise TypeError inside `+=`. |
+| `test_total_is_derived_when_the_provider_omits_it` | Total is derived when the provider omits it. |
+| `test_recording_into_a_broken_accumulator_does_not_raise` | The caller's request succeeded; only the telemetry is lost. |
+| `test_accumulator_sums_across_providers` | Accumulator sums across providers. |
+| `test_labels_land_on_the_call_record` | Labels land on the call record. |
+| `test_a_none_accumulator_makes_counting_opt_in` | A none accumulator makes counting opt in. |
+| `test_new_accumulator_matches_the_shape_predict_category_returns` | `body.token_usage` is already in the browser's response. |
+| `test_per_call_records_keep_the_published_field_names` | Per call records keep the published field names. |
+| `test_log_usage_emits_one_parseable_line` | Log usage emits one parseable line. |
+| `test_log_usage_is_silent_when_nothing_was_counted` | Log usage is silent when nothing was counted. |
+| `test_log_usage_survives_an_unserialisable_label` | Log usage survives an unserialisable label. |
+| `test_subject_generation_reports_its_usage` | Subject generation reports its usage. |
+| `test_answer_generation_reports_its_usage` | Answer generation reports its usage. |
+| `test_a_groq_failure_still_bills_the_gemini_retry` | Only successful model responses contribute recorded token usage. |
+| `test_organization_search_reports_its_usage` | The service that could not report usage at all before #159. |
+| `test_classification_counts_every_call_in_its_walk` | Classification is a loop, and the loop is the cost. |
+| `test_classification_usage_survives_having_no_provider` | No key configured must still return the published (results, usage) pair. |
+| `test_classification_logs_as_well_as_returns` | Classification is the one service that does both. |
+| `test_invoke_provider_still_parses_after_the_chain_split` | The two-step form must return exactly what `| parser` used to. |
+| `test_invoke_provider_captures_usage_from_the_message` | The whole point of the split: the AIMessage is no longer discarded. |
+| `test_invoke_provider_works_without_an_accumulator` | Counting is opt-in; the default call path must not require it. |
+| `test_model_name_falls_back_when_the_model_has_no_id` | A usage record with a blank model column is not worth logging. |
+| `test_every_subject_branch_records_usage` | Every subject branch records usage. |
+| `test_a_subject_falls_back_to_gemini_and_bills_both` | Groq answered, then failed to parse; Gemini was asked the same thing. |
+| `test_subject_with_no_provider_logs_nothing_spent` | Subject with no provider logs nothing spent. |
+| `test_output_token_details_without_reasoning_changes_nothing` | The details dict is present on plenty of non-reasoning responses. |
+| `test_log_usage_never_raises_on_a_hostile_accumulator` | Telemetry failing must not take down the request that succeeded. |
+| `test_answer_generation_with_no_provider_at_all` | No configured provider succeeds, but the spend log is still emitted. |
+| `test_both_providers_failing_on_a_long_description_still_reports` | The long-description branch has its own fallback pair. |
+| `test_a_broken_extractor_is_logged_not_hidden` | A broken extractor is logged not hidden. |
+| `test_an_unrecognised_response_warns` | A provider that stops reporting usage bills us exactly the same. |
+| `test_recording_into_a_broken_accumulator_is_logged` | Recording into a broken accumulator is logged. |
+| `test_an_unserialisable_record_degrades_to_totals_rather_than_vanishing` | Losing the labels is acceptable; losing the whole request is not. |
+
+> 44 test functions expand to 57 cases through parametrisation.

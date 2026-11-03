@@ -1,0 +1,21 @@
+[run]
+source = .
+branch = True
+omit =
+    tests/*
+    */__pycache__/*
+    # Prompt libraries are data - long string constants with no branches.
+    # Counting them drags the number around without saying anything about
+    # whether the code that uses them is exercised.
+    utils/prompts.py
+    utils/prompts_no_hallucination_reviewed.py
+    utils/categories*.py
+    utils/predict_category_list.py
+
+[report]
+show_missing = True
+skip_covered = False
+exclude_lines =
+    pragma: no cover
+    if __name__ == .__main__.:
+    raise NotImplementedError

@@ -1,0 +1,166 @@
+name: Deploy to AWS Lambda
+
+on:
+  push:
+    branches:
+      - dev
+  # Pull requests run the test job only. Every job below is guarded on
+  # github.event_name, so a pull request never touches AWS.
+  pull_request:
+    branches:
+      - dev
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Tests & Coverage
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          # Matches the Lambda runtime and the build container below. psycopg2
+          # wheels are built per minor version, so drifting here is exactly the
+          # failure that took the deployment down once already.
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Run the regression suite
+        # Needs no API keys and makes no network calls - tests/conftest.py fails
+        # any unmarked test that opens a URL, and needs_network is excluded by
+        # pytest.ini. A failure here has to stop the deploy rather than be
+        # reviewed after the fact.
+        run: python -m pytest -q
+
+      - name: Coverage
+        # The threshold catches a regression - a change that deletes tests or
+        # adds a large unexercised module. See docs/testing/COVERAGE.md.
+        run: python -m pytest -q --cov --cov-report=term-missing --cov-fail-under=35
+
+      - name: Check the test catalogue is current
+        # The catalogue is generated from the suite. Regenerating it here and
+        # diffing means it cannot drift from the tests it claims to describe.
+        run: |
+          python tools/gen_test_catalogue.py
+          git diff --exit-code -- docs/testing/TEST_CATALOGUE.md             || (echo "::error::TEST_CATALOGUE.md is stale. Run: python tools/gen_test_catalogue.py" && exit 1)
+
+  build:
+    name: Build & Package
+    needs: test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Prepare package directory
+        run: rm -rf package deployment.zip && mkdir -p package
+
+      - name: Build dependencies in Lambda compatible container
+        run: |
+          docker run --rm \
+            -v "$PWD":/var/task \
+            public.ecr.aws/sam/build-python3.11:latest \
+            /bin/sh -c "
+              python -m pip install --upgrade pip &&
+              pip install -r requirements.txt -t package
+            "
+
+      - name: Copy application code
+        run: |
+          cp -r *.py package/
+          cp -r utils package/utils
+          cp -r services package/services
+          cp -r config package/config
+
+      - name: Trim files the Lambda runtime already provides
+        run: |
+          # boto3, botocore and s3transfer ship with the Python 3.11 Lambda runtime,
+          # so shipping them again wastes about 24 MB. Packaging tools are never used
+          # at runtime. Distribution metadata is deliberately kept: libraries such as
+          # langchain read their own versions through importlib.metadata at import time.
+          sudo rm -rf package/boto3 package/botocore package/s3transfer \
+                      package/pip package/setuptools package/wheel \
+                      package/pkg_resources
+          sudo find package -type d -name "__pycache__" -prune -exec rm -rf {} + || true
+          sudo find package -type f -name "*.pyc" -delete || true
+
+      - name: Zip deployment package
+        run: |
+          cd package
+          zip -qr ../deployment.zip .
+
+      - name: Report package size
+        run: |
+          bytes=$(wc -c < deployment.zip)
+          echo "Zipped package: $((bytes / 1024 / 1024)) MB (${bytes} bytes)"
+          echo "Direct upload limit is 70167211 bytes; S3 deploy supports 250 MB unzipped."
+          if [ "$bytes" -ge 70167211 ]; then
+            echo "::warning::Package exceeds the direct upload limit. DEPLOY_S3_BUCKET must be set."
+          fi
+
+      - name: Upload zip artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-package
+          path: deployment.zip
+
+  deploy:
+    name: Deploy ${{ matrix.name }}
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      # One function failing must not cancel the deploy of the others.
+      fail-fast: false
+      matrix:
+        # All five functions deploy with the shared AWS_AI_* credentials.
+        # Only the Lambda ARN differs per function.
+        include:
+          - name: Predict Category
+            arn_secret: PRED_CAT_AWS_LAMBDA_ARN
+          - name: Generate Subject
+            arn_secret: GEN_SUB_AWS_LAMBDA_ARN
+          - name: Generate Answer
+            arn_secret: GEN_ANS_AWS_LAMBDA_ARN
+            timeout: 120
+          - name: Emergency Contacts
+            arn_secret: EMR_CON_AWS_LAMBDA_ARN
+          - name: More Organizations
+            arn_secret: MORE_ORG_LAMBDA_ARN
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+          sparse-checkout-cone-mode: false
+
+      - name: Download zip artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: deployment-package
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_AI_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_AI_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Deploy to AWS Lambda
+        env:
+          FUNCTION_NAME: ${{ secrets[matrix.arn_secret] }}
+          DEPLOY_S3_BUCKET: ${{ secrets.DEPLOY_S3_BUCKET }}
+          LAMBDA_TIMEOUT: ${{ matrix.timeout }}
+        run: |
+          chmod +x .github/scripts/deploy_lambda.sh
+          .github/scripts/deploy_lambda.sh

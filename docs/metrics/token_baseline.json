@@ -1,0 +1,436 @@
+{
+  "corpus_size": 8,
+  "models": {
+    "groq": "openai/gpt-oss-20b",
+    "gemini": "gemini-2.5-flash"
+  },
+  "services": {
+    "generate_answer": {
+      "runs": [
+        {
+          "calls": 1,
+          "prompt": 496,
+          "completion": 218,
+          "total": 714,
+          "providers": [
+            "groq"
+          ],
+          "seconds": 0.6,
+          "case": "housing-short"
+        },
+        {
+          "calls": 1,
+          "prompt": 493,
+          "completion": 298,
+          "total": 791,
+          "providers": [
+            "groq"
+          ],
+          "seconds": 0.54,
+          "case": "food-short"
+        },
+        {
+          "calls": 1,
+          "prompt": 544,
+          "completion": 299,
+          "total": 843,
+          "providers": [
+            "groq"
+          ],
+          "seconds": 0.86,
+          "case": "healthcare-medium"
+        },
+        {
+          "calls": 1,
+          "prompt": 539,
+          "completion": 188,
+          "total": 727,
+          "providers": [
+            "groq"
+          ],
+          "seconds": 1.16,
+          "case": "education-medium"
+        },
+        {
+          "calls": 1,
+          "prompt": 541,
+          "completion": 531,
+          "total": 1072,
+          "providers": [
+            "groq"
+          ],
+          "seconds": 0.5,
+          "case": "elderly-medium"
+        },
+        {
+          "calls": 1,
+          "prompt": 493,
+          "completion": 287,
+          "total": 780,
+          "providers": [
+            "groq"
+          ],
+          "seconds": 0.61,
+          "case": "clothing-short"
+        },
+        {
+          "calls": 1,
+          "prompt": 603,
+          "completion": 696,
+          "total": 1299,
+          "providers": [
+            "groq"
+          ],
+          "seconds": 0.75,
+          "case": "housing-long"
+        },
+        {
+          "calls": 1,
+          "prompt": 511,
+          "completion": 766,
+          "total": 1277,
+          "providers": [
+            "groq"
+          ],
+          "seconds": 0.66,
+          "case": "general-ambiguous"
+        }
+      ],
+      "summary": {
+        "samples": 8,
+        "errors": 0,
+        "calls_per_request": 1,
+        "prompt_mean": 528,
+        "completion_mean": 410,
+        "total_mean": 938,
+        "total_median": 817,
+        "total_min": 714,
+        "total_max": 1299,
+        "seconds_mean": 0.71
+      }
+    },
+    "predict_category": {
+      "runs": [
+        {
+          "calls": 3,
+          "prompt": 1533,
+          "completion": 188,
+          "total": 1721,
+          "providers": [
+            "groq",
+            "groq",
+            "groq"
+          ],
+          "seconds": 1.38,
+          "case": "housing-short"
+        },
+        {
+          "calls": 2,
+          "prompt": 876,
+          "completion": 192,
+          "total": 1068,
+          "providers": [
+            "groq",
+            "groq"
+          ],
+          "seconds": 2.39,
+          "case": "food-short"
+        },
+        {
+          "calls": 3,
+          "prompt": 1863,
+          "completion": 304,
+          "total": 2167,
+          "providers": [
+            "groq",
+            "groq",
+            "groq"
+          ],
+          "seconds": 16.31,
+          "case": "healthcare-medium"
+        },
+        {
+          "calls": 3,
+          "prompt": 1430,
+          "completion": 467,
+          "total": 1897,
+          "providers": [
+            "groq",
+            "groq",
+            "groq"
+          ],
+          "seconds": 15.18,
+          "case": "education-medium"
+        },
+        {
+          "calls": 1,
+          "prompt": 462,
+          "completion": 65,
+          "total": 527,
+          "providers": [
+            "groq"
+          ],
+          "seconds": 2.75,
+          "case": "elderly-medium"
+        },
+        {
+          "calls": 2,
+          "prompt": 897,
+          "completion": 320,
+          "total": 1217,
+          "providers": [
+            "groq",
+            "groq"
+          ],
+          "seconds": 8.91,
+          "case": "clothing-short"
+        },
+        {
+          "calls": 2,
+          "prompt": 1209,
+          "completion": 142,
+          "total": 1351,
+          "providers": [
+            "groq",
+            "groq"
+          ],
+          "seconds": 12.14,
+          "case": "housing-long"
+        },
+        {
+          "calls": 2,
+          "prompt": 1108,
+          "completion": 384,
+          "total": 1492,
+          "providers": [
+            "groq",
+            "groq"
+          ],
+          "seconds": 8.97,
+          "case": "general-ambiguous"
+        }
+      ],
+      "summary": {
+        "samples": 8,
+        "errors": 0,
+        "calls_per_request": 2.25,
+        "prompt_mean": 1172,
+        "completion_mean": 258,
+        "total_mean": 1430,
+        "total_median": 1422,
+        "total_min": 527,
+        "total_max": 2167,
+        "seconds_mean": 8.5
+      }
+    },
+    "search_orgs": {
+      "runs": [
+        {
+          "calls": 1,
+          "prompt": 1190,
+          "completion": 1014,
+          "total": 2204,
+          "providers": [
+            "groq"
+          ],
+          "seconds": 12.42,
+          "case": "housing-short"
+        },
+        {
+          "calls": 1,
+          "prompt": 1188,
+          "completion": 994,
+          "total": 2182,
+          "providers": [
+            "groq"
+          ],
+          "seconds": 14.51,
+          "case": "food-short"
+        },
+        {
+          "calls": 1,
+          "prompt": 1232,
+          "completion": 975,
+          "total": 2207,
+          "providers": [
+            "groq"
+          ],
+          "seconds": 13.73,
+          "case": "healthcare-medium"
+        },
+        {
+          "calls": 1,
+          "prompt": 1224,
+          "completion": 888,
+          "total": 2112,
+          "providers": [
+            "groq"
+          ],
+          "seconds": 19.29,
+          "case": "education-medium"
+        },
+        {
+          "calls": 1,
+          "prompt": 1227,
+          "completion": 954,
+          "total": 2181,
+          "providers": [
+            "groq"
+          ],
+          "seconds": 15.12,
+          "case": "elderly-medium"
+        },
+        {
+          "calls": 2,
+          "prompt": 2351,
+          "completion": 12004,
+          "total": 14355,
+          "providers": [
+            "groq",
+            "gemini"
+          ],
+          "seconds": 43.23,
+          "case": "clothing-short"
+        },
+        {
+          "calls": 1,
+          "prompt": 1292,
+          "completion": 938,
+          "total": 2230,
+          "providers": [
+            "groq"
+          ],
+          "seconds": 2.16,
+          "case": "housing-long"
+        },
+        {
+          "calls": 1,
+          "prompt": 1200,
+          "completion": 1008,
+          "total": 2208,
+          "providers": [
+            "groq"
+          ],
+          "seconds": 2.5,
+          "case": "general-ambiguous"
+        }
+      ],
+      "summary": {
+        "samples": 8,
+        "errors": 0,
+        "calls_per_request": 1.12,
+        "prompt_mean": 1363,
+        "completion_mean": 2347,
+        "total_mean": 3710,
+        "total_median": 2206,
+        "total_min": 2112,
+        "total_max": 14355,
+        "seconds_mean": 15.37
+      }
+    },
+    "generate_subject": {
+      "runs": [
+        {
+          "calls": 1,
+          "prompt": 499,
+          "completion": 168,
+          "total": 667,
+          "providers": [
+            "groq"
+          ],
+          "seconds": 10.5,
+          "case": "housing-short"
+        },
+        {
+          "calls": 1,
+          "prompt": 498,
+          "completion": 314,
+          "total": 812,
+          "providers": [
+            "groq"
+          ],
+          "seconds": 4.53,
+          "case": "food-short"
+        },
+        {
+          "calls": 1,
+          "prompt": 535,
+          "completion": 4094,
+          "total": 4629,
+          "providers": [
+            "groq"
+          ],
+          "seconds": 7.58,
+          "case": "healthcare-medium"
+        },
+        {
+          "calls": 1,
+          "prompt": 527,
+          "completion": 742,
+          "total": 1269,
+          "providers": [
+            "groq"
+          ],
+          "seconds": 12.32,
+          "case": "education-medium"
+        },
+        {
+          "calls": 1,
+          "prompt": 529,
+          "completion": 1788,
+          "total": 2317,
+          "providers": [
+            "groq"
+          ],
+          "seconds": 8.29,
+          "case": "elderly-medium"
+        },
+        {
+          "calls": 1,
+          "prompt": 498,
+          "completion": 209,
+          "total": 707,
+          "providers": [
+            "groq"
+          ],
+          "seconds": 8.49,
+          "case": "clothing-short"
+        },
+        {
+          "calls": 1,
+          "prompt": 597,
+          "completion": 4094,
+          "total": 4691,
+          "providers": [
+            "groq"
+          ],
+          "seconds": 16.33,
+          "case": "housing-long"
+        },
+        {
+          "calls": 1,
+          "prompt": 504,
+          "completion": 709,
+          "total": 1213,
+          "providers": [
+            "groq"
+          ],
+          "seconds": 16.62,
+          "case": "general-ambiguous"
+        }
+      ],
+      "summary": {
+        "samples": 8,
+        "errors": 0,
+        "calls_per_request": 1,
+        "prompt_mean": 523,
+        "completion_mean": 1515,
+        "total_mean": 2038,
+        "total_median": 1241,
+        "total_min": 667,
+        "total_max": 4691,
+        "seconds_mean": 10.58
+      }
+    }
+  }
+}
