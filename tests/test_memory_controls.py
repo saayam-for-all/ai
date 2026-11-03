@@ -104,3 +104,26 @@ def test_invalid_session_id_is_rejected(monkeypatch, tmp_path):
     )
 
     assert response["statusCode"] == 400
+
+
+def test_unusable_store_path_returns_503(monkeypatch, tmp_path):
+    blocker = tmp_path / "not-a-directory"
+    blocker.write_text("regular file")
+
+    monkeypatch.setenv("SAAYAM_SESSION_MEMORY_DEMO", "1")
+    monkeypatch.setenv(
+        "SAAYAM_MEMORY_SQLITE_PATH",
+        str(blocker / "sessions.db"),
+    )
+    monkeypatch.delenv("AWS_LAMBDA_FUNCTION_NAME", raising=False)
+    monkeypatch.delenv("AWS_EXECUTION_ENV", raising=False)
+
+    response = lambda_function.local_memory_controls_handler(
+        make_event("view", "session-A"),
+        None,
+    )
+
+    assert response["statusCode"] == 503
+    assert response["body"]["error"] == (
+        "Memory controls temporarily unavailable"
+    )

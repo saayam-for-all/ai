@@ -207,6 +207,29 @@ Memory summarization introduces additional model calls and processing time.
 
 The evaluation did not establish production latency guarantees. Further optimization and testing are required.
 
+#### Worst-case latency
+
+Summarization runs before the answer in the same request, so the summarizer's time adds to the answer's. Two cases matter for API Gateway's 29-second limit.
+
+**Cold backlog, healthy models.** Each 25-message evaluation conversation had five turns outside the window, so each memory-enabled request made exactly one summarizer call. The per-scenario difference from the table above (1.97 s, 3.01 s, 3.89 s) is therefore roughly the cost of one batch. A request catching up the maximum of `MAX_BATCHES_PER_REQUEST = 3` batches makes three sequential summarizer calls before the answer:
+
+| Component | Estimate |
+|---|---:|
+| 3 summarizer batches × ~3.9 s (slowest observed) | ~11.7 s |
+| Answer generation (slowest observed baseline) | ~6.0 s |
+| **Estimated worst healthy request** | **~18 s** |
+
+These numbers are extrapolated from the evaluation and were not measured directly. Under them, a cold backlog leaves about 11 s of headroom below 29 s.
+
+**Degraded models: no upper bound today.** `run_model_chain` tries four targets in order (`config/model_routing.json`: three Groq models, then Gemini). Neither client sets a request timeout. With the installed library defaults, `ChatGroq` has `request_timeout=None, max_retries=2`, and `ChatGoogleGenerativeAI` has `timeout=None, max_retries=6`. One batch can therefore make up to 3 × 3 + 7 = 16 HTTP attempts, and three batches can make up to 48 before the answer chain starts. Each SDK retry also waits for a backoff interval. A single provider connection that hangs blocks the request indefinitely. When that happens, API Gateway returns 504 at 29 s and the client gets no answer, even though memory is otherwise designed never to block one.
+
+This does not affect the current deployment, because memory never runs inside Lambda. Before the AWS gate is lifted, the memory path needs:
+
+1. A `request_timeout` / `timeout` on the summarizer's model clients, with `max_retries` reduced.
+2. A wall-clock budget for memory, for example to stop starting new batches after a few seconds. Each batch is already saved before the next one starts, so stopping early loses no work; the remaining backlog resumes on the next request.
+
+The answer chain has the same unbounded-timeout behaviour today, independent of memory.
+
 ### 6.3 Memory correction experiment
 
 A separate real-model experiment evaluated changing user requirements.
@@ -256,6 +279,8 @@ A recent user correction may be honored by answer generation before it is incorp
 The future View My Memory interface must account for that possibility.
 
 ### Privacy filtering
+
+PIN, OTP, CVV and one-time-code values are redacted only when the value contains a digit, so prose such as "the otp is valid until 5pm" is kept. "PIN code" and "pincode" (the Indian postal code) are never redacted. A bare "PIN: 560001" is still redacted, because a six-digit UPI PIN cannot be told apart from a postal code. The rest of the sentence is kept. `tests/test_session_memory_privacy.py` pins this behaviour.
 
 Current redaction rules are initial safeguards. Further coverage, data minimization, provider-data handling review, and logging review are required.
 

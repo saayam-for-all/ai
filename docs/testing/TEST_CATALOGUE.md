@@ -36,7 +36,7 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_generate_answer.py`](../../tests/test_generate_answer.py) | Contract | #169 | `generate_answer_handler` | 50 |
 | [`tests/test_import_blast_radius.py`](../../tests/test_import_blast_radius.py) | Integration | #169, #171 | `module-scope imports` | 4 |
 | [`tests/test_lambda_session_memory.py`](../../tests/test_lambda_session_memory.py) | Integration | #197 | `generate_answer_handler session memory` | 11 |
-| [`tests/test_memory_controls.py`](../../tests/test_memory_controls.py) | Integration | #197 | `local_memory_controls_handler` | 4 |
+| [`tests/test_memory_controls.py`](../../tests/test_memory_controls.py) | Integration | #197 | `local_memory_controls_handler` | 5 |
 | [`tests/test_memory_integration.py`](../../tests/test_memory_integration.py) | Integration | #197 | `session_memory + SQLite store` | 1 |
 | [`tests/test_memory_summarizer.py`](../../tests/test_memory_summarizer.py) | Unit | #197 | `services/memory_summarizer.py` | 5 |
 | [`tests/test_memory_validation.py`](../../tests/test_memory_validation.py) | Unit | #197 | `services/memory_validation.py` | 13 |
@@ -46,11 +46,11 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_response_contract.py`](../../tests/test_response_contract.py) | Contract | #146, #169, #170 | `response envelopes` | 10 |
 | [`tests/test_router.py`](../../tests/test_router.py) | Integration | #171 | `lambda_function.lambda_handler` | 34 |
 | [`tests/test_session_memory_corrections.py`](../../tests/test_session_memory_corrections.py) | Integration | #197 | `services/session_memory.py corrections` | 1 |
-| [`tests/test_session_memory_privacy.py`](../../tests/test_session_memory_privacy.py) | Integration | #197 | `services/session_memory.py redaction` | 6 |
+| [`tests/test_session_memory_privacy.py`](../../tests/test_session_memory_privacy.py) | Integration | #197 | `services/session_memory.py redaction` | 16 |
 | [`tests/test_session_sqlite.py`](../../tests/test_session_sqlite.py) | Integration | #197 | `services/sqlite_memory_store.py` | 21 |
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
 | [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 57 |
-| | | | **Total** | **488** |
+| | | | **Total** | **499** |
 
 ## Every test
 
@@ -336,7 +336,7 @@ Test the local session-memory integration in the Lambda handler.
 
 ### `test_memory_controls.py`
 
-*Integration · issue #197 · 4 tests*
+*Integration · issue #197 · 5 tests*
 
 Tests for local session memory controls.
 
@@ -346,6 +346,7 @@ Tests for local session memory controls.
 | `test_deleting_memory_invalidates_session` | Deleting memory invalidates session. |
 | `test_memory_controls_disabled_by_default` | Memory controls disabled by default. |
 | `test_invalid_session_id_is_rejected` | Invalid session id is rejected. |
+| `test_unusable_store_path_returns_503` | Unusable store path returns 503. |
 
 ### `test_memory_integration.py`
 
@@ -560,7 +561,7 @@ Regression tests for changing facts in session memory.
 
 ### `test_session_memory_privacy.py`
 
-*Integration · issue #197 · 6 tests*
+*Integration · issue #197 · 16 tests*
 
 Privacy and deletion regression tests for session memory.
 
@@ -571,8 +572,11 @@ Privacy and deletion regression tests for session memory.
 | `test_deleted_session_cannot_be_recreated` | An old transcript must not recreate a deleted session. |
 | `test_redaction_that_lengthens_summary_does_not_stick_session` | A summary inside the cap must not leave it once secrets are redacted. |
 | `test_overlong_model_summary_is_capped_and_saved` | A 2100-char model summary is stored cut to the cap, so the cursor moves. |
+| `test_redaction_keeps_ordinary_prose_and_postal_codes` | Redaction keeps ordinary prose and postal codes. |
+| `test_redaction_removes_numeric_codes` | Redaction removes numeric codes. |
+| `test_bare_pin_label_is_redacted_even_when_it_may_be_a_postal_code` | A six-digit UPI PIN and a postal code look identical after "PIN:". |
 
-> 5 test functions expand to 6 cases through parametrisation.
+> 8 test functions expand to 16 cases through parametrisation.
 
 ### `test_session_sqlite.py`
 

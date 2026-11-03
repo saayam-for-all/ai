@@ -221,3 +221,50 @@ def test_overlong_model_summary_is_capped_and_saved(tmp_path):
     state, _ = store.load("session-overlong")
     assert state["memory"] == summary
     assert state["summarized_count"] > 0
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "the otp is valid until 5pm",
+        "My PIN code is 560001, near MG Road",
+        "Pincode: 560001",
+        "Call me on +91 98765 43210",
+    ],
+)
+def test_redaction_keeps_ordinary_prose_and_postal_codes(text):
+    from services.memory_privacy import redact_sensitive
+
+    assert redact_sensitive(text) == text
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "otp is 482913",
+        "OTP: 4829",
+        "cvv=123",
+        "pin is 1234",
+        "one-time code: 991122",
+    ],
+)
+def test_redaction_removes_numeric_codes(text):
+    from services.memory_privacy import redact_sensitive
+
+    redacted = redact_sensitive(text)
+
+    assert "[REDACTED SECRET]" in redacted
+    assert not any(ch.isdigit() for ch in redacted)
+
+
+def test_bare_pin_label_is_redacted_even_when_it_may_be_a_postal_code():
+    """A six-digit UPI PIN and a postal code look identical after "PIN:".
+
+    Redaction errs toward privacy: the value is dropped and the rest of the
+    sentence is kept. Users who write "PIN code" or "pincode" keep the value.
+    """
+    from services.memory_privacy import redact_sensitive
+
+    assert redact_sensitive("My PIN: 560001, I live in Bangalore") == (
+        "My [REDACTED SECRET], I live in Bangalore"
+    )

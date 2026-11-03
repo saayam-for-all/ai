@@ -420,7 +420,15 @@ def _local_memory_controls_store():
 
 def local_memory_controls_handler(event, context):
     """Local-only, non-routed handler for viewing or deleting memory."""
-    store = _local_memory_controls_store()
+    try:
+        # The store constructor creates directories and opens SQLite, so a bad
+        # SAAYAM_MEMORY_SQLITE_PATH must land in the 503 branch below.
+        store = _local_memory_controls_store()
+    except Exception:
+        return _response(
+            503,
+            {"error": "Memory controls temporarily unavailable"},
+        )
 
     if store is None:
         return _response(404, {"error": "Memory controls unavailable"})
