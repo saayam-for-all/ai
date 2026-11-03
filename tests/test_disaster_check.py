@@ -188,6 +188,29 @@ def test_one_feed_down_is_never_a_negative_answer():
         _check(quiet, down)
 
 
+def test_two_feeds_from_one_source_are_told_apart_by_event_type(capsys):
+    """GDACS serves floods and wildfires as two feeds. With one of them down,
+    the log and the error say which."""
+    floods = _Feed(source="GDACS", event_types=("flood",))
+    fires = _Feed(raises=RuntimeError("feed down"), source="GDACS", event_types=("wildfire",))
+    with pytest.raises(dc.DisasterCheckUnavailable, match=r"^no answer from: GDACS \(wildfire\)$"):
+        _check(floods, fires)
+    assert "disaster_check feed GDACS (wildfire) failed" in capsys.readouterr().out
+
+
+def test_every_real_feed_has_what_the_check_relies_on():
+    """The four names, an answer shared across every window a caller may ask
+    for, and event types no other feed also answers for."""
+    for feed in dc.FEEDS:
+        assert isinstance(feed.SOURCE, str) and feed.SOURCE
+        assert feed.EVENT_TYPES and all(isinstance(t, str) for t in feed.EVENT_TYPES)
+        assert feed.MAX_IMPACT_RADIUS_KM > 0
+        assert callable(feed.fetch_events)
+        assert feed.COVER_HOURS >= dc.MAX_WINDOW_HOURS
+    event_types = [t for feed in dc.FEEDS for t in feed.EVENT_TYPES]
+    assert sorted(event_types) == ["earthquake", "flood", "wildfire"]
+
+
 # -------------------------------------------------------------------------
 # When each feed answered
 # -------------------------------------------------------------------------

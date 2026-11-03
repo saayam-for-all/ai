@@ -467,10 +467,11 @@ Answers whether a natural disaster is affecting a location, from authoritative
 feeds, and returns the impact zone of each event
 ([issue #191](https://github.com/saayam-for-all/ai/issues/191)).
 
-**What is built so far is two slices of that issue:** the latitude/longitude
-query, for **earthquakes** from the USGS feed and **floods** from GDACS. Both
-feeds are public, so this service needs no API key. The news-snippet query,
-the LLM cross-check and wildfires are not built yet.
+**What is built so far is three slices of that issue:** the
+latitude/longitude query, for **earthquakes** from the USGS feed, and
+**floods** and **wildfires** from GDACS. All the feeds are public, so this
+service needs no API key. The news-snippet query and the LLM cross-check are
+not built yet.
 
 It is reachable through the unified router as `"service": "disaster_check"`.
 It has no dedicated Lambda function or API Gateway route yet.
@@ -534,7 +535,8 @@ The Gaziantep query above, replayed against the feed's record of 6 February
   ],
   "sources_checked": [
     { "source": "USGS", "event_types": ["earthquake"], "status": "ok", "retrieved_at": "2023-02-06T12:00:00Z" },
-    { "source": "GDACS", "event_types": ["flood"], "status": "ok", "retrieved_at": "2023-02-06T12:00:00Z" }
+    { "source": "GDACS", "event_types": ["flood"], "status": "ok", "retrieved_at": "2023-02-06T12:00:00Z" },
+    { "source": "GDACS", "event_types": ["wildfire"], "status": "ok", "retrieved_at": "2023-02-06T12:00:00Z" }
   ]
 }
 ```
@@ -548,7 +550,8 @@ With nothing happening:
   "events": [],
   "sources_checked": [
     { "source": "USGS", "event_types": ["earthquake"], "status": "ok", "retrieved_at": "2023-02-06T12:00:00Z" },
-    { "source": "GDACS", "event_types": ["flood"], "status": "ok", "retrieved_at": "2023-02-06T12:00:00Z" }
+    { "source": "GDACS", "event_types": ["flood"], "status": "ok", "retrieved_at": "2023-02-06T12:00:00Z" },
+    { "source": "GDACS", "event_types": ["wildfire"], "status": "ok", "retrieved_at": "2023-02-06T12:00:00Z" }
   ]
 }
 ```
@@ -556,24 +559,29 @@ With nothing happening:
 Reading the fields:
 
 - **`disaster_detected: false` covers only what `sources_checked` lists.**
-  Today that is earthquakes and floods. It is not an all-clear for a wildfire
-  or anything else, and a caller must not present it as one.
+  Today that is earthquakes, Orange and Red floods, and Orange and Red
+  wildfires. It is not an all-clear for anything else, such as a smaller
+  fire or a storm, and a caller must not present it as one.
 - **`events`** are ordered most severe first. `severity` uses the CAP
   vocabulary (`moderate`, `severe`, `extreme`) so that every event type can
   share one scale.
 - **`confidence`** grades the first event, the most severe one: `high` when
   USGS has reviewed its solution, `medium` while it is still automatic. A
   reviewed aftershock does not raise the grade of an unreviewed mainshock. A
-  flood is always `medium`, because GDACS flood alerts are forecasts. It is
-  `null` when nothing is detected.
+  flood is always `medium`, because GDACS flood alerts are forecasts. A
+  wildfire is always `high`: its burned area is observed by satellite, and
+  GDACS sets Orange and Red with expert review. It is `null` when nothing is
+  detected.
 - **`impact_zone`** is GeoJSON, so positions are `[longitude, latitude]`.
   For an earthquake it is a 32-sided counterclockwise polygon drawn just
   outside the modelled circle, so it covers everyone the radius includes, and
   `boundary_source` is `modelled`. For a flood it is the affected area GDACS
-  publishes, and `boundary_source` is `authoritative`.
+  publishes, and for a wildfire the area GDACS reports burned; for both,
+  `boundary_source` is `authoritative`.
   **`impact_zone_fallback.center` is `[latitude, longitude]`**, as in the
   issue's contract. The two orders differ.
-- **`expires_at`** is `null` for a flood GDACS still marks as running.
+- **`expires_at`** is `null` for a flood or wildfire GDACS still marks as
+  running.
 - **`llm_cross_check`** is `null`: no model runs on the coordinate path.
 - **`sources_checked`** is an addition to the issue's contract. It is what
   makes a negative answer traceable. Each feed's `status` is `ok`, `stale`
@@ -581,7 +589,9 @@ Reading the fields:
   `unavailable`, and `retrieved_at` is when that feed actually answered. A
   detection can come back while another feed is down, and that feed is named
   here as `unavailable`. A `false` is only ever returned when every feed
-  answered, freshly or with a stale answer inside its limit.
+  answered, freshly or with a stale answer inside its limit. Floods and
+  wildfires both come from GDACS, as two feeds, so two rows name `GDACS`;
+  they are told apart by `event_types`.
 
 #### Status codes
 
@@ -691,22 +701,92 @@ otherwise turn into a false all-clear:
   response invalid JSON.
 
 GDACS publishes its data without accepting liability for its use. Credit it
-as the source wherever a flood finding is shown.
+as the source wherever a flood or wildfire finding is shown.
+
+#### Wildfires: the impact zone is the area GDACS reports burned
+
+Wildfires also come from GDACS, which takes them from GWIS, the Global
+Wildfire Information System run by the European Commission's Joint Research
+Centre. GWIS maps the area each fire has burned from MODIS and VIIRS
+satellite detections every day. The zone is that burned area, a MultiPolygon
+with `boundary_source: "authoritative"`.
+
+- **Only Orange and Red fires are reported.** GDACS grades a fire Orange when
+  it directly affects people or built-up areas, and Red when the impact is
+  severe, with expert review. They are rare: 14 to 15 a year since 2021,
+  mostly around the Mediterranean, in Chile and in the US, and none was
+  burning when this was built. Green is given automatically to every fire
+  past 5,000 ha "even in absence of impacts", about 160 at a time worldwide.
+  It is left out because those lists run to many pages and GDACS pages them
+  unreliably: the same query paged at different sizes left out different
+  fires. A list that may be missing a fire cannot back a `false`.
+- **A fire counts** when the caller's location is inside its burned area, or
+  within `radius_km` of its edge. **Holes are filled**: unburned ground
+  surrounded by fire is in the fire zone. Floods differ here: dry ground in a
+  hole is outside the flood.
+- **The centre GDACS gives a fire can lie outside its burned area**, as it
+  does for the 2025 Palisades fire in the recorded data. The centre only
+  decides which burned areas are fetched. `impact_zone_fallback` is centred
+  on it and wide enough to cover the whole area.
+- **The alert level is the latest one**, as for floods. GDACS publishes a new
+  update of a burning fire one to three times a day, each with its own,
+  larger, burned area. While the list is fresh, an earlier update's area
+  never stands in for a later one: it could leave out ground that has burned
+  since. A list standing in while GDACS cannot be reached can be an update
+  or two behind, and so can the areas of the updates it names.
+- **The time window:** a fire counts if GDACS marks it as burning, or if it
+  burned at any point inside the window. GDACS dates fires by whole days, so
+  a fire last dated 12 January counts until the end of that day, and its
+  `expires_at` is 13 January, 00:00 UTC. While a fire is burning its end date
+  trails real time by one to three days, so `expires_at` is `null`.
+- **`confidence`** is `high`: the burned area is observed, not forecast.
+
+| Constant | Value | Where |
+| --- | --- | --- |
+| Alert levels reported, at the latest update | Orange and Red | `services/gdacs_wildfires.py` `ALERT_LEVELS` |
+| Severity | Orange `severe`, Red `extreme` | `services/gdacs_wildfires.py` `SEVERITY` |
+| How far before the window the fire list is asked from | 7 days (end dates trailed by one to three days) | `services/gdacs_wildfires.py` `LOOKBACK_DAYS` |
+| How far from the caller a fire's centre may be for its area to be fetched | 500 km (the farthest reach measured was 40 km) | `services/gdacs_wildfires.py` `MAX_IMPACT_RADIUS_KM` |
+| Volunteer band outside the area | 30 km, as for floods | `services/gdacs_wildfires.py` `VOLUNTEER_BAND_KM` |
+
+These are first-pass values **awaiting review**, like the flood ones.
+
+The flood habits above apply to fires as well: `204` for nothing, pages of
+100, the ID check on every geometry feature, positions reduced to longitude
+and latitude. Fires add three of their own:
+
+- The burned area is asked for with `polygontype=area`, in lower case, and is
+  the feature of class `Poly_area`. Asked for `Affected`, as floods are,
+  GDACS answers with the fire's centre point alone, which fails the check.
+- Event IDs are numbered per type, so a flood and a fire can share one. The
+  list and every geometry feature must say `WF`.
+- A geometry request for a fire or update GDACS does not know is answered
+  `404` or `400`. Like any HTTP error, that counts as GDACS being
+  unavailable, so a nearby fire whose area cannot be fetched fails the check.
+- Only the outline of each polygon is kept, so it has to come first, as
+  GeoJSON requires. A polygon whose first ring does not span its others
+  fails the check rather than shrinking the zone to a hole.
+
+`services/gdacs_wildfires.py` is a copy of `services/gdacs_floods.py` with
+these differences. The GDACS code the two share can move to one module once
+both are merged.
 
 #### Caching: one answer per feed, shared by every caller
 
-Both feeds are asked for a worldwide answer reaching back seven days, the
+Every feed is asked for a worldwide answer reaching back seven days, the
 longest window allowed. One answer per feed is kept in memory and shared by
 every caller, whatever their window; each request then keeps the events in
 its own window that reach its own location. USGS is asked for every
 magnitude 5+ earthquake worldwide (about 45 KB for a week). GDACS's flood
-list was already worldwide.
+and wildfire lists were already worldwide.
 
 | Answer | Reused for | Used past that while the feed cannot be reached | Where |
 | --- | --- | --- | --- |
 | USGS earthquakes | 1 minute | Never: an earthquake can happen at any minute | `services/usgs_earthquakes.py` `FRESH_SECONDS` |
 | GDACS flood list | 15 minutes | Up to 6 hours: GDACS publishes about once a day | `services/gdacs_floods.py` `LIST_FRESH_SECONDS`, `LIST_STALE_SECONDS` |
 | GDACS affected area | 24 hours | Up to 7 days: an area belongs to one update of one flood and never changes | `services/gdacs_floods.py` `AREA_FRESH_SECONDS`, `AREA_STALE_SECONDS` |
+| GDACS wildfire list | 15 minutes | Up to 6 hours, as for floods | `services/gdacs_wildfires.py` `LIST_FRESH_SECONDS`, `LIST_STALE_SECONDS` |
+| GDACS burned area | 24 hours | Up to 7 days, for the update it belongs to only | `services/gdacs_wildfires.py` `AREA_FRESH_SECONDS`, `AREA_STALE_SECONDS` |
 
 - **`retrieved_at` is when the feed actually answered.** A cached answer is
   older than the request, and says so. An earlier answer that stands in while
@@ -723,7 +803,8 @@ list was already worldwide.
   allowed, or a `502` at once, instead of each waiting out an 8-second
   timeout.
 - **Memory:** up to 8 affected areas are kept. The recorded India area takes
-  about 1.5 MB once read, so about 12 MB for 8 of that size.
+  about 1.5 MB once read, so about 12 MB for 8 of that size. Up to 8 burned
+  areas are kept as well; they are small, 5 to 90 KB as JSON.
 - **A failed or unreadable answer is never cached.** A cache can make an
   answer older, never wrong.
 - **Each running Lambda keeps its own cache**, and loses it on a cold start.
@@ -731,8 +812,9 @@ list was already worldwide.
   part 7.
 - **Rate limiting** of how often callers reach this service belongs to API
   Gateway (part 7). Caching already bounds how often this service reaches the
-  feeds: once a minute for USGS and once every 15 minutes for GDACS, per
-  running Lambda, plus one request per flood update for its area.
+  feeds: once a minute for USGS and once every 15 minutes for each GDACS
+  list, per running Lambda, plus one request per flood or fire update for
+  its area.
 
 These durations are first-pass values **awaiting review**.
 
@@ -763,17 +845,39 @@ These durations are first-pass values **awaiting review**.
   350 KB for a large flood. Nothing simplifies it yet.
 - Flood findings are forecasts, and with only Orange and Red alerts
   reported they are rare: 2 of the 100 most recent GDACS floods.
+- Wildfire findings are rarer still: GDACS raised 14 to 15 Orange or Red
+  fires a year since 2021. A `false` for wildfires means no Orange or Red
+  fire, not no fire: a fire that has not yet affected people is not
+  reported. In the US, the published NIFC fire perimeters could add
+  coverage in a later part.
+- A burned area is mapped from satellite passes and published a few times a
+  day, so a moving fire front can be ahead of it. Near an active fire, a
+  generous `radius_km` is the safer question.
+- While GDACS cannot be reached, a list up to 6 hours old can back a `false`.
+  GDACS updates a burning fire one to three times a day, so that list can be
+  missing a fire newly raised to Orange, or name an earlier, smaller, burned
+  area for one it has. Whether a stale list may back a `false` at all is
+  under review in #221.
+- Every request a check makes is made one after another: USGS, the two
+  GDACS lists, and the area of each nearby flood or fire not yet cached, each
+  allowed 8 seconds per network read. With GDACS slow and nothing cached, a
+  check can run well past 16 seconds before it answers, which matters for
+  the API Gateway timeout in part 7. The two GDACS feeds keep separate
+  pauses after a failure, so while GDACS is down each waits out its own
+  timeout.
 
 #### Adding a feed
 
 A feed is one module exposing `SOURCE`, `EVENT_TYPES`, `MAX_IMPACT_RADIUS_KM`
 and `fetch_events(latitude, longitude, search_radius_km, since)`, added to
-`FEEDS` in `services/disaster_check.py`. `fetch_events` returns a
+`FEEDS` in `services/disaster_check.py`. Two feeds may share a `SOURCE`, as
+GDACS's floods and wildfires do, but not an event type. `fetch_events` returns a
 `services.feed_cache.FeedAnswer`: the events, when the feed actually answered,
 and whether that answer is stale. Use a `feed_cache.FeedCache` for anything
 the same for every caller, and store only answers that have been fully read. `services/usgs_earthquakes.py` is the
 example to copy for a feed that gives a point and a magnitude, and
-`services/gdacs_floods.py` for one that publishes a boundary: an event that
+`services/gdacs_floods.py` or `services/gdacs_wildfires.py` for one that
+publishes a boundary: an event that
 carries an `area` (a GeoJSON Polygon or MultiPolygon) is matched and drawn by
 that area. `fetch_events` must raise when the feed cannot be read; an empty
 list means the feed was asked and listed nothing. Every event's `severity`
@@ -784,10 +888,11 @@ returns anything else, such as CAP's `Unknown`, is treated as unavailable.
 
 | File | Proves |
 | --- | --- |
-| `test_disaster_check_contract.py` | Against responses recorded from USGS and GDACS: a location inside a known earthquake or flood is detected with the feed's record in `verified_by`; Chennai, 265 km from the centre of the recorded India flood, is in it, while Kochi, 74 km from any of its water, is not; a quiet location is a `false` from one call per feed; any feed outage with nothing found is `502` `DISASTER_CHECK_UNAVAILABLE` with no `disaster_detected` field; a `news_snippet` is a `501`; the body is an object on every path. |
+| `test_disaster_check_contract.py` | Against responses recorded from USGS and GDACS: a location inside a known earthquake, flood or wildfire is detected with the feed's record in `verified_by`; Chennai, 265 km from the centre of the recorded India flood, is in it, while Kochi, 74 km from any of its water, is not; Santa Monica, inside the circle around the recorded 2025 Palisades fire but 3.9 km from burned ground, is in it at a 5 km radius but not at 3 km; a quiet location is a `false` from one call per feed; any feed outage with nothing found is `502` `DISASTER_CHECK_UNAVAILABLE` with no `disaster_detected` field; a `news_snippet` is a `501`; the body is an object on every path. |
 | `test_disaster_check.py` | An epicentre beyond the caller's radius is still found when its zone reaches them; a feed that did not answer is never a `false`; `confidence` is that of the most severe event; the zone is a closed counterclockwise ring that covers the modelled circle, including across the antimeridian and at a pole; query validation. |
 | `test_usgs_earthquakes.py` | The worldwide query sent to USGS; the recorded payload becomes events with latitude and longitude the right way round; events before the window are left out; one answer is shared for a minute and never stands in once USGS is down; an unreachable feed, an unreadable answer, or an event with a NaN or out-of-range magnitude or position raises rather than returning an empty list. |
 | `test_gdacs_floods.py` | The queries sent to GDACS; the recorded India flood becomes an event with its affected area; `204` means no floods; a full page, a geometry answered for another event, a missing affected area, or an unreadable flood raises rather than returning an empty list. |
+| `test_gdacs_wildfires.py` | The queries sent to GDACS, with `polygontype=area` for the burned area; the recorded Los Angeles fires become events with their burned areas, holes filled; a fire counts while GDACS marks it as burning, and until the end of its last day; `204` means no fires; a full page, a flood listed as a fire, geometry for another fire or update, a missing burned area, or an unreadable fire raises rather than returning an empty list; a new update of a fire never reuses the older update's area. |
 | `test_geometry.py` | Distance to a published area: zero inside, to the nearest edge outside, holes counted as outside, the antimeridian measured the short way, checked against the 11,568 vertices of the recorded India flood. |
 | `test_feed_cache.py` | The cache: fresh answers reused, failed ones never stored, an earlier answer standing in only inside its limit and marked stale, the pause after a failure, the clock going backwards, the size limit, and that the suite empties every cache before each test. |
 

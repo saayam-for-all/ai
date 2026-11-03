@@ -13,8 +13,8 @@ Every feed adapter exposes the same four names, which is all
                           feed-neutral event records, when the feed actually
                           answered, and whether that answer is stale
 
-A flood or wildfire adapter is a second module with the same four names,
-added to ``services.disaster_check.FEEDS``.
+The flood and wildfire adapters are modules with the same four names, in
+``services.disaster_check.FEEDS``.
 
 USGS is asked once for every earthquake worldwide in the window, and that one
 answer is cached and shared by every caller; disaster_check keeps the events
