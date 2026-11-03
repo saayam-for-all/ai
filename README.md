@@ -33,7 +33,13 @@ ai/
 ├── services/
 │   ├── emergency.py               # Emergency contact geolocation and lookup logic
 │   ├── emergency_numbers.json     # Global emergency numbers database by country/state/city
-│   └── classification_service.py  # Category prediction algorithms
+│   ├── classification_service.py  # Category prediction algorithms
+│   ├── session_memory.py          # Agentic memory: rolling summaries of turns past the cap
+│   ├── memory_summarizer.py       # Agentic memory: summarization through the model chain
+│   ├── sqlite_memory_store.py     # Agentic memory: local SQLite session store
+│   ├── memory_validation.py       # Agentic memory: transcript validation
+│   ├── memory_privacy.py          # Agentic memory: secret redaction
+│   └── memory_store.py            # Agentic memory: shared VersionConflict error
 ├── utils/
 │   ├── categories.py              # Category mappings
 │   ├── categories_with_description.py # Category description mappings
@@ -457,6 +463,136 @@ curl -X POST https://<api-gateway-url>/more-organizations \
     "location": "San Jose, CA"
   }'
 ```
+
+---
+
+## Agentic Memory (issue #197)
+
+Generate Answer forwards only the last 20 messages of `conversation_history`
+(`MAX_HISTORY_MESSAGES`, `utils/__init__.py`), so in a long chat the earliest
+turns - often the ones that state the actual need - are silently dropped.
+Session memory summarizes turns as they leave that window and passes the
+summary to the model alongside the recent turns, so what truncation drops is
+kept.
+
+**Status: local demonstration only.** Memory runs only when
+`SAAYAM_SESSION_MEMORY_DEMO=1` is set and never inside AWS Lambda, because the
+store is a local SQLite file and Lambda instances share no disk. With the flag
+off, Generate Answer behaves exactly as documented above and does not import
+any memory module.
+
+#### How it works
+
+1. The client sends a `session_id` with `conversation_history`.
+2. Turns older than the 20-message window are summarized in batches of five
+   through the existing Groq → Gemini model chain
+   (`services/memory_summarizer.py`). At most three batches run per request,
+   each saved before the next, so a long backlog catches up over several
+   requests rather than holding one past API Gateway's timeout.
+3. The summary is capped at 2,000 characters (`MAX_SUMMARY_CHARS`) and stored
+   with the count and fingerprint of the turns it covers. The raw transcript
+   is never stored. Sessions expire after 24 hours.
+4. The answer model receives the summary as untrusted reference data, ahead
+   of the recent turns.
+
+Passwords, PINs, OTPs, API keys, card numbers and SSNs are redacted before the
+summarizer sees a turn and again before a summary is saved. Concurrent writes
+to one session are detected with an optimistic version check.
+
+#### request Payload
+```json
+{
+  "subject": "Transport assistance",
+  "description": "I need a ride.",
+  "category": "Transportation",
+  "session_id": "session-3f9c2a71",
+  "conversation_history": [
+    {"role": "user", "content": "I need transportation every Friday."}
+  ]
+}
+```
+
+`session_id` is 8-128 characters of letters, digits, `_` and `-`. Without it,
+memory is skipped. Use a new id for each new conversation.
+
+#### Status codes added by memory
+
+| Status | Meaning |
+| --- | --- |
+| 400 | `session_id` is malformed. |
+| 410 | The session was deleted. Start a new session. |
+
+Nothing else about memory can fail a request. A model outage, a write
+conflict, a locked database, a transcript over 500 messages, or a transcript
+that no longer starts with the turns already summarized (trimmed by the
+client, or restarted under the same id) all answer **without** memory. A
+restarted transcript discards the stored summary and summarizes afresh, so an
+answer is never built from a conversation the client no longer has.
+
+#### View and delete memory
+
+`local_memory_controls_handler` views or deletes a session's summary. It is
+local only and **not routed** by `lambda_handler`; it is not an authenticated
+API.
+
+```json
+{ "session_id": "session-3f9c2a71", "action": "view" }
+```
+
+`action` is `view` or `delete`. A deleted session id cannot be reused: later
+requests with it receive 410.
+
+#### Running it locally
+
+Create `.env` in the repository root (it is git-ignored):
+
+```dotenv
+GROQ_API_KEY=your_groq_key
+SAAYAM_LOCAL_MODEL_KEYS=1
+```
+
+`SAAYAM_LOCAL_MODEL_KEYS=1` lets `utils/client.py` fall back to keys from the
+environment when Parameter Store is unreachable. It is ignored inside AWS.
+Then set the flags and call the handler:
+
+```powershell
+$env:SAAYAM_SESSION_MEMORY_DEMO = "1"
+$env:SAAYAM_MEMORY_SQLITE_PATH = ".local/session_memory.db"   # optional; this is the default
+python -m pytest tests/test_lambda_session_memory.py           # offline, model mocked
+```
+
+`.local/` is git-ignored.
+
+#### Regression tests covering this feature
+
+All run offline: the summarizer and the answer model are mocked, and SQLite
+uses a temporary file.
+
+| File | Proves |
+| --- | --- |
+| `test_lambda_session_memory.py` | Memory is off by default and never imported when off; sessions are isolated; 400/410 mapping; every server-side failure answers without memory. |
+| `test_session_memory_corrections.py` | Facts the 20-message cap would drop survive in the summary, and a corrected fact replaces the old one. |
+| `test_memory_integration.py` | The complete pipeline across requests through SQLite. |
+| `test_session_sqlite.py` | Only summaries are stored; expiry; optimistic locking; restart on an edited or trimmed transcript; the per-request batch limit. |
+| `test_session_memory_privacy.py` | Secrets never reach the summarizer or the store; deleted sessions stay deleted; summaries are capped after redaction. |
+| `test_memory_validation.py` | Transcript validation, and that it keeps exactly the messages the answer service keeps. |
+| `test_memory_summarizer.py` | Model fallback and summary handling. |
+| `test_answer_memory.py` | The summary reaches the prompt as untrusted data, within the size cap. |
+| `test_memory_controls.py` | View and delete. |
+
+#### Limitations before production
+
+- **Store:** SQLite must be replaced by a store shared across Lambda instances
+  (for example DynamoDB with TTL) before the AWS gate can be lifted.
+- **Authorization:** memory is keyed by `session_id` alone. In production it
+  must also be bound to `user_id`, or anyone holding a session id can read it.
+- **Client:** the web app does not yet send `session_id`, and the More
+  Information chat stops at five questions (at most 11 messages), which never
+  reaches the 20-message window. Memory has no effect on that chat until both
+  change.
+
+See [`docs/concepts/agentic_memory_implementation.md`](docs/concepts/agentic_memory_implementation.md)
+for the design and the evaluation results.
 
 ---
 
