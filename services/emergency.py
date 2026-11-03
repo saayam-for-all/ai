@@ -14,7 +14,11 @@ Two rules govern everything in this module, both from issue #146:
 import hashlib
 import ipaddress
 import json
+import logging
 import os
+import socket
+import time
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -28,6 +32,154 @@ DATA_FILE = os.path.join(BASE_DIR, "emergency_numbers.json")
 
 # Module-level cache: reused across Lambda invocations in the same warm container.
 _emergency_numbers_cache = None
+
+logger = logging.getLogger(__name__)
+
+
+def _log_level(name):
+    """Level named by EMERGENCY_LOG_LEVEL, INFO by default.
+
+    A typo in the variable must not stop the module importing, so anything that
+    is not a level name falls back to INFO.
+    """
+    level = logging.getLevelName(str(name or "INFO").strip().upper())
+    return level if isinstance(level, int) else logging.INFO
+
+
+# The Lambda runtime leaves the root logger at WARNING. Without a level on this
+# logger the INFO lines below - one per request, the lines that explain why a
+# user saw the numbers they saw - would never reach CloudWatch.
+logger.setLevel(_log_level(os.environ.get("EMERGENCY_LOG_LEVEL")))
+
+
+def _mask_ip(ip):
+    """An IP with the host part removed, for logs.
+
+    Enough to see which network and country a lookup was made for, not enough
+    to identify the person: 203.0.113.3 becomes 203.0.113.x.
+    """
+    if not ip:
+        return "none"
+    try:
+        addr = ipaddress.ip_address(str(ip).strip())
+    except ValueError:
+        return "invalid"
+    if addr.version == 4:
+        return str(addr).rsplit(".", 1)[0] + ".x"
+    return str(ipaddress.ip_network(f"{addr}/48", strict=False).network_address) + "/48"
+
+
+def _coarse(value):
+    """A coordinate rounded to one decimal (about 11 km), or None.
+
+    Enough to tell Prague from Houston in a log, not enough to locate a person.
+    """
+    try:
+        return round(float(value), 1)
+    except (TypeError, ValueError):
+        return None
+
+
+# Text we did not write - sent by the caller, or returned by ipinfo and
+# Nominatim - is cut to this length before it reaches a log line.
+_LOG_TEXT_LIMIT = 80
+
+
+def _cap(value, limit=_LOG_TEXT_LIMIT):
+    """A value as text, cut to `limit` characters, or None.
+
+    A caller can send anything, a JSON body with a megabyte-long city
+    included, and a log line has to stay readable.
+    """
+    if value is None:
+        return None
+    text = str(value)
+    return text[:limit] + "..." if len(text) > limit else text
+
+
+def _clean(value, limit=_LOG_TEXT_LIMIT):
+    """Text we did not write, capped and made safe to put inside a log line.
+
+    Characters that are not printable, line breaks included, are escaped, so
+    the text can never start a log line of its own or pass for one of ours.
+    """
+    text = _cap(value, limit)
+    if text is None:
+        return None
+    return "".join(c if c.isprintable() else repr(c)[1:-1] for c in text)
+
+
+def _coarse_zip(value):
+    """A postcode cut to its first three characters, for logs, or None.
+
+    A full UK postcode or a US ZIP+4 can point to a handful of addresses, far
+    more precisely than the rounding applied to coordinates. Three characters
+    still show the region: 560001 becomes 560*, "SW1A 1AA" becomes SW1*.
+    """
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text[:3] + "*" if len(text) > 3 else text
+
+
+def _describe(location):
+    """'city, state, country' from whichever of those a location has.
+
+    The parts come from ipinfo, Nominatim or the caller, so they are cleaned.
+    """
+    parts = [location.get(k) for k in ("city", "state", "country")] if location else []
+    return ", ".join(_clean(p) for p in parts if p) or "unknown"
+
+
+def _display_location(location, hint=None):
+    """A place name the web client can show as is.
+
+    Built only from the parts that exist, so it never reads "null":
+    "Vienna (AT)", "Osaka, Osaka Prefecture (JP)", "Paris, Ile-de-France (FR)",
+    "Singapore (SG)". Countries name their first-level areas differently
+    (state, prefecture, region, province), and city-states have none, so the
+    region falls back through those names and a repeat of the city is dropped
+    (Doha, Doha -> Doha). Returns None when nothing is known.
+    """
+    hint = hint or {}
+    parts = []
+    for part in (location.get("city") or hint.get("city"),
+                 location.get("state") or hint.get("region")):
+        text = str(part).strip() if part else ""
+        if text and text.casefold() not in (p.casefold() for p in parts):
+            parts.append(text)
+    label = ", ".join(parts)
+    country = _normalize_country(location.get("country"))
+    if country:
+        return f"{label} ({country})" if label else country
+    return label or None
+
+
+def _lookup_failure_reason(error):
+    """Why a call to ipinfo or Nominatim failed, in a few words.
+
+    These lookups used to fail silently, which left the logs unable to say
+    whether a wrong country came from a timeout, a rate limit or a refusal.
+    """
+    if isinstance(error, urllib.error.HTTPError):
+        if error.code == 429:
+            return "HTTP 429 (rate limited)"
+        return f"HTTP {error.code}"
+    if isinstance(error, urllib.error.URLError):
+        reason = error.reason
+        if isinstance(reason, (socket.timeout, TimeoutError)) or "timed out" in str(reason).lower():
+            return "timeout"
+        return f"network error ({type(reason).__name__}: {_clean(reason)})"
+    if isinstance(error, (socket.timeout, TimeoutError)) or "timed out" in str(error).lower():
+        return "timeout"
+    if isinstance(error, json.JSONDecodeError):
+        return "response was not JSON"
+    return f"{type(error).__name__}: {_clean(error)}"
+
+
+def _elapsed_ms(started):
+    return int((time.monotonic() - started) * 1000)
+
 
 # S3 is read inside the first request a container serves, and the function's
 # timeout is 3 s. One attempt only: botocore's legacy `max_attempts` counts
@@ -291,6 +443,13 @@ class LocalizationService:
 class LocationResolver:
     def __init__(self, client_ip):
         self.client_ip = client_ip
+        # How the last resolve() found the country: gps, place, city_directory,
+        # country_param, ip or none. Returned as location_source, so the web
+        # client can tell a GPS position from a guess based on the IP.
+        self.source = "none"
+        # Area names Nominatim gives under other keys (province, region...),
+        # used only for display_location; resolved_location keeps its shape.
+        self.display_hint = {}
 
     def _get_location_from_ip(self, ip):
         # The IP arrives from a request header and is interpolated into a URL,
@@ -299,11 +458,13 @@ class LocationResolver:
         try:
             ipaddress.ip_address(str(ip).strip())
         except ValueError:
+            logger.warning("ipinfo lookup skipped: client IP is not a valid address (%s)", _mask_ip(ip))
             return {}
+        started = time.monotonic()
         try:
             with urllib.request.urlopen(f"https://ipinfo.io/{ip}/json", timeout=3) as r:
                 data = json.load(r)
-                return {
+                location = {
                     "zip": data.get("postal"),
                     "city": data.get("city"),
                     "state": data.get("region"),
@@ -311,8 +472,23 @@ class LocationResolver:
                     # country must not silently inherit US emergency numbers.
                     "country": data.get("country")
                 }
-        except Exception:
+        except Exception as e:
+            logger.warning(
+                "ipinfo lookup failed for ip=%s: %s (%d ms)",
+                _mask_ip(ip), _lookup_failure_reason(e), _elapsed_ms(started),
+            )
             return {}
+        if location["country"]:
+            logger.info(
+                "ipinfo lookup: ip=%s -> %s (%d ms)",
+                _mask_ip(ip), _describe(location), _elapsed_ms(started),
+            )
+        else:
+            logger.warning(
+                "ipinfo lookup for ip=%s returned no country (%d ms)",
+                _mask_ip(ip), _elapsed_ms(started),
+            )
+        return location
 
     def _reverse_geocode(self, lat, lng):
         # lat/lng come straight off the query string. Coercing to float both
@@ -321,11 +497,19 @@ class LocationResolver:
             lat = float(lat)
             lng = float(lng)
         except (TypeError, ValueError):
+            logger.warning("GPS coordinates ignored: lat/lng are not numbers")
             return None
         if not (-90 <= lat <= 90 and -180 <= lng <= 180):
+            logger.warning("GPS coordinates ignored: lat/lng out of range")
             return None
+        started = time.monotonic()
         try:
-            query = urllib.parse.urlencode({"format": "json", "lat": lat, "lon": lng})
+            # English names: the site is in English, and without this Nominatim
+            # answers in the local script ("Wien", "大阪府"). The directory's
+            # state and city keys (Karnataka, Bengaluru, Mysuru) read the same.
+            query = urllib.parse.urlencode(
+                {"format": "json", "lat": lat, "lon": lng, "accept-language": "en"}
+            )
             req = urllib.request.Request(
                 f"https://nominatim.openstreetmap.org/reverse?{query}",
                 headers={"User-Agent": "saayam-emergency-api"},
@@ -333,7 +517,7 @@ class LocationResolver:
             with urllib.request.urlopen(req, timeout=4) as r:
                 data = json.load(r)
                 addr = data.get("address", {})
-                return {
+                location = {
                     "zip": addr.get("postcode"),
                     "city": (
                         addr.get("city")
@@ -343,8 +527,31 @@ class LocationResolver:
                     "state": addr.get("state"),
                     "country": addr.get("country_code", "").upper()
                 }
-        except Exception:
+                self.display_hint = {
+                    "city": addr.get("municipality"),
+                    "region": (
+                        addr.get("province")
+                        or addr.get("region")
+                        or addr.get("state_district")
+                    ),
+                }
+        except Exception as e:
+            logger.warning(
+                "Nominatim reverse lookup failed for lat~%s lng~%s: %s (%d ms)",
+                _coarse(lat), _coarse(lng), _lookup_failure_reason(e), _elapsed_ms(started),
+            )
             return None
+        if location["country"]:
+            logger.info(
+                "Nominatim reverse lookup: lat~%s lng~%s -> %s (%d ms)",
+                _coarse(lat), _coarse(lng), _describe(location), _elapsed_ms(started),
+            )
+        else:
+            logger.warning(
+                "Nominatim reverse lookup for lat~%s lng~%s returned no country (%d ms)",
+                _coarse(lat), _coarse(lng), _elapsed_ms(started),
+            )
+        return location
 
     def _geocode_place(self, zip_code=None, city=None, state=None, country=None):
         # Place names are user text, so they are percent-encoded rather than
@@ -353,9 +560,16 @@ class LocationResolver:
         parts = [str(p).strip() for p in (zip_code, city, state, country) if p]
         if not parts:
             return None
+        text = ", ".join(parts)
+        # What the log shows of the search: the same parts with the zip cut to
+        # its region, capped, and passed to %r so line breaks come out escaped.
+        shown = [_coarse_zip(zip_code)] if zip_code else []
+        shown = _cap(", ".join(shown + [str(p).strip() for p in (city, state, country) if p]),
+                     2 * _LOG_TEXT_LIMIT)
+        started = time.monotonic()
         try:
             query = urllib.parse.urlencode(
-                {"format": "json", "limit": 1, "q": ", ".join(parts)}
+                {"format": "json", "limit": 1, "q": text, "accept-language": "en"}
             )
             req = urllib.request.Request(
                 f"https://nominatim.openstreetmap.org/search?{query}",
@@ -363,12 +577,21 @@ class LocationResolver:
             )
             with urllib.request.urlopen(req, timeout=4) as r:
                 results = json.load(r)
-                if not results:
-                    return None
-                place = results[0]
-                return self._reverse_geocode(place["lat"], place["lon"])
-        except Exception:
+            if not results:
+                logger.warning(
+                    "Nominatim place search found no match for %r (%d ms)",
+                    shown, _elapsed_ms(started),
+                )
+                return None
+            place = results[0]
+            lat, lon = place["lat"], place["lon"]
+        except Exception as e:
+            logger.warning(
+                "Nominatim place search failed for %r: %s (%d ms)",
+                shown, _lookup_failure_reason(e), _elapsed_ms(started),
+            )
             return None
+        return self._reverse_geocode(lat, lon)
 
     def _infer_state_country_from_city(self, city, data):
         """Locate a bare city name in the directory.
@@ -390,11 +613,18 @@ class LocationResolver:
                         "country": country_code,
                     })
         if len(matches) != 1:
+            if matches:
+                logger.info(
+                    "city %r is in the directory for %d countries (%s); not guessing which",
+                    city_norm, len(matches), ", ".join(sorted(m["country"] for m in matches)),
+                )
             return None
         return matches[0]
 
     def resolve(self, params, data):
         location = {}
+        source = "none"
+        self.display_hint = {}
         lat = params.get("lat")
         lng = params.get("lng")
         zip_code = params.get("zip")
@@ -406,6 +636,7 @@ class LocationResolver:
             geo = self._reverse_geocode(lat, lng)
             if geo:
                 location.update(geo)
+                source = "gps"
         elif zip_code or city or state:
             geo = self._geocode_place(
                 zip_code=zip_code, city=city,
@@ -413,11 +644,13 @@ class LocationResolver:
             )
             if geo:
                 location.update(geo)
+                source = "place"
 
         if city and not location.get("country"):
             inferred = self._infer_state_country_from_city(city, data)
             if inferred:
                 location.update(inferred)
+                source = "city_directory"
 
         if country_override:
             # An explicit country wins. The finer-grained fields resolved from
@@ -426,14 +659,34 @@ class LocationResolver:
             # match by coincidence.
             if location.get("country") and location["country"] != country_override:
                 location = {}
-            location["country"] = country_override
+                self.display_hint = {}
+            if location.get("country") != country_override:
+                # A country that only confirms the GPS or place result keeps
+                # that source: the position itself is still what was used.
+                location["country"] = country_override
+                source = "country_param"
 
         if not location.get("country") and self.client_ip:
+            if lat and lng:
+                # The case behind the Prague report: the browser sent a
+                # position, but it did not resolve to a country, so the answer
+                # now depends on where the caller's network appears to be.
+                logger.warning(
+                    "GPS coordinates did not resolve to a country; using the caller's IP (%s) instead",
+                    _mask_ip(self.client_ip),
+                )
             ip_loc = self._get_location_from_ip(self.client_ip)
-            for k, v in ip_loc.items():
-                if v:
-                    location.setdefault(k, v)
+            if ip_loc.get("country"):
+                # Replaced, not merged: a GPS or place answer with no country
+                # (a point at sea) left empty keys behind that would have
+                # kept the IP's answer out, and a city from one source with a
+                # country from another names a place that does not exist.
+                location = {k: v for k, v in ip_loc.items() if v}
+                self.display_hint = {}
+            if location.get("country"):
+                source = "ip"
 
+        self.source = source if location.get("country") else "none"
         return location
 
 
@@ -556,8 +809,59 @@ class EmergencyServiceResolver:
         )
 
 
+def _log_request(params, client_ip):
+    """One line describing what the caller sent, before anything is resolved.
+
+    Coordinates are rounded, the zip is cut to its region and the IP is masked;
+    the login token and other headers never reach this function. The other
+    values are the caller's own text, so they are capped and logged with %r:
+    quoted, with line breaks escaped, so none can start a line of its own.
+    """
+    lat, lng = params.get("lat"), params.get("lng")
+    # Names only, never values: a client that sends "latitude" instead of "lat"
+    # shows up here as the reason a position was ignored. Capped as well, since
+    # a JSON body can carry any number of keys of any length.
+    names = sorted(_cap(k, 40) for k in params)
+    if len(names) > 20:
+        names = names[:20] + [f"+{len(names) - 20} more"]
+    logger.info(
+        "emergency request: gps=%s lat~%s lng~%s zip=%r city=%r state=%r country=%r "
+        "service=%r language=%r ip=%s params=%s",
+        bool(lat and lng), _coarse(lat), _coarse(lng),
+        _coarse_zip(params.get("zip")), _cap(params.get("city")), _cap(params.get("state")),
+        _cap(params.get("country")), _cap(params.get("service")), _cap(params.get("language")),
+        _mask_ip(client_ip), names,
+    )
+
+
+# Query-string values always arrive as text; a JSON body can carry any type.
+_TEXT_PARAMS = ("zip", "city", "state", "country", "service", "language")
+
+
+def _as_text(params):
+    """The text parameters as strings, so no JSON type can raise further on.
+
+    A number is read as text (a zip sent as 560001). A list, an object or a
+    true/false where a city or a service name belongs is treated as not sent:
+    it used to raise (city.title(), or a list as a dict key) and turn the
+    lookup into a 500.
+    """
+    params = dict(params)
+    for key in _TEXT_PARAMS:
+        value = params.get(key)
+        if isinstance(value, (list, dict, bool)):
+            params[key] = None
+        elif isinstance(value, (int, float)):
+            params[key] = str(value) if value else None
+    return params
+
+
 def get_emergency_services(params, client_ip):
+    started = time.monotonic()
+    # Logged as sent (capped and escaped), so a malformed value is still visible.
+    _log_request(params, client_ip)
     try:
+        params = _as_text(params)
         service_resolver = EmergencyServiceResolver()
         data = service_resolver.load_data()
 
@@ -569,11 +873,37 @@ def get_emergency_services(params, client_ip):
         )
 
         if not services:
+            country = _normalize_country(location.get("country"))
+            if not country:
+                reason = "no country could be resolved"
+            elif params.get("service"):
+                # Both come from the caller here: the service name as sent, the
+                # country as normalised from the `country` parameter.
+                reason = f"no {_clean(params.get('service'))} number for {_clean(country)}"
+            else:
+                reason = f"no numbers for {_clean(country)}"
+            logger.warning(
+                "emergency response: status=404 reason=%s source=%s area=%s (%d ms)",
+                reason, location_resolver.source, _describe(location), _elapsed_ms(started),
+            )
             return {"status": 404, "body": {"error": "Emergency services not found"}}
 
         language = params.get("language") or "en"
         localization = LocalizationService()
         localized = localization.localize_services(services, language)
+
+        # The services filled with the country's general number. The line names
+        # them only when there are any, so the common case stays short.
+        fallbacks = sorted(k for k, v in localized.items() if v["is_fallback"])
+        logger.info(
+            "emergency response: status=200 country=%s match_level=%s source=%s area=%s "
+            "numbers=%s%s (%d ms)",
+            _normalize_country(location.get("country")), level, location_resolver.source,
+            _describe(location),
+            {k: v["dial_number"] for k, v in localized.items() if not v["is_fallback"]},
+            f" general_fallback={localized[fallbacks[0]]['dial_number']} for {fallbacks}" if fallbacks else "",
+            _elapsed_ms(started),
+        )
 
         return {
             "status": 200,
@@ -583,8 +913,19 @@ def get_emergency_services(params, client_ip):
                 "country": _normalize_country(location.get("country")),
                 "match_level": level,
                 "resolved_location": location,
+                # How the location was found: gps, place, city_directory,
+                # country_param, ip or none. "ip" means an estimate from the
+                # caller's network, which a VPN or a roaming phone can move.
+                "location_source": location_resolver.source,
+                # Ready to show; the page no longer has to assemble it.
+                "display_location": _display_location(location, location_resolver.display_hint),
                 "client_ip": client_ip
             }
         }
     except Exception as e:
-        return {"status": 500, "body": {"error": str(e)}}
+        logger.exception(
+            "emergency response: status=500 (%s) after %d ms", type(e).__name__, _elapsed_ms(started)
+        )
+        # The detail is in the record above. The caller gets the same generic
+        # message as the handler's own error path, never the exception text.
+        return {"status": 500, "body": {"error": "Emergency services lookup failed"}}

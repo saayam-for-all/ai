@@ -1,4 +1,5 @@
 import json
+import logging
 from utils.subject_generator import generate_subject_from_description
 from services.classification_service import predict_categories
 from utils.categories import help_categories
@@ -6,6 +7,8 @@ from utils.generate_answer_service import generate_ai_answer
 from utils.model_fallback import ModelChainExhausted
 from services.emergency import get_emergency_services
 from utils.search_orgs import OrganizationSearchError, find_organizations
+
+logger = logging.getLogger(__name__)
 
 # -------------------------------------------------------------
 # Common Utility Helpers
@@ -310,8 +313,10 @@ def emergency_contacts_handler(event, context):
         # proxy shape too. Returning an object body here made API Gateway reject
         # the response and the page saw a 502 with no diagnosis - the failure
         # mode reported in issue #146. The detail goes to CloudWatch rather than
-        # to the caller.
-        print(f"ERROR: emergency_contacts failed: {type(e).__name__}: {e}")
+        # to the caller. Logged rather than printed: Lambda turns each printed
+        # line into a log event of its own, while a logged record, traceback
+        # included, stays one event that carries the request ID.
+        logger.exception("emergency_contacts failed: %s", type(e).__name__)
         return _proxy_response(500, {"error": "Emergency services lookup failed"})
 
 
