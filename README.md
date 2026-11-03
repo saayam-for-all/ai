@@ -497,6 +497,63 @@ and deploy are skipped on pull requests, so a PR never touches AWS.
 
 ---
 
+## Branches & the `test` Sandbox
+
+| Branch | Role | Deploys to | Coverage gate |
+| --- | --- | --- | --- |
+| `main` | Production | `ai-app-prod` | 90% |
+| `dev` | Integration — every feature PR targets this | `ai-app-dev` | 90% |
+| `test` | Sandbox — a mirror of `dev` for trying the latest tech stack | `ai-app-test` | none |
+
+`test` exists so new libraries, models, runtimes and infrastructure ideas can be
+tried against the current `dev` codebase, on a real Lambda, without risking the
+integration or production environments. The deploy job in
+`.github/workflows/python-ci-cd.yml` uploads a `test` build to
+`s3://saayam-virginia-private/code/test/` and creates or updates the
+`ai-app-test` function; tests still run, but without the 90% coverage gate.
+
+### Rules for the sandbox
+
+- **`test` is disposable.** It is reset to `dev` whenever it needs to be. Do not
+  keep work on it that is not also on a feature branch.
+- **Real changes still go to `dev`.** If an experiment on `test` works, open a
+  normal pull request into `dev` from a feature branch based on `origin/dev`.
+- **Pull requests into `test` run the test suite**, the same as pull requests
+  into `dev`.
+
+### Syncing `test` with `dev`
+
+While `test` has nothing of its own, it is a fast-forward of `dev`:
+
+```bash
+git fetch origin
+git push origin origin/dev:refs/heads/test
+```
+
+That push triggers the sandbox build and deploy. If experiments have landed on
+`test`, the push is refused as non-fast-forward; reset it to `dev` instead
+(`git push --force-with-lease origin origin/dev:refs/heads/test`) once nobody
+needs those experiments.
+
+### Trying an experiment
+
+```bash
+git fetch origin
+git switch -c experiment/<topic> origin/test
+# make the change, then
+git push origin experiment/<topic>
+# open a pull request into test; merge it to deploy to ai-app-test
+```
+
+### History before the sandbox
+
+Before it became a mirror of `dev`, `test` carried the original Flask
+prototype (`app.py`, `MetaAIAPI_app.py`, `templates/`, `static/`) and the
+`Issue42/` volunteer-matching prototype. That history is kept at the tag
+`archive/test-2025-04`.
+
+---
+
 ## CI/CD GitHub Actions Deployment
 
 Any push to the `dev` branch triggers the multi-job parallel deploy workflow defined in `.github/workflows/deploy_aws_lambda.yml`. 

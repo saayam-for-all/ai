@@ -15,6 +15,7 @@
 
     pull_request:
       branches:
+        - test
         - dev
         - main
       types:
