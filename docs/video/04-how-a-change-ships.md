@@ -22,17 +22,18 @@ target_runtime: "under 6 minutes"
 ## Purpose
 
 Show a developer the path a GenAI code change follows before it reaches AWS:
-local verification, CI guardrails, packaging, and deployment.
+local verification, CI guardrails, packaging, deployment, and a final
+running-system check.
 
-This episode explains the **shape of the delivery path and why each gate exists**.
-It deliberately does not narrate configuration values that are owned by the
-wiki or deployment environment.
+The episode explains the **stable shape of the delivery path and why each gate
+exists**. It deliberately does not narrate configuration values that belong to
+the wiki or deployment environment.
 
 ## Governing rule
 
 Do **not** say model names, Lambda memory or timeout settings, category counts,
-test counts, line numbers, endpoint lists, coverage percentages, or other
-volatile values aloud.
+test counts, line numbers, endpoint lists, coverage percentages, package-size
+limits, or other volatile values aloud.
 
 When a changing value is visible on screen, refer to its role instead:
 
@@ -45,43 +46,59 @@ When a changing value is visible on screen, refer to its role instead:
 The episode ends by directing viewers to the **GenAI Services Specification**
 and the repository's **testing documentation** for current values.
 
+## Recording prerequisites
+
+Before recording, confirm that you can safely show:
+
+- a real local regression-suite run;
+- a real GitHub Actions run for the relevant workflow;
+- a live request to the deployed service and its actual response body;
+- one normal CloudWatch log line for that request.
+
+Do not record credentials, secret values, authorization headers, environment
+files, or GitHub/AWS secret configuration.
+
+If approved AWS/log access is not available, stop after script review and treat
+recording as blocked rather than substituting slides or fabricated output.
+
 ## Recording plan
 
-### Scene 1 — Start from a code change
+### Scene 1 — A change starts in the repository
+**Timing budget:** 0:00–0:35
 
 **On screen**
 
-Open the repository on a small documentation or code change and then show the
-GitHub Actions workflows under `.github/workflows/`.
+Open the repository, show a small code/documentation change, then open
+`.github/workflows/`.
 
 **Narration**
 
 > A change does not go straight from a developer's branch to a running Lambda.
-> It moves through a series of checks designed to catch contract, safety, and
-> packaging problems before deployment. In this episode, I will follow that
-> path from the test suite through the deployment workflow.
+> It passes through validation, build, and deployment stages first. In this
+> episode, I will follow that path and show why each gate exists.
 
 ### Scene 2 — Run the regression suite
+**Timing budget:** 0:35–1:20
 
 **On screen**
 
 Open `docs/testing/QA_RUNBOOK.md`, then run:
 
-```bash
+~~~bash
 python -m pytest
-```
+~~~
 
-Show the actual command and its real result. Do not call out the test count.
+Show the actual result. Do not call out the test count.
 
 **Narration**
 
-> The first gate is the regression suite. Its job is to prove that the
-> behaviours the rest of Saayam depends on have not changed unexpectedly.
-> A green suite means the repository's tested contracts still hold. It does
-> not, by itself, prove that the deployed AWS endpoint is healthy, because
-> external systems are intentionally isolated from the default test run.
+> The first gate is the regression suite. It checks that behaviours the rest of
+> Saayam depends on have not changed unexpectedly. A green run means the tested
+> contracts still hold. It does not by itself prove that AWS is healthy,
+> because the default suite intentionally isolates external systems.
 
-### Scene 3 — Explain the network guard
+### Scene 3 — Explain the no-network guard
+**Timing budget:** 1:20–2:05
 
 **On screen**
 
@@ -89,103 +106,119 @@ Open `tests/conftest.py` and highlight the autouse network guard fixture.
 
 **Narration**
 
-> The default test run is deliberately hermetic. Tests are not allowed to make
-> accidental live network calls. That prevents a model provider, geocoder, or
-> another external service from turning a code regression test into an uptime
-> check for somebody else's system. Tests that genuinely need the network are
-> separated and must opt into that behaviour explicitly.
+> The default test run is deliberately hermetic. Unmarked tests are prevented
+> from making accidental live network calls. That keeps a model provider,
+> geocoder, or another external service from turning a regression test into an
+> uptime check for somebody else's system. Tests that genuinely need the
+> network have to opt into that behaviour explicitly.
 
-### Scene 4 — Show the CI quality gates
+### Scene 4 — Show CI quality gates
+**Timing budget:** 2:05–3:10
 
 **On screen**
 
-Open the relevant validation steps in
-`.github/workflows/python-ci-cd.yml` and
-`.github/workflows/deploy_aws_lambda.yml`.
+Use `.github/workflows/deploy_aws_lambda.yml` as the main end-to-end delivery
+story: test, build, then deploy.
 
-Show the steps for security/static analysis where applicable, tests, coverage,
-and the test-catalogue consistency check. If a recent Actions run exists, show
-the real run rather than a slide.
+Briefly show `.github/workflows/python-ci-cd.yml` for additional repository
+quality checks such as static security analysis and broader validation.
+
+Show the test-catalogue consistency check in the deployment workflow. Prefer a
+real GitHub Actions run over describing the YAML alone.
 
 **Narration**
 
-> GitHub Actions repeats the important checks in a clean environment. The
-> workflow runs the regression suite, applies its quality gates, and verifies
-> that the generated test catalogue still agrees with the tests in the
-> repository. These checks are there so a change cannot rely only on what
-> happened on one developer's machine.
+> GitHub Actions repeats the important checks in a clean environment, so a
+> change does not depend only on what happened on one developer's machine.
+> The deployment workflow runs its validation gates before build and deploy,
+> while the repository CI also performs additional quality checks.
 
-> The key idea is that deployment depends on validation. If an earlier gate
-> fails, the delivery path stops before AWS is touched.
+> One useful gate keeps the generated test catalogue aligned with the actual
+> suite. The important idea is simple: if validation fails, the delivery path
+> stops before AWS is touched.
 
-### Scene 5 — Build the deployment artifact
+### Scene 5 — Build one deployment artifact
+**Timing budget:** 3:10–4:05
 
 **On screen**
 
 Show the build steps in `.github/workflows/deploy_aws_lambda.yml`:
-dependency installation in the Lambda-compatible build environment, copying
-application code, trimming runtime-provided or build-only files, creating the
-deployment archive, and publishing the build artifact.
+Lambda-compatible dependency installation, copying application code, trimming
+unneeded files, creating the deployment archive, and uploading the build
+artifact.
 
-Do not narrate package-size limits or other numeric configuration.
-
-**Narration**
-
-> Once validation succeeds, the workflow builds the Lambda artifact in an
-> environment compatible with the runtime. Application code and dependencies
-> are assembled, files that do not need to ship are removed, and the result is
-> packaged as the deployment artifact.
-
-> Keeping build and deployment separate is useful: the deploy stage receives
-> the exact artifact produced by the successful build instead of rebuilding
-> something different later.
-
-### Scene 6 — Deploy after the gates pass
-
-**On screen**
-
-Show the deploy job and the deployment helper it invokes. If you have approved
-AWS access during recording, show the real successful workflow run and one
-normal CloudWatch log line from the deployed service. Do not reveal secrets or
-read changing configuration values aloud.
+Do not narrate numeric size limits or configuration values.
 
 **Narration**
 
-> Deployment runs only after the earlier stages have succeeded. The workflow
-> authenticates to AWS, takes the approved build artifact, and updates the
-> Lambda functions through the deployment path defined by the repository.
+> After validation succeeds, the workflow builds the Lambda artifact in an
+> environment compatible with the runtime. The application code and
+> dependencies are assembled, unnecessary files are removed, and the result is
+> packaged as the artifact that will be deployed.
 
-> The important point is not a particular configuration value. It is the
-> dependency chain: test first, build once, then deploy the validated artifact.
-> That gives reviewers a clear place to stop a bad change before it reaches the
-> running service.
+> The important property here is build once, deploy that build. The deploy
+> stage receives the artifact produced by the successful build instead of
+> rebuilding something different later.
 
-### Scene 7 — Close on the maintained references
+### Scene 6 — Deploy, then prove the running path
+**Timing budget:** 4:05–5:15
 
 **On screen**
 
-End on a simple repository view that points to:
+Show the deploy job and the deployment helper it invokes.
+
+Then show, with approved access:
+
+1. a successful workflow run;
+2. a live `curl` or equivalent request to the deployed service;
+3. the actual response body;
+4. one matching, non-sensitive CloudWatch log line.
+
+Do not reveal credentials, tokens, request authorization headers, secret
+values, or changing configuration values.
+
+**Narration**
+
+> Deployment only runs after the earlier stages succeed. The workflow
+> authenticates to AWS, takes the validated build artifact, and updates the
+> Lambda functions through the repository's deployment path.
+
+> After deployment, I verify the running path rather than assuming that a
+> successful workflow means the service answers correctly. Here is a real
+> request, its response, and the corresponding application log.
+
+> The stable lesson is the dependency chain: validate first, build once, deploy
+> the validated artifact, then verify the running service.
+
+### Scene 7 — Redirect changing facts to maintained sources
+**Timing budget:** 5:15–5:40
+
+**On screen**
+
+End on a repository/wiki view pointing to:
 
 - Wiki — **GenAI Services Specification**
 - `docs/testing/`
 
 **Narration**
 
-> This video explains the stable delivery path. For the current deployment
-> configuration, current test inventory, and other values that can change,
+> This recording explains the stable delivery path. For current deployment
+> configuration, the current test inventory, and other values that can change,
 > use the GenAI Services Specification and the testing documentation. Those
-> maintained sources own the details; this recording owns the shape of the
-> process and the reason each gate exists.
+> maintained sources own the details; this video owns the shape of the process
+> and the reason each gate exists.
 
 ## Pre-recording checklist
 
 - [ ] Rebase or compare against the latest `dev`.
-- [ ] Update `recorded_against` to the exact commit used for the recording.
+- [ ] Update `script_verified_against` if the reviewed source files changed.
+- [ ] Update `recorded_against` to the exact commit used for recording.
 - [ ] Confirm every source file in the front matter still exists.
-- [ ] Confirm the workflow order described above still matches the current code.
+- [ ] Confirm the workflow order described above still matches current `dev`.
+- [ ] Confirm the live request/log demonstration is approved and available.
 - [ ] Remove any spoken model name, timeout/memory value, test count, coverage
       percentage, package-size limit, line number, or endpoint list.
-- [ ] Use a real test run and real workflow evidence, not slides.
-- [ ] Check the recording for secrets before publishing.
+- [ ] Use a real test run, real workflow run, real response, and real log.
+- [ ] Check the recording frame-by-frame for secrets before publishing.
 - [ ] Keep the final recording under the issue's target length.
 - [ ] End on the wiki/testing reference card.
