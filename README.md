@@ -1,5 +1,10 @@
 # Saayam For All AI Services (AWS Lambda)
 
+> **You are on `test`, the GenAI sandbox branch.** Its code is a copy of `dev`,
+> kept in sync with it, and it deploys to its own Lambda (`ai-app-test`) so the
+> latest tech stack can be tried without touching `dev` or production. See
+> [Branches & the `test` Sandbox](#branches--the-test-sandbox) for how it works.
+
 A suite of serverless backend services built on AWS Lambda that provides context-aware AI capabilities, classification, search, and emergency contact resolution for the Saayam platform.
 
 These services run independently as separate Lambda functions or under a single unified routing Lambda function.
@@ -494,6 +499,66 @@ cannot start depending on a third party's uptime by accident.
 
 Every pull request into `dev` runs the full suite and the coverage gate. Build
 and deploy are skipped on pull requests, so a PR never touches AWS.
+
+---
+
+## Branches & the `test` Sandbox
+
+| Branch | Role | Deploys to | Coverage gate |
+| --- | --- | --- | --- |
+| `main` | Production | `ai-app-prod` | 90% |
+| `dev` | Integration — every feature PR targets this | `ai-app-dev` | 90% |
+| `test` | Sandbox — a mirror of `dev` for trying the latest tech stack | `ai-app-test` | none |
+
+`test` exists so new libraries, models, runtimes and infrastructure ideas can be
+tried against the current `dev` codebase, on a real Lambda, without risking the
+integration or production environments. The deploy job in
+`.github/workflows/python-ci-cd.yml` uploads a `test` build to
+`s3://saayam-virginia-private/code/test/` and creates or updates the
+`ai-app-test` function; tests still run, but without the 90% coverage gate.
+
+### Rules for the sandbox
+
+- **`test` follows `dev`.** It is refreshed from `dev` regularly. Do not
+  keep work on it that is not also on a feature branch.
+- **Real changes still go to `dev`.** If an experiment on `test` works, open a
+  normal pull request into `dev` from a feature branch based on `origin/dev`.
+- **Pull requests into `test` run the test suite**, the same as pull requests
+  into `dev`.
+
+### Syncing `test` with `dev`
+
+`test` is `dev` plus this sandbox README and the CI trigger for pull requests
+into `test`. To bring in the latest `dev`, merge it:
+
+```bash
+git fetch origin
+git switch test
+git merge origin/dev
+git push origin test
+```
+
+That push triggers the sandbox build and deploy. If `dev` changed `README.md`,
+keep `dev`'s version and re-apply the sandbox banner and this section. To drop
+an experiment that is no longer needed, revert its merge on `test`.
+
+### Trying an experiment
+
+```bash
+git fetch origin
+git switch -c experiment/<topic> origin/test
+# make the change, then
+git push origin experiment/<topic>
+# open a pull request into test; merge it to deploy to ai-app-test
+```
+
+### History before the sandbox
+
+Before it became a mirror of `dev`, `test` carried the original Flask
+prototype (`app.py`, `MetaAIAPI_app.py`, `templates/`, `static/`) and the
+`Issue42/` volunteer-matching prototype. That content was replaced by `dev`'s
+code in a merge, so it is still in `test`'s history and is also tagged
+`archive/test-2025-04`.
 
 ---
 
