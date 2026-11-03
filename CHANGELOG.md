@@ -10,6 +10,41 @@ team works and reviews in.
 
 ## Unreleased
 
+### Disaster Check — wildfires from GDACS — [#191](https://github.com/saayam-for-all/ai/issues/191), part 3
+
+**Added**
+
+- Wildfires, from GDACS, which takes them from the European Commission's
+  Global Wildfire Information System. A fire is reported while the grade of
+  its latest update is Orange or Red. No API key is involved.
+  *Observable difference:* a location inside the burned area of a current
+  Orange or Red fire answers `disaster_detected: true` with a `wildfire`
+  event, and `sources_checked` has a third row, `GDACS` with
+  `event_types: ["wildfire"]`.
+- A fire's zone is the area GDACS reports burned, with
+  `boundary_source: "authoritative"`. Holes in it are filled: unburned ground
+  surrounded by fire is in the zone.
+  *Observable difference:* against the recorded 2025 Palisades fire, a point
+  2.6 km inside the burned area is in it; Santa Monica, inside the circle
+  around the fire but 3.9 km from burned ground, is in it only once the
+  caller's radius reaches 3.9 km.
+- A fire counts until the end of the last day GDACS dates it, and while GDACS
+  marks it as burning, with `expires_at: null`.
+- The wildfire list is cached like the flood list, and each burned area by
+  fire and update.
+- `tests/fixtures/gdacs/`: every Orange and Red fire since 27 December 2024,
+  and the burned areas of the two Los Angeles fires of January 2025 and of a
+  Red fire in France in July 2026, recorded from GDACS.
+
+**Changed**
+
+- A negative answer now needs the wildfire feed to have answered too.
+  *Observable difference:* a quiet location costs three feed requests when
+  nothing is cached, not two, and a wildfire feed outage with nothing found
+  is a `502`.
+- A failing feed is named in the log with its event types, such as
+  `GDACS (wildfire)`, since two feeds now come from GDACS.
+
 ### Disaster Check — caching — [#191](https://github.com/saayam-for-all/ai/issues/191), part 6
 
 **Added**

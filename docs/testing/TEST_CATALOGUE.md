@@ -29,13 +29,14 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_classification_resilience.py`](../../tests/test_classification_resilience.py) | Unit | - | `services/classification_service.py` | 10 |
 | [`tests/test_client_factory.py`](../../tests/test_client_factory.py) | Unit | #193 | `utils/client.py create_chat_model` | 9 |
 | [`tests/test_client_imports.py`](../../tests/test_client_imports.py) | Integration | #154 | `utils/client.py` | 2 |
-| [`tests/test_disaster_check.py`](../../tests/test_disaster_check.py) | Unit | #191 | `services/disaster_check.py` | 64 |
-| [`tests/test_disaster_check_contract.py`](../../tests/test_disaster_check_contract.py) | Contract | #191 | `disaster_check_handler` | 46 |
+| [`tests/test_disaster_check.py`](../../tests/test_disaster_check.py) | Unit | #191 | `services/disaster_check.py` | 66 |
+| [`tests/test_disaster_check_contract.py`](../../tests/test_disaster_check_contract.py) | Contract | #191 | `disaster_check_handler` | 60 |
 | [`tests/test_emergency_dataset.py`](../../tests/test_emergency_dataset.py) | Dataset | #146 | `services/emergency_numbers.json` | 17 |
 | [`tests/test_emergency_locale.py`](../../tests/test_emergency_locale.py) | Unit | #146 | `services/emergency.py` | 67 |
 | [`tests/test_emergency_s3_reader.py`](../../tests/test_emergency_s3_reader.py) | Unit | #334 | `services/emergency.py S3 reader` | 23 |
-| [`tests/test_feed_cache.py`](../../tests/test_feed_cache.py) | Unit | #191 | `services/feed_cache.py` | 20 |
+| [`tests/test_feed_cache.py`](../../tests/test_feed_cache.py) | Unit | #191 | `services/feed_cache.py` | 21 |
 | [`tests/test_gdacs_floods.py`](../../tests/test_gdacs_floods.py) | Unit | #191 | `services/gdacs_floods.py` | 82 |
+| [`tests/test_gdacs_wildfires.py`](../../tests/test_gdacs_wildfires.py) | Unit | #191 | `services/gdacs_wildfires.py` | 101 |
 | [`tests/test_generate_answer.py`](../../tests/test_generate_answer.py) | Contract | #169 | `generate_answer_handler` | 50 |
 | [`tests/test_geometry.py`](../../tests/test_geometry.py) | Unit | #191 | `services/geometry.py` | 11 |
 | [`tests/test_import_blast_radius.py`](../../tests/test_import_blast_radius.py) | Integration | #169, #171 | `module-scope imports` | 4 |
@@ -47,7 +48,7 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
 | [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 57 |
 | [`tests/test_usgs_earthquakes.py`](../../tests/test_usgs_earthquakes.py) | Unit | #191 | `services/usgs_earthquakes.py` | 66 |
-| | | | **Total** | **710** |
+| | | | **Total** | **828** |
 
 ## Every test
 
@@ -131,7 +132,7 @@ Guard against the utils/client.py import regression that broke dev.
 
 ### `test_disaster_check.py`
 
-*Unit · issue #191 · 64 tests*
+*Unit · issue #191 · 66 tests*
 
 Which events reach a location, and the zone drawn around each - issue #191.
 
@@ -149,6 +150,8 @@ Which events reach a location, and the zone drawn around each - issue #191.
 | `test_a_bug_in_an_adapter_also_fails_closed` | Any exception from a feed is an unanswered question. |
 | `test_one_feed_down_does_not_hide_what_another_feed_found` | A detection stands on the feed that made it; the dead feed is named. |
 | `test_one_feed_down_is_never_a_negative_answer` | `false` needs every feed to have answered. |
+| `test_two_feeds_from_one_source_are_told_apart_by_event_type` | GDACS serves floods and wildfires as two feeds. With one of them down, the log and the error say which. |
+| `test_every_real_feed_has_what_the_check_relies_on` | The four names, an answer shared across every window a caller may ask for, and event types no other feed also answers for. |
 | `test_each_feed_reports_when_it_actually_answered` | A cached answer is older than the request, and says so. |
 | `test_an_event_carries_the_time_its_own_feed_answered` | An event carries the time its own feed answered. |
 | `test_a_stale_answer_is_named_and_still_counts_as_an_answer` | A feed that could not be reached, standing in with an older answer inside its limit, is marked stale - and a `false` can rest on it. |
@@ -170,11 +173,11 @@ Which events reach a location, and the zone drawn around each - issue #191.
 | `test_numeric_strings_and_zero_coordinates_are_accepted` | 0, 0 is a real place; a falsy check would reject it as missing. |
 | `test_an_unusable_query_is_refused_with_a_reason` | An unusable query is refused with a reason. |
 
-> 32 test functions expand to 64 cases through parametrisation.
+> 34 test functions expand to 66 cases through parametrisation.
 
 ### `test_disaster_check_contract.py`
 
-*Contract · issue #191 · 46 tests*
+*Contract · issue #191 · 60 tests*
 
 The disaster_check contract: the Lambda event in, the envelope out - issue #191.
 
@@ -196,16 +199,28 @@ The disaster_check contract: the Lambda event in, the envelope out - issue #191.
 | `test_a_running_flood_is_reported_with_no_expiry` | While GDACS marks a flood as running, its end date is only the date of its last update, which can be days old. The flood stays in, open-ended. |
 | `test_a_flood_that_has_eased_to_green_is_not_reported` | As recorded, the India flood's latest grade is Green. Its own grade, Orange, is only the highest it ever reached. |
 | `test_a_flood_response_survives_json_serialisation` | A flood response survives json serialisation. |
+| `test_a_location_inside_a_known_wildfire_is_detected` | A location inside a known wildfire is detected. |
+| `test_at_the_default_radius_both_los_angeles_fires_are_found` | Eaton's burned area is 36 km from the Palisades point, inside 50 km. |
+| `test_a_wildfire_zone_is_the_burned_area_gdacs_publishes` | A wildfire zone is the burned area gdacs publishes. |
+| `test_every_wildfire_detection_is_backed_by_its_gdacs_report` | Every wildfire detection is backed by its gdacs report. |
+| `test_a_wildfire_counts_when_it_comes_within_the_callers_radius` | Santa Monica is 3.9 km from the edge of the Palisades burned area. |
+| `test_the_burned_area_decides_not_the_circle_around_it` | Santa Monica is 9.9 km from the centre GDACS gives the fire, inside the 10.5 km fallback circle, but 3.9 km from any burned ground. |
+| `test_a_wildfire_that_ended_before_the_window_is_not_fetched` | On 20 January the default 72-hour window starts on the 17th. Both fires were last dated 12 January, and GDACS no longer marks them as burning. |
+| `test_a_wildfire_response_survives_json_serialisation` | A wildfire response survives json serialisation. |
 | `test_one_worldwide_answer_serves_callers_in_different_places` | Asked about Tibet, then about the Aeolian Islands, USGS is asked once. |
 | `test_a_repeated_request_asks_no_feed_at_all` | A repeated request asks no feed at all. |
 | `test_a_cached_answer_reports_when_the_feed_actually_answered` | Raised in the review of part 1: a cached answer must not look current. |
 | `test_while_gdacs_is_down_its_last_answer_stands_in_marked_stale` | GDACS publishes its list about once a day; for up to 6 hours an earlier answer stands in, with the time GDACS gave it. |
 | `test_an_earthquake_answer_never_stands_in_once_usgs_is_down` | An earthquake answer never stands in once usgs is down. |
 | `test_a_quiet_location_is_a_first_class_negative_answer` | A quiet location is a first class negative answer. |
-| `test_a_negative_answer_names_what_it_covers` | `false` covers earthquakes and floods, and nothing else. |
+| `test_each_gdacs_list_is_asked_for_its_own_event_type` | Each gdacs list is asked for its own event type. |
+| `test_a_negative_answer_names_what_it_covers` | `false` covers earthquakes, floods and wildfires, and nothing else. |
 | `test_any_feed_outage_with_nothing_found_is_an_error_not_an_all_clear` | Any feed outage with nothing found is an error not an all clear. |
 | `test_an_earthquake_is_still_reported_while_gdacs_is_down` | A detection stands on its own feed; the dead one is named. |
+| `test_a_flood_is_still_reported_while_the_wildfire_feed_is_down` | A flood is still reported while the wildfire feed is down. |
+| `test_a_wildfire_is_still_reported_while_the_flood_feed_is_down` | A wildfire is still reported while the flood feed is down. |
 | `test_a_nearby_flood_without_its_area_is_an_outage` | No area, no way to tell who is in the flood - so no `false` either. |
+| `test_a_nearby_wildfire_without_its_burned_area_is_an_outage` | No burned area, no way to tell who is in the fire - so no `false` either. |
 | `test_an_unreadable_feed_answer_is_an_outage_too` | An unreadable feed answer is an outage too. |
 | `test_an_outage_does_not_leak_the_feed_error` | An outage does not leak the feed error. |
 | `test_an_unexpected_failure_is_a_500_without_internals` | Nothing escapes the handler: a direct invoke has no router to catch it. |
@@ -215,7 +230,7 @@ The disaster_check contract: the Lambda event in, the envelope out - issue #191.
 | `test_the_router_reaches_the_real_handler` | `"service": "disaster_check"` in the body, as the issue specifies. |
 | `test_a_direct_invoke_where_the_event_is_the_payload` | Another Lambda invoking this one sends no `body` wrapper. |
 
-> 34 test functions expand to 46 cases through parametrisation.
+> 46 test functions expand to 60 cases through parametrisation.
 
 ### `test_emergency_dataset.py`
 
@@ -316,7 +331,7 @@ Unit tests for issue #334 - S3 dataset loader with caching and zero-downtime fal
 
 ### `test_feed_cache.py`
 
-*Unit · issue #191 · 20 tests*
+*Unit · issue #191 · 21 tests*
 
 The feed cache - issue #191, part 6.
 
@@ -341,6 +356,7 @@ The feed cache - issue #191, part 6.
 | `test_clear_all_empties_every_cache` | Clear all empties every cache. |
 | `test_earthquakes_are_cached_for_a_minute_and_never_served_stale` | Earthquakes are cached for a minute and never served stale. |
 | `test_floods_are_cached_for_15_minutes_and_served_stale_up_to_6_hours` | Floods are cached for 15 minutes and served stale up to 6 hours. |
+| `test_wildfires_are_cached_like_floods` | One shared list, and burned areas kept by fire and update. |
 | `test_every_test_starts_with_every_cache_empty` | tests/conftest.py empties the caches around every test, whatever order the tests run in. This fails if that fixture stops applying to every test. |
 
 ### `test_gdacs_floods.py`
@@ -387,6 +403,57 @@ The GDACS flood adapter, replayed from recorded responses - issue #191, part 2.
 | `test_only_a_gdacs_that_could_not_be_reached_counts_as_unreachable` | Only a gdacs that could not be reached counts as unreachable. |
 
 > 34 test functions expand to 82 cases through parametrisation.
+
+### `test_gdacs_wildfires.py`
+
+*Unit · issue #191 · 101 tests*
+
+The GDACS wildfire adapter, replayed from recorded responses - issue #191, part 3.
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_the_recorded_list_is_every_orange_and_red_fire_since_27_december_2024` | Pinned, so a re-recording that changes what the tests stand on fails here first. |
+| `test_the_list_query_asks_for_wildfires_that_reached_orange_or_red` | From seven days before the longest window: on 10 January the window can reach back to the 3rd, so the list is asked from 27 December. |
+| `test_only_the_fires_near_the_caller_have_their_burned_area_fetched` | Of 29 fires, the two in Los Angeles. Each area is asked for by ID, with `polygontype=area`: `Affected`, as floods are asked, returns only the centre. |
+| `test_a_recorded_fire_becomes_a_feed_neutral_event` | A recorded fire becomes a feed neutral event. |
+| `test_the_centre_gdacs_gives_can_lie_outside_the_burned_area` | It is 28 m outside here. The centre only decides which areas are fetched; the area decides who is in the fire. |
+| `test_holes_in_a_burned_area_are_filled` | Unburned ground surrounded by fire is in the fire zone. |
+| `test_a_burned_area_in_several_parts_keeps_every_part` | A burned area in several parts keeps every part. |
+| `test_a_red_fire_as_recorded` | France, July 2026: 47,910 ha in two parts, one with 24 holes. |
+| `test_a_fire_whose_latest_grade_is_green_is_not_reported` | The fire's own grade is the highest it reached. Its latest update's grade is where it stands now. |
+| `test_the_latest_grade_maps_onto_the_shared_severity_scale` | The lagrade maps onto the shared severity scale. |
+| `test_a_burning_fire_counts_whatever_its_end_date_says` | While a fire burns, its end date trails real time by one to three days. A burning fire is open-ended. |
+| `test_a_fire_burns_until_the_end_of_its_last_day` | Both Los Angeles fires were last dated 12 January. A window opening late that day still finds them; one opening after it does not, and their areas are not fetched. |
+| `test_a_date_written_with_a_zone_ends_when_that_zones_day_ends` | GDACS writes dates without a zone today. If one comes with a zone, the day ends at that zone's midnight: 08:00 UTC for Los Angeles. |
+| `test_a_fire_too_far_away_is_not_fetched` | A fire too far away is not fetched. |
+| `test_positions_are_reduced_to_longitude_and_latitude` | An altitude is dropped rather than passed through: an unchecked NaN in it would make the whole response invalid JSON. |
+| `test_the_evidence_link_is_built_from_the_ids_not_taken_from_the_payload` | The evidence link is built from the ids not taken from the payload. |
+| `test_no_content_means_no_fires` | GDACS answers an empty search with 204 and no body. |
+| `test_an_unreachable_list_raises` | An unreachable list raises. |
+| `test_an_unreachable_burned_area_raises` | An unreachable burned area raises. |
+| `test_a_full_page_is_not_trusted` | GDACS pages at 100. A full page may have left a fire on the next. |
+| `test_an_unreadable_list_raises_rather_than_reporting_nothing` | An unreadable list raises rather than reporting nothing. |
+| `test_a_fire_that_cannot_be_trusted_fails_the_whole_answer` | A fire is not skipped for being unreadable: it might be the one covering the caller. |
+| `test_a_burned_area_that_cannot_be_trusted_fails_the_whole_answer` | Geometry for another event, or a fire with no area, cannot place the fire - so neither is passed over quietly. Holes are checked too, though they are filled, and a hole listed before the outline would otherwise become the whole zone. |
+| `test_a_burned_area_answered_with_nothing_usable_fails` | A burned area answered with nothing usable fails. |
+| `test_the_fire_list_and_areas_are_reused_for_15_minutes` | The fire list and areas are reused for 15 minutes. |
+| `test_after_15_minutes_the_list_is_fetched_again_but_the_areas_are_not` | A burned area belongs to one update of one fire and never changes. |
+| `test_a_new_update_of_a_fire_fetches_its_own_burned_area` | A new update of a fire fetches its own burned area. |
+| `test_a_new_update_without_its_burned_area_is_an_outage_not_the_older_area` | The older area is smaller: ground burned since would read as clear. |
+| `test_no_fires_is_reused_too` | No fires is reused too. |
+| `test_while_gdacs_is_down_the_last_list_stands_in_marked_stale` | While gdacs is down the last list stands in marked stale. |
+| `test_during_the_pause_after_a_failure_gdacs_is_not_asked_again` | During the pause after a failure gdacs is not asked again. |
+| `test_a_list_older_than_6_hours_does_not_stand_in` | A list older than 6 hours does not stand in. |
+| `test_a_stale_list_cannot_place_a_fire_whose_burned_area_was_never_fetched` | The list stands in, but the area of a fire nobody nearby has asked about yet cannot be fetched - so there is no answer, not a `false`. |
+| `test_an_unreadable_list_is_not_cached` | An unreadable list is not cached. |
+| `test_one_list_serves_every_window` | One list serves every window. |
+| `test_the_last_list_stands_in_across_midnight` | The list fetched at 23:30 still stands in at 00:05 the next day. |
+| `test_an_answer_that_came_back_unreadable_never_lets_the_old_list_stand_in` | GDACS answered, so it may be listing a fire the old list does not have. Reported as unavailable, not as the old list's "nothing". |
+| `test_a_burned_area_stands_in_for_up_to_7_days` | An area belongs to one update of one fire and never changes. |
+| `test_a_window_reaching_back_past_the_shared_list_is_asked_for_on_its_own` | A window reaching back past the shared list is asked for on its own. |
+| `test_only_a_gdacs_that_could_not_be_reached_counts_as_unreachable` | Only a gdacs that could not be reached counts as unreachable. |
+
+> 40 test functions expand to 101 cases through parametrisation.
 
 ### `test_generate_answer.py`
 

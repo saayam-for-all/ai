@@ -10,12 +10,13 @@ cross-check that goes with it, are not built yet.
 import math
 from datetime import timedelta, timezone
 
-from services import feed_cache, gdacs_floods, usgs_earthquakes
+from services import feed_cache, gdacs_floods, gdacs_wildfires, usgs_earthquakes
 from services.geometry import circle_polygon, distance_km, distance_to_area_km
 
 # One adapter per authoritative feed. See services/usgs_earthquakes.py for the
-# four names an adapter has to expose.
-FEEDS = (usgs_earthquakes, gdacs_floods)
+# four names an adapter has to expose. Two feeds can come from one source, as
+# GDACS's floods and wildfires do; they are told apart by their event types.
+FEEDS = (usgs_earthquakes, gdacs_floods, gdacs_wildfires)
 
 DEFAULT_RADIUS_KM = 50.0
 MAX_RADIUS_KM = 500.0
@@ -102,14 +103,14 @@ def check_location(latitude, longitude, radius_km, window_hours, now=None):
         except Exception as e:
             # Fail closed: anything a feed raises, including a bug in its
             # adapter, is an unanswered question rather than an empty answer.
-            print(f"ERROR: disaster_check feed {feed.SOURCE} failed: {type(e).__name__}: {e}")
+            print(f"ERROR: disaster_check feed {_label(source)} failed: {type(e).__name__}: {e}")
             sources_checked.append({**source, "status": "unavailable"})
             continue
         status = "stale" if answer.stale else "ok"
         sources_checked.append({**source, "status": status, "retrieved_at": retrieved_at})
         events += [(event, feed.SOURCE, retrieved_at) for event in reached]
 
-    unavailable = [source["source"] for source in sources_checked if source["status"] == "unavailable"]
+    unavailable = [_label(source) for source in sources_checked if source["status"] == "unavailable"]
     if unavailable and not events:
         raise DisasterCheckUnavailable(f"no answer from: {', '.join(unavailable)}")
 
@@ -127,6 +128,11 @@ def check_location(latitude, longitude, radius_km, window_hours, now=None):
         "events": [_render(event, source, retrieved_at) for event, source, retrieved_at in events],
         "sources_checked": sources_checked,
     }
+
+
+def _label(source):
+    """A feed's name for logs, such as "GDACS (wildfire)"."""
+    return f"{source['source']} ({', '.join(source['event_types'])})"
 
 
 def _require_known_severity(event):
