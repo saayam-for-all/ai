@@ -562,6 +562,146 @@ code in a merge, so it is still in `test`'s history and is also tagged
 
 ---
 
+## AI tech stack: grounded retrieval 
+
+Grounded retrieval answers "which organizations can help with this?" from records
+a person has verified, with a source behind every claim, instead of asking a
+model to recall them. It returns nothing when nothing matches. It is an
+experiment for issue #197 and is not wired into the deployed handler.
+
+**Why.** `utils/search_orgs.py` asks a model for six "verified" organizations
+with a size and a 0.0-5.0 rating from its own memory (`build_prompt`, line 118),
+and nothing checks them. Here a record is served only if it is verified and every
+claim has an `https` source. No model is called, so it is deterministic and has
+no provider outage.
+
+**Files added**
+
+| File | What it is |
+| --- | --- |
+| `utils/grounded_orgs.py` | The module: dataset rules, the taxonomy as a graph, retrieval, `audit`, and the `--demo`. |
+| `services/organizations.json` | The dataset. Currently 10 clearly labelled PROXY records (3 cities, plus one national helpline). |
+| `docs/organizations_provenance.md` | The rules for adding a record. |
+| `tests/test_grounded_orgs.py` | Offline tests. |
+| `tests/fixtures/grounded_orgs_test_records.json` | Test-only fake records. Never copy these into the dataset. |
+
+No existing code file is changed. This README section is the only edit to an existing
+file, and `requirements.txt` is unchanged (standard library only).
+
+**How it works.** `Taxonomy` builds a graph from the classifier's dotted category
+IDs, so a request for "looking for a rental" (`3.5`) also reaches an organization
+filed under the broader "housing assistance" (`3`). Rows are scored (exact, then
+broader, then narrower, then keyword), filtered by service area, and returned in
+the same shape as `find_organizations`, so every field the data team's aggregator
+reads is present. A `grounding` block lists each result's `source_id` and the
+source URL behind each field. `audit(organizations)` compares organizations from
+any other source, such as the model, against the verified records.
+
+### Run the experiment
+
+Run everything from the repo root (the `ai/` folder), with your virtual
+environment active. No API keys, AWS credentials or network are needed.
+
+1. **Install** (once):
+
+   ```
+   pip install -r requirements.txt -r requirements-dev.txt
+   ```
+
+2. **Run the demo.** It sends six sample requests through grounded retrieval and
+   prints what comes back:
+
+   ```
+   python -m utils.grounded_orgs --demo
+   ```
+
+   Expected output:
+
+   ```
+Dataset: 10 records, each served only if verified and sourced
+
+REQUEST  category=HOUSING_ASSISTANCE  location="Chicago, IL"  text="I need a place to stay"
+  -> Sample Chicago Shelter Network (proxy data)
+     matched via: exact  (score 1.0, location fit 3)
+     name sourced from: https://example.org/proxy/proxy-003
+
+  -> Sample National Housing Helpline (proxy data)
+     matched via: exact  (score 1.0, location fit 1)
+     name sourced from: https://example.org/proxy/proxy-010
+
+REQUEST  category=LOOKING_FOR_RENTAL  location="Houston, TX"  text="looking for a rental"
+  -> Sample Houston Shelter Network (proxy data)
+     matched via: broader  (score 0.6, location fit 3)
+     name sourced from: https://example.org/proxy/proxy-006
+
+  -> Sample National Housing Helpline (proxy data)
+     matched via: broader  (score 0.6, location fit 1)
+     name sourced from: https://example.org/proxy/proxy-010
+
+REQUEST  category=DONATE_CLOTHES  location="Seattle, WA"  text="I want to donate clothes"
+  -> Sample Seattle Clothing Closet (proxy data)
+     matched via: exact  (score 1.0, location fit 3)
+     name sourced from: https://example.org/proxy/proxy-008
+
+REQUEST  category=HOUSING_ASSISTANCE  location="Denver, CO"  text="I need a place to stay"
+  -> Sample National Housing Helpline (proxy data)
+     matched via: exact  (score 1.0, location fit 1)
+     name sourced from: https://example.org/proxy/proxy-010
+
+REQUEST  category=FOOD_ASSISTANCE  location="Denver, CO"  text="I need food"
+  -> nothing returned (no verified record matches)
+
+REQUEST  category=TUTORING  location="Chicago, IL"  text="math tutoring"
+  -> nothing returned (no verified record matches)
+   ```
+
+   Importing the project's existing `utils/search_orgs.py` may first print a few
+   `INIT` lines saying no Groq or Gemini key and no AWS region were found. That is
+   expected here: this experiment calls no model and no cloud service.
+
+3. **Try your own request.** The arguments are subject, description, location and
+   (optionally) a category name from `utils/predict_category_list.py`. It prints
+   the JSON the handler would return, plus the `grounding` block:
+
+   ```
+   python -m utils.grounded_orgs "shelter" "I need a place to stay" "Chicago, IL" HOUSING_ASSISTANCE
+   ```
+
+4. **Run the tests** (offline by default; nothing here is marked `needs_network`):
+
+   ```
+   pytest tests/test_grounded_orgs.py -v
+   pytest -m dataset        # the dataset rules and the proxy-data checks
+   ```
+
+### How to read the output
+
+- **matched via** says how the record relates to the category asked for: `exact`,
+  `broader` (the record is filed under a parent category), `narrower` (under a
+  child) or `keyword` (only its keywords matched).
+- **location fit** is 3 for a city match, 2 for a state, 1 for a national
+  organization. A record that does not serve the place is never returned.
+- **name sourced from** is the URL the organization's name is backed by. Every
+  claim in a served record has one; a record without them is dropped when the
+  dataset is loaded.
+- **nothing returned** is the intended answer when no verified record matches. The
+  model-based search would instead write six plausible organizations.
+
+### What the experiment shows
+
+- A request is answered only from verified, sourced records (requests 1 and 3).
+- The category graph finds a record a flat lookup would miss: a rental request
+  reaches the shelter filed under Housing (request 2).
+- Where there is no local record, only a national one answers (request 4), and
+  where there is none at all, the answer is empty (requests 5 and 6).
+
+**Limitations.** The shipped records are proxy data (made up, labelled `(proxy data)`), agreed
+for this experiment; real use needs people to verify real records.
+Matching is deliberately simple (category graph plus keywords). `size` and `rating`
+are blank unless a source supports them. It is not wired into `find_organizations`.
+
+---
+
 ## CI/CD GitHub Actions Deployment
 
 Any push to the `dev` branch triggers the multi-job parallel deploy workflow defined in `.github/workflows/deploy_aws_lambda.yml`. 
