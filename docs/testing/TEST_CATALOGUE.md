@@ -32,7 +32,7 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_emergency_dataset.py`](../../tests/test_emergency_dataset.py) | Dataset | #146 | `services/emergency_numbers.json` | 17 |
 | [`tests/test_emergency_locale.py`](../../tests/test_emergency_locale.py) | Unit | #146 | `services/emergency.py` | 67 |
 | [`tests/test_emergency_s3_reader.py`](../../tests/test_emergency_s3_reader.py) | Unit | #334 | `services/emergency.py S3 reader` | 23 |
-| [`tests/test_generate_answer.py`](../../tests/test_generate_answer.py) | Contract | #169 | `generate_answer_handler` | 50 |
+| [`tests/test_generate_answer.py`](../../tests/test_generate_answer.py) | Contract | #169 | `generate_answer_handler` | 53 |
 | [`tests/test_import_blast_radius.py`](../../tests/test_import_blast_radius.py) | Integration | #169, #171 | `module-scope imports` | 4 |
 | [`tests/test_model_fallback.py`](../../tests/test_model_fallback.py) | Unit | #193 | `utils/model_fallback.py` | 24 |
 | [`tests/test_org_search_contract.py`](../../tests/test_org_search_contract.py) | Contract | #170 | `utils/search_orgs.py` | 24 |
@@ -41,7 +41,7 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_router.py`](../../tests/test_router.py) | Integration | #171 | `lambda_function.lambda_handler` | 34 |
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
 | [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 57 |
-| | | | **Total** | **422** |
+| | | | **Total** | **425** |
 
 ## Every test
 
@@ -225,7 +225,7 @@ Unit tests for issue #334 - S3 dataset loader with caching and zero-downtime fal
 
 ### `test_generate_answer.py`
 
-*Contract · issue #169 · 50 tests*
+*Contract · issue #169 · 53 tests*
 
 Tests for the generate_answer endpoint - issue #169.
 
@@ -260,13 +260,16 @@ Tests for the generate_answer endpoint - issue #169.
 | `test_an_unexpected_lookup_exception_is_a_500_with_no_internals` | An unexpected lookup exception is a 500 with no internals. |
 | `test_unified_router_reaches_generate_answer` | Unified router reaches generate answer. |
 | `test_a_follow_up_question_is_answered_when_the_request_store_is_down` | The person asked something answerable. An outage is not their problem. |
+| `test_follow_up_without_user_id_uses_conversation` | Follow up without user id uses conversation. |
+| `test_follow_up_from_non_owner_uses_conversation` | Follow up from non owner uses conversation. |
+| `test_missing_owner_with_empty_history_still_returns_400` | Missing owner with empty history still returns 400. |
+| `test_non_owner_with_empty_history_still_returns_404` | Non owner with empty history still returns 404. |
 | `test_a_follow_up_question_is_answered_when_the_schema_has_moved` | The failure this issue is about. It must not reach the beneficiary. |
 | `test_degrading_still_logs_the_failure_it_degraded_around` | A fallback that hides the outage from CloudWatch is how #169 lasted 13 days. |
 | `test_the_degraded_flag_is_absent_on_a_healthy_call` | Nothing that does not care about degradation has to learn a new key. |
 | `test_the_opening_call_has_no_question_to_fall_back_to_and_still_fails` | conversation_history is [] on the first click: there is nothing to answer. |
 | `test_a_history_with_no_user_turn_does_not_fabricate_a_question` | A history with no user turn does not fabricate a question. |
 | `test_a_blank_user_turn_is_not_a_question` | A blank user turn is not a question. |
-| `test_a_request_that_does_not_exist_is_never_answered_from_the_history` | The owner check is what makes 404 a 404. Degrading past it is a leak. |
 | `test_a_store_failure_carries_text_a_client_can_show` | So a dead end reads as "not right now" rather than as a broken page. |
 | `test_the_presentable_message_is_not_called_answer` | It is never advice, so it must never land in a field rendered as advice. |
 | `test_the_presentable_message_names_nothing_about_our_infrastructure` | The presentable message names nothing about our infrastructure. |
@@ -276,7 +279,7 @@ Tests for the generate_answer endpoint - issue #169.
 | `test_gender_and_age_are_passed_through_when_the_caller_sends_them` | The prompt builder has always accepted these; the handler never sent them. |
 | `test_absent_gender_and_age_stay_absent` | Absent gender and age stay absent. |
 
-> 44 test functions expand to 50 cases through parametrisation.
+> 47 test functions expand to 53 cases through parametrisation.
 
 ### `test_import_blast_radius.py`
 
