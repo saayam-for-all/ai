@@ -467,10 +467,12 @@ Answers whether a natural disaster is affecting a location, from authoritative
 feeds, and returns the impact zone of each event
 ([issue #191](https://github.com/saayam-for-all/ai/issues/191)).
 
-**What is built so far is one slice of that issue:** the latitude/longitude
-query, for **earthquakes only**, from the USGS feed. The feed is public, so
-this service needs no API key. The news-snippet query, the LLM cross-check,
-floods and wildfires are not built yet.
+**Implemented here:** coordinate queries and a conservative Part 4 news-snippet
+subset for **earthquakes only**, using the existing USGS adapter. Coordinate
+queries need no API key. News geocoding uses a maps.co key in Parameter Store;
+see [Part 4 setup, matching rules and manual tests](docs/disaster_news_part4.md).
+Gemini cross-checking, broader language extraction, floods and wildfires remain
+follow-up work.
 
 It is reachable through the unified router as `"service": "disaster_check"`.
 It has no dedicated Lambda function or API Gateway route yet.
@@ -497,6 +499,45 @@ It has no dedicated Lambda function or API Gateway route yet.
 away an epicentre may be. An event is returned when its **impact zone reaches
 that area**, so a large earthquake 150 km away is reported to a caller who
 asked about 50 km.
+
+#### News-snippet requests (Part 4)
+
+```json
+{
+  "service": "disaster_check",
+  "news_snippet": "A magnitude 6.5 earthquake struck near Tokyo, Japan on 2026-11-04T01:00:00Z.",
+  "published_at": "2026-11-04T02:00:00Z"
+}
+```
+
+This is an input example, not evidence that this earthquake occurred. Supported
+wording is `[A] magnitude <number> earthquake struck|hit|occurred near|in
+<place> on|at <ISO timestamp with timezone>` (also `M <number>`). The parser
+accepts one report of at most 2000 characters. `published_at` is optional
+publication metadata and **never substitutes for occurrence time**. Date-only,
+relative-time and unsupported prose return an unresolved result.
+
+Matching requires exactly one active USGS earthquake within 50 km of the
+geocoded place, 15 minutes of the reported time, and 0.3 magnitude units of the
+reported magnitude. These are conservative initial thresholds awaiting review.
+Occurrence must be within the last 168 hours, not in the future or after
+publication; USGS currently covers magnitudes 5.0 and above. Expired events
+cannot confirm a report.
+
+Successful news responses preserve the event/evidence schema below and add
+`status: "matched"` and `extracted` fields. `confidence` retains the USGS
+solution grade; `llm_cross_check` remains null. No Gemini check has run.
+
+Insufficient details, unsupported event types, unknown/ambiguous geocoding,
+and zero or multiple matching records return HTTP 200 with `status:
+"unresolved"`, a machine-readable `reason`, `disaster_detected: null`,
+`confidence: "unverified"`, empty `events`, and the extracted facts. This is
+**not an all-clear**. Consumers must require `disaster_detected === true`
+before treating a news result as a detection.
+
+Do not combine `news_snippet` with `latitude`, `longitude`, `radius_km`, or
+`window_hours`: even null coordinate fields are rejected with 400. A present
+but blank/non-string snippet is also 400, never a coordinate fallback.
 
 #### Response
 The Gaziantep query above, replayed against the feed's record of 6 February
@@ -579,10 +620,9 @@ Reading the fields:
 
 | Status | Meaning |
 |---|---|
-| 200 | The feed answered. Read `disaster_detected`. |
-| 400 | `latitude` or `longitude` missing, or a value out of range. `error` says which. |
-| 501 | `NEWS_SNIPPET_NOT_SUPPORTED` — the request carried a `news_snippet`. |
-| 502 | `DISASTER_CHECK_UNAVAILABLE` — a feed could not be reached or its answer could not be read, and nothing was detected. Retryable. |
+| 200 | Coordinate finding, or news `matched` / `unresolved` result. Read the status and `disaster_detected`. |
+| 400 | Invalid coordinates, invalid snippet/publication timestamp, or mixed input modes. `error` says which. |
+| 502 | `DISASTER_CHECK_UNAVAILABLE` — a required feed, geocoder or geocoding credentials could not be used. Retryable; back off on provider throttling. |
 | 500 | An unexpected failure. The body is `{"error": "Disaster check failed"}`. |
 
 **A `502` or `500` body carries no `disaster_detected` field at all.** An
@@ -646,12 +686,15 @@ empty list means the feed was asked and listed nothing.
 
 | File | Proves |
 | --- | --- |
-| `test_disaster_check_contract.py` | Against two responses recorded from USGS: a location inside a known earthquake is detected with a USGS record in `verified_by`; a quiet location is a `false` from one feed call; an outage is `502` `DISASTER_CHECK_UNAVAILABLE` with no `disaster_detected` field; a `news_snippet` is a `501`; the body is an object on every path. |
+| `test_disaster_check_contract.py` | Against two responses recorded from USGS: a location inside a known earthquake is detected with a USGS record in `verified_by`; a quiet location is a `false` from one feed call; an outage is `502` `DISASTER_CHECK_UNAVAILABLE` with no `disaster_detected` field; mixed snippet/coordinate input is a `400`; the body is an object on every path. |
 | `test_disaster_check.py` | An epicentre beyond the caller's radius is still found when its zone reaches them; a feed that did not answer is never a `false`; `confidence` is that of the most severe event; the zone is a closed counterclockwise ring that covers the modelled circle, including across the antimeridian and at a pole; query validation. |
 | `test_usgs_earthquakes.py` | The query sent to USGS; the recorded payload becomes events with latitude and longitude the right way round; an unreachable feed, an unreadable answer, or an event with a NaN or out-of-range magnitude or position raises rather than returning an empty list. |
+| `test_disaster_news.py` | Recorded-USGS news matching, extraction limits, unrelated/expired/multiple events, unresolved results and input validation. |
+| `test_disaster_news_contract.py` | Router forwarding, mixed input rejection and provider outage responses. |
+| `test_disaster_geocoding.py` | Unique/ambiguous/unknown locations, encoded requests, bounded timeouts, throttling, malformed responses and lazy SSM credentials. |
 
 The fixtures are in `tests/fixtures/usgs/`. No test in the default run calls
-USGS.
+USGS, the geocoding provider or SSM for this feature.
 
 #### curl Command
 ```bash
