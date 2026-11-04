@@ -12,6 +12,7 @@ import json
 import logging
 from pathlib import Path
 from typing import Any, TypeVar
+import httpx
 
 
 logger = logging.getLogger(__name__)
@@ -122,6 +123,97 @@ def _load_model_chain(
         )
 
     return tuple(targets)
+def _error_class_from_status(status: int) -> str:
+    """Convert an HTTP status code into an error category."""
+
+    if status == 404:
+        return "model_not_found"
+
+    if status in (401, 403):
+        return "auth_or_entitlement"
+
+    if status == 429:
+        return "rate_limited"
+
+    if 500 <= status <= 599:
+        return "timeout_or_unavailable"
+
+    return "other"
+
+
+def classify_provider_error(error: Exception) -> str:
+    """
+    Classify Groq and Google Gemini provider errors.
+
+    Supports:
+    - Groq SDK
+    - google-genai SDK
+    - Older google-api-core exceptions
+    - LangChain Google exceptions
+    - Wrapped exceptions
+    """
+
+    seen = set()
+    current = error
+
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+
+        # Find which exception class was raised.
+        class_name = type(current).__name__
+        module_name = type(current).__module__
+
+        # Some failures have no HTTP status code.
+        if isinstance(
+            current,
+            (
+                TimeoutError,
+                ConnectionError,
+                httpx.TimeoutException,
+                httpx.NetworkError,
+            ),
+        ):
+            return "timeout_or_unavailable"
+
+        # Groq connection and timeout errors.
+        if module_name.startswith("groq") and class_name in (
+            "APITimeoutError",
+            "APIConnectionError",
+        ):
+            return "timeout_or_unavailable"
+
+        # Newer LangChain Google errors.
+        if module_name.startswith("langchain_google_genai"):
+
+            if class_name == "GoogleModelNotFoundError":
+                return "model_not_found"
+
+            if class_name in (
+                "GoogleAuthenticationError",
+                "GooglePermissionDeniedError",
+            ):
+                return "auth_or_entitlement"
+
+            if class_name == "GoogleRateLimitError":
+                return "rate_limited"
+
+            if class_name == "GoogleAPIError":
+                return "timeout_or_unavailable"
+
+        # Groq uses status_code.
+        # Google SDKs typically use code.
+        status = getattr(current, "status_code", None)
+
+        if status is None:
+            status = getattr(current, "code", None)
+
+        if isinstance(status, int) and not isinstance(status, bool):
+            return _error_class_from_status(status)
+
+        # Check underlying error if an SDK wrapped it.
+        current = current.__cause__ or current.__context__
+
+    return "other"
 
 
 def _failure_reason(error: Exception) -> str:
@@ -160,7 +252,7 @@ def run_model_chain(
             # bounded guarantee for a caller that supplies a custom test chain.
             logger.warning(
                 "MODEL_FAILOVER operation=%s provider=%s model=%s "
-                "reason=duplicate_target_skipped",
+                "reason=duplicate_target_skipped error_class=other",
                 operation,
                 target.provider,
                 target.model,
@@ -172,11 +264,12 @@ def run_model_chain(
             result = invoke(target)
         except Exception as error:
             logger.warning(
-                "MODEL_FAILOVER operation=%s provider=%s model=%s reason=%s",
+                "MODEL_FAILOVER operation=%s provider=%s model=%s reason=%s error_class=%s",
                 operation,
                 target.provider,
                 target.model,
                 _failure_reason(error),
+                classify_provider_error(error),
             )
             continue
 
@@ -185,11 +278,12 @@ def run_model_chain(
         except Exception as error:
             logger.warning(
                 "MODEL_FAILOVER operation=%s provider=%s model=%s "
-                "reason=result_validation_failed: %s",
+                "reason=result_validation_failed: %s error_class=%s",
                 operation,
                 target.provider,
                 target.model,
                 _failure_reason(error),
+                classify_provider_error(error),
             )
             continue
 
@@ -198,7 +292,7 @@ def run_model_chain(
 
         logger.warning(
             "MODEL_FAILOVER operation=%s provider=%s model=%s "
-            "reason=invalid_or_empty_result",
+            "reason=invalid_or_empty_result error_class=other",
             operation,
             target.provider,
             target.model,
