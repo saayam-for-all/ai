@@ -4,8 +4,8 @@ Authoritative feeds decide. Nothing in this module asks a model anything: an
 event exists here only because a feed in ``FEEDS`` listed it, and every event
 carries that feed in ``verified_by``.
 
-This is the coordinate half of the service. The news-snippet half, and the LLM
-cross-check that goes with it, are not built yet.
+This is the coordinate half of the service. Part 4 lives in disaster_news;
+the Part 5 LLM cross-check is not built yet.
 """
 import math
 from datetime import datetime, timedelta, timezone

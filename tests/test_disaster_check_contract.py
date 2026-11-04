@@ -200,13 +200,13 @@ def test_an_unexpected_failure_is_a_500_without_internals(broken):
 # Requests this slice does not answer
 # -------------------------------------------------------------------------
 
-def test_a_news_snippet_is_refused_by_name_without_touching_the_feed():
-    """The snippet path is not built; ignoring the snippet would be a guess."""
+def test_a_news_snippet_with_coordinates_is_rejected_without_touching_the_feed():
+    """Part 4 requires one input mode; silently ignoring either is a guess."""
     with _feed_answers("no_events.geojson") as urlopen:
         res = _call({"news_snippet": "Heavy flooding has submerged parts of Chennai.", **GAZIANTEP})
 
-    assert res["statusCode"] == 501
-    assert res["body"]["code"] == "NEWS_SNIPPET_NOT_SUPPORTED"
+    assert res["statusCode"] == 400
+    assert "cannot be combined" in res["body"]["error"]
     assert "disaster_detected" not in res["body"]
     assert not urlopen.called
 
