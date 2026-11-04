@@ -39,12 +39,12 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_request_db_schema.py`](../../tests/test_request_db_schema.py) | Unit | #169 | `utils/request_db.py` | 54 |
 | [`tests/test_response_contract.py`](../../tests/test_response_contract.py) | Contract | #146, #169, #170 | `response envelopes` | 10 |
 | [`tests/test_router.py`](../../tests/test_router.py) | Integration | #171 | `lambda_function.lambda_handler` | 34 |
-| [`tests/test_skill_eval_dataset.py`](../../tests/test_skill_eval_dataset.py) | Dataset | #216 | `docs/metrics/volunteer_skills_eval_set.json` | 24 |
+| [`tests/test_skill_eval_dataset.py`](../../tests/test_skill_eval_dataset.py) | Dataset | #216 | `docs/metrics/volunteer_skills_eval_set.json` | 26 |
 | [`tests/test_skill_eval_scoring.py`](../../tests/test_skill_eval_scoring.py) | Unit | #216 | `tools/skill_eval_scoring.py` | 22 |
-| [`tests/test_skill_suggestion.py`](../../tests/test_skill_suggestion.py) | Unit | #216 | `services/skill_suggestion_service.py` | 75 |
+| [`tests/test_skill_suggestion.py`](../../tests/test_skill_suggestion.py) | Unit | #216 | `services/skill_suggestion_service.py` | 76 |
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
 | [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 57 |
-| | | | **Total** | **543** |
+| | | | **Total** | **546** |
 
 ## Every test
 
@@ -456,7 +456,7 @@ Router-level regression tests - issue #171.
 
 ### `test_skill_eval_dataset.py`
 
-*Dataset · issue #216 · 24 tests*
+*Dataset · issue #216 · 26 tests*
 
 The volunteer evaluation set itself (issue #216).
 
@@ -481,7 +481,7 @@ The volunteer evaluation set itself (issue #216).
 | `test_descriptions_fit_within_the_services_own_cap` | Over 2,000 characters the service truncates, and a label at the end of a longer description would be unreachable rather than missed. |
 | `test_descriptions_are_unique` | Descriptions are unique. |
 
-> 18 test functions expand to 24 cases through parametrisation.
+> 18 test functions expand to 26 cases through parametrisation.
 
 ### `test_skill_eval_scoring.py`
 
@@ -517,7 +517,7 @@ How volunteer skill suggestions are scored (issue #216).
 
 ### `test_skill_suggestion.py`
 
-*Unit · issue #216 · 75 tests*
+*Unit · issue #216 · 76 tests*
 
 Volunteer skill suggestions: predict_category_api with mode "volunteer_skills" (issue #216).
 
@@ -577,8 +577,9 @@ Volunteer skill suggestions: predict_category_api with mode "volunteer_skills" (
 | `test_a_session_remembers_its_latest_entries_only` | A session remembers its laentries only. |
 | `test_merged_results_are_capped` | Merged results are capped. |
 | `test_handler_round_trips_the_session` | Handler round trips the session. |
+| `test_describe_add_more_then_repeat_the_first` | One volunteer's session: describe, add more, then repeat the first text. |
 
-> 54 test functions expand to 75 cases through parametrisation.
+> 55 test functions expand to 76 cases through parametrisation.
 
 ### `test_subject_generator.py`
 

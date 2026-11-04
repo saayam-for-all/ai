@@ -34,6 +34,8 @@ REQUIRED_TRAITS = {
     "long": 3,
     "no_match": 4,
     "unmatched_skills": 4,
+    "medical_quoted": 3,
+    "medical_paraphrased": 3,
 }
 
 #: The ten cases in issue #216, abridged as the issue states them. They were
