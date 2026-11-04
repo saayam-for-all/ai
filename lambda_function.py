@@ -6,6 +6,7 @@ from utils.generate_answer_service import generate_ai_answer
 from utils.model_fallback import ModelChainExhausted
 from services.emergency import get_emergency_services
 from utils.search_orgs import OrganizationSearchError, find_organizations
+from services.disaster_news import check_news
 from services.disaster_check import (
     DisasterCheckUnavailable,
     InvalidQuery,
@@ -559,9 +560,8 @@ def generate_subject_handler(event, context):
 def disaster_check_handler(event, context):
     """AWS Lambda entry point for disaster_check service - issue #191.
 
-    Answers a latitude/longitude query from authoritative feeds. The
-    news-snippet query is part of the same contract and is not built yet, so
-    it is refused with its own code rather than silently ignored.
+    Answers coordinate queries and conservative news-snippet queries from
+    authoritative feeds. Unresolved news is never an all-clear.
     """
     try:
         body = _parse_event_body(event)
@@ -571,16 +571,9 @@ def disaster_check_handler(event, context):
     if not isinstance(body, dict):
         return _response(400, {"error": "Request body must be a JSON object"})
 
-    if str(body.get("news_snippet") or "").strip():
-        return _response(
-            501,
-            {
-                "error": "news_snippet queries are not supported yet; send latitude and longitude",
-                "code": "NEWS_SNIPPET_NOT_SUPPORTED",
-            },
-        )
-
     try:
+        if "news_snippet" in body:
+            return _response(200, check_news(body))
         return _response(200, check_location(**parse_query(body)))
     except InvalidQuery as e:
         return _response(400, {"error": str(e)})

@@ -85,6 +85,7 @@ def test_a_recorded_earthquake_becomes_a_feed_neutral_event():
     mainshock = events[0]
     assert mainshock["event_id"] == "usgs-us6000jllz"
     assert mainshock["event_type"] == "earthquake"
+    assert mainshock["magnitude"] == 7.8
     assert mainshock["severity"] == "extreme"
     assert mainshock["headline"].startswith("M 7.8 - Pazarcik earthquake")
     assert mainshock["started_at"] == datetime(2023, 2, 6, 1, 17, 34, 342000, tzinfo=timezone.utc)

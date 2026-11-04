@@ -134,6 +134,7 @@ def _to_event(feature):
     return {
         "event_id": f"usgs-{feature['id']}",
         "event_type": "earthquake",
+        "magnitude": magnitude,
         "severity": severity_for(magnitude),
         "headline": str(properties["title"]),
         "started_at": started_at,
