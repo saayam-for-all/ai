@@ -25,7 +25,21 @@ from utils.model_fallback import (
     ModelChainExhausted,
     ModelTarget,
     run_model_chain,
+    classify_provider_error,
 )
+import httpx
+
+from groq import (
+    NotFoundError,
+    AuthenticationError,
+    PermissionDeniedError,
+    RateLimitError,
+    APITimeoutError,
+    APIConnectionError,
+    InternalServerError,
+)
+
+from google.genai import errors as google_errors
 
 
 pytestmark = pytest.mark.unit
@@ -244,6 +258,8 @@ def test_warning_names_the_failed_model_and_reason(
 
     assert "groq-primary" in caplog.text
     assert "model_not_found" in caplog.text
+    assert "reason=" in caplog.text
+    assert "error_class=" in caplog.text
 
 
 # ---------------------------------------------------------------------------
@@ -340,3 +356,168 @@ def test_a_validator_that_raises_advances_the_chain(caplog):
 
     assert result == "answer"
     assert "result_validation_failed" in caplog.text
+
+@pytest.mark.parametrize(
+    "error_type, status, expected",
+    [
+        (NotFoundError, 404, "model_not_found"),
+        (AuthenticationError, 401, "auth_or_entitlement"),
+        (PermissionDeniedError, 403, "auth_or_entitlement"),
+        (RateLimitError, 429, "rate_limited"),
+        (InternalServerError, 503, "timeout_or_unavailable"),
+    ],
+)
+def test_groq_error_classification(error_type, status, expected):
+    request = httpx.Request("POST", "https://api.groq.com")
+    response = httpx.Response(status, request=request)
+
+    error = error_type(
+        "Simulated provider error",
+        response=response,
+        body={},
+    )
+
+    assert classify_provider_error(error) == expected
+
+
+@pytest.mark.parametrize(
+    "error_type",
+    [APITimeoutError, APIConnectionError],
+)
+def test_groq_connection_errors(error_type):
+    request = httpx.Request("POST", "https://api.groq.com")
+
+    error = error_type(request=request)
+
+    assert classify_provider_error(error) == "timeout_or_unavailable"
+
+
+@pytest.mark.parametrize(
+    "status, expected",
+    [
+        (404, "model_not_found"),
+        (401, "auth_or_entitlement"),
+        (403, "auth_or_entitlement"),
+        (429, "rate_limited"),
+        (400, "other"),
+    ],
+)
+def test_google_client_error_classification(status, expected):
+    error = google_errors.ClientError(
+        status,
+        {"message": "Simulated Google error"},
+    )
+
+    assert classify_provider_error(error) == expected
+
+
+@pytest.mark.parametrize("status", [500, 503, 504])
+def test_google_server_error_classification(status):
+    error = google_errors.ServerError(
+        status,
+        {"message": "Simulated server error"},
+    )
+
+    assert classify_provider_error(error) == "timeout_or_unavailable"
+
+
+@pytest.mark.parametrize(
+    "error_name, expected",
+    [
+        ("NotFound", "model_not_found"),
+        ("Unauthorized", "auth_or_entitlement"),
+        ("Forbidden", "auth_or_entitlement"),
+        ("ResourceExhausted", "rate_limited"),
+        ("DeadlineExceeded", "timeout_or_unavailable"),
+        ("ServiceUnavailable", "timeout_or_unavailable"),
+    ],
+)
+def test_google_api_core_errors(error_name, expected):
+    google_api = pytest.importorskip("google.api_core.exceptions")
+
+    error_type = getattr(google_api, error_name)
+    error = error_type("Simulated Google error")
+
+    assert classify_provider_error(error) == expected
+
+
+def test_langchain_wrapped_error():
+    original = google_errors.ClientError(
+        429,
+        {"message": "Rate limit exceeded"},
+    )
+
+    wrapped = RuntimeError("LangChain call failed")
+    wrapped.__cause__ = original
+
+    assert classify_provider_error(wrapped) == "rate_limited"
+
+
+def test_unknown_error():
+    assert classify_provider_error(ValueError("Invalid JSON")) == "other"
+
+def test_model_failover_warning_has_correct_error_class(caplog):
+    target = ModelTarget(provider="groq", model="test-model")
+
+    request = httpx.Request("POST", "https://api.groq.com")
+    response = httpx.Response(404, request=request)
+
+    error = NotFoundError(
+        "Model not found",
+        response=response,
+        body={},
+    )
+
+    def invoke(_target):
+        raise error
+
+    with caplog.at_level(logging.WARNING):
+        with pytest.raises(ModelChainExhausted):
+            run_model_chain(
+                targets=[target],
+                invoke=invoke,
+                is_valid=bool,
+                operation="predict_category",
+            )
+
+    assert "MODEL_FAILOVER" in caplog.text
+    assert "model=test-model" in caplog.text
+    assert "reason=" in caplog.text
+    assert "error_class=model_not_found" in caplog.text
+@pytest.mark.parametrize(
+    "scenario",
+    ["duplicate", "invalid_result", "validation_error"],
+)
+def test_all_failover_warnings_have_error_class(scenario, caplog):
+    target = ModelTarget(provider="groq", model="test-model")
+
+    targets = [target, target] if scenario == "duplicate" else [target]
+
+    def invoke(_target):
+        if scenario == "duplicate":
+            raise ValueError("Simulated failure")
+        return None
+
+    def is_valid(_result):
+        if scenario == "validation_error":
+            raise ValueError("Invalid result")
+        return False
+
+    with caplog.at_level(logging.WARNING):
+        with pytest.raises(ModelChainExhausted):
+            run_model_chain(
+                targets=targets,
+                invoke=invoke,
+                is_valid=is_valid,
+                operation="test_all_warnings",
+            )
+
+    warnings = [
+        record.getMessage()
+        for record in caplog.records
+        if "MODEL_FAILOVER" in record.getMessage()
+    ]
+
+    assert warnings
+    assert all("reason=" in warning for warning in warnings)
+    assert all("error_class=other" in warning for warning in warnings)
