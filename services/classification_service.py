@@ -1,5 +1,6 @@
 import json
-from utils.categories_with_description import TAXONOMY
+from pathlib import Path
+# from utils.categories_with_description import TAXONOMY
 from utils.client import client, _use_groq, _gemini_client
 from utils.model_fallback import ModelTarget, run_model_chain
 from utils.predict_category_list import (
@@ -11,6 +12,30 @@ from utils.predict_category_list import (
 )
 from utils.routing_for_categories import is_elderly_context
 from utils import token_usage
+from config.all_prompts import (
+    SINGLE_CLASSIFICATION_INSTRUCTIONS,
+    RANKED_CLASSIFICATION_INSTRUCTIONS,
+    CLASSIFICATION_ROUTING_HINT,
+    SINGLE_CLASSIFICATION_OUTPUT,
+    RANKED_CLASSIFICATION_OUTPUT,
+)
+
+
+
+CONFIG_PATH = (
+    Path(__file__).resolve().parent.parent
+    / "config"
+    / "category_with_desc.json"
+)
+
+with CONFIG_PATH.open("r", encoding="utf-8") as f:
+    category_config = json.load(f)
+
+TAXONOMY = {
+    details["name"]: details["description"]
+    for details in category_config.values()
+}
+
 
 
 class GroqClassificationService:
@@ -40,25 +65,17 @@ class GroqClassificationService:
                 candidate_lines.append(f"{category_id}: {category_name}")
         candidates_text = "\n".join(candidate_lines)
 
-        prompt_lines = [
-            "You are a classifier. For each category, rate how well the request matches from 0 to 1, then select the best category ID from the list.",
-            "Return JSON only with keys category and confidence (0.0 to 1.0).",
-            "Confidence bands: 0.9-1.0 explicit match; 0.6-0.8 strong match; 0.3-0.5 weak/ambiguous; <0.3 unsure.",
-        ]
+
+        prompt_lines = list(SINGLE_CLASSIFICATION_INSTRUCTIONS)
+
         if set(candidates) == set(get_top_level_categories()):
-            prompt_lines.append(
-                "Routing hint: choose HOUSING_ASSISTANCE for repairs/maintenance (plumber, leak, electrician, handyman); "
-                "choose FOOD_AND_ESSENTIALS for food access or groceries; choose CLOTHING_ASSISTANCE for clothes; "
-                "choose EDUCATION_CAREER_SUPPORT for tutoring, exams, or school; "
-                "choose HEALTHCARE_AND_WELLNESS for medical or health needs; "
-                "choose ELDERLY_COMMUNITY_ASSISTANCE for seniors or caregiving; "
-                "choose GENERAL_CATEGORY for unclear or uncategorized requests."
-            )
+            prompt_lines.extend(CLASSIFICATION_ROUTING_HINT)
+
         prompt_lines.extend(
             [
                 f"Categories:\n{candidates_text}",
                 f"Description: {description}",
-                'Return format: {"category": "CATEGORY_ID", "confidence": <0.0-1.0>}',
+                *SINGLE_CLASSIFICATION_OUTPUT,
             ]
         )
 
@@ -79,34 +96,16 @@ class GroqClassificationService:
                 candidate_lines.append(f"{category_id}: {category_name}")
         candidates_text = "\n".join(candidate_lines)
 
-        prompt_lines = [
-            "You are a zero-shot classifier.",
-            "Return JSON only with a key 'categories' containing a list of ranked categories.",
-            "For each item include the category ID and a confidence score (0.0 to 1.0).",
-            "Return at least the top 3 most relevant categories.",
-            "Choose only from the category IDs listed below; do not invent IDs or use names.",
-        ]
+        prompt_lines = list(RANKED_CLASSIFICATION_INSTRUCTIONS)
+
         if set(candidates) == set(get_top_level_categories()):
-            prompt_lines.append(
-                "Routing hint: choose HOUSING_ASSISTANCE for repairs/maintenance (plumber, leak, electrician, handyman); "
-                "choose FOOD_AND_ESSENTIALS for food access or groceries; choose CLOTHING_ASSISTANCE for clothes; "
-                "choose EDUCATION_CAREER_SUPPORT for tutoring, exams, or school; "
-                "choose HEALTHCARE_AND_WELLNESS for medical or health needs; "
-                "choose ELDERLY_COMMUNITY_ASSISTANCE for seniors or caregiving; "
-                "choose GENERAL_CATEGORY for unclear or uncategorized requests."
-            )
+            prompt_lines.extend(CLASSIFICATION_ROUTING_HINT)
+
         prompt_lines.extend(
             [
                 f"Categories:\n{candidates_text}",
                 f"Description: {description}",
-                "Return format:",
-                "{",
-                '  "categories": [',
-                '    {"category": "CATEGORY_ID", "confidence": 0.95},',
-                '    {"category": "CATEGORY_ID", "confidence": 0.80},',
-                '    {"category": "CATEGORY_ID", "confidence": 0.65}',
-                "  ]",
-                "}",
+                *RANKED_CLASSIFICATION_OUTPUT,
             ]
         )
 
