@@ -69,7 +69,7 @@ class GroqClassificationService:
         prompt_lines = list(SINGLE_CLASSIFICATION_INSTRUCTIONS)
 
         if set(candidates) == set(get_top_level_categories()):
-            prompt_lines.append(CLASSIFICATION_ROUTING_HINT)
+            prompt_lines.extend(CLASSIFICATION_ROUTING_HINT)
 
         prompt_lines.extend(
             [
@@ -99,7 +99,7 @@ class GroqClassificationService:
         prompt_lines = list(RANKED_CLASSIFICATION_INSTRUCTIONS)
 
         if set(candidates) == set(get_top_level_categories()):
-            prompt_lines.append(CLASSIFICATION_ROUTING_HINT)
+            prompt_lines.extend(CLASSIFICATION_ROUTING_HINT)
 
         prompt_lines.extend(
             [
