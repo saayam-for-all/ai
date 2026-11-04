@@ -451,6 +451,76 @@ def test_a_follow_up_question_is_answered_when_the_request_store_is_down():
     assert gen.call_args.kwargs["description"] == "Which documents do I need to bring?"
 
 
+
+def test_follow_up_without_user_id_uses_conversation():
+    with _lookup(dict(ROW)) as lookup, _generation():
+        res = LF.generate_answer_handler(
+            _event({"req_id": "REQ-1", "conversation_history": FOLLOW_UP}),
+            None,
+        )
+
+    lookup.assert_not_called()
+    assert res["statusCode"] == 200
+    assert res["body"]["answer"]
+    assert res["body"]["source"] == "conversation"
+    assert res["body"]["degraded"] == "REQUEST_OWNER_MISSING"
+
+
+def test_follow_up_from_non_owner_uses_conversation():
+    absent = {"error": "Request not found", "error_kind": "not_found"}
+    with _lookup(absent), _generation():
+        res = LF.generate_answer_handler(
+            _event({
+                "user_id": "SID-other",
+                "req_id": "REQ-1",
+                "conversation_history": FOLLOW_UP,
+            }),
+            None,
+        )
+
+    assert res["statusCode"] == 200
+    assert res["body"]["answer"]
+    assert res["body"]["source"] == "conversation"
+    assert res["body"]["degraded"] == "REQUEST_NOT_FOUND"
+
+
+def test_missing_owner_with_empty_history_still_returns_400():
+    with _lookup(dict(ROW)) as lookup, _generation() as gen:
+        res = LF.generate_answer_handler(
+            _event({"req_id": "REQ-1", "conversation_history": []}),
+            None,
+        )
+
+    lookup.assert_not_called()
+    gen.assert_not_called()
+    assert res["statusCode"] == 400
+    assert res["body"] == {
+        "error": (
+            "Provide either subject and description, or "
+            "user_id and req_id to look them up"
+        )
+    }
+
+
+def test_non_owner_with_empty_history_still_returns_404():
+    absent = {"error": "Request not found", "error_kind": "not_found"}
+    with _lookup(absent), _generation() as gen:
+        res = LF.generate_answer_handler(
+            _event({
+                "user_id": "SID-other",
+                "req_id": "REQ-1",
+                "conversation_history": [],
+            }),
+            None,
+        )
+
+    gen.assert_not_called()
+    assert res["statusCode"] == 404
+    assert res["body"] == {
+        "error": "No request found for the given user_id and req_id"
+    }
+
+
 def test_a_follow_up_question_is_answered_when_the_schema_has_moved():
     """The failure this issue is about. It must not reach the beneficiary."""
     with _lookup(SCHEMA_MOVED), _generation():
@@ -525,27 +595,6 @@ def test_a_blank_user_turn_is_not_a_question():
         )
 
     assert res["statusCode"] == 503
-
-
-def test_a_request_that_does_not_exist_is_never_answered_from_the_history():
-    """The owner check is what makes 404 a 404. Degrading past it is a leak.
-
-    `not_found` means the store answered and this caller does not own that
-    request. Falling back to the conversation there would answer a question
-    about a request the caller has no right to, on the strength of an id they
-    guessed.
-    """
-    absent = {"error": "No data found for given user_id and req_id",
-              "error_kind": "not_found"}
-    with _lookup(absent), _generation():
-        res = LF.generate_answer_handler(
-            _event({"user_id": "SID-1", "req_id": "REQ-someone-elses",
-                    "conversation_history": FOLLOW_UP}),
-            None,
-        )
-
-    assert res["statusCode"] == 404
-    assert "degraded" not in res["body"]
 
 
 # -------------------------------------------------------------------

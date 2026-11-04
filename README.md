@@ -103,6 +103,15 @@ curl -X POST https://<api-gateway-url>/generate-subject \
 ---
 
 ### 3. Generate Answer
+
+Follow-ups can use conversation history when the original request cannot be
+looked up. These responses include `source: "conversation"` and a `degraded` code:
+
+- `REQUEST_OWNER_MISSING`: `user_id` or `req_id` is missing; request lookup is skipped.
+- `REQUEST_NOT_FOUND`: no request matches the supplied user and request IDs.
+
+Without a follow-up, the existing 400/404 responses still apply.
+
 Generates a structured, context-aware response to a help request. Backs the
 **More Information** button on the Request Details page.
 

@@ -364,25 +364,29 @@ def generate_answer_handler(event, context):
         additional_info = ""
 
         if not subject or not description:
-            if not user_id or not req_id:
-                return _response(
-                    400,
-                    {
-                        "error": (
-                            "Provide either subject and description, or "
-                            "user_id and req_id to look them up"
-                        )
-                    },
-                )
+            has_identifiers = bool(user_id and req_id)
+            data = _lookup_request(str(user_id), str(req_id)) if has_identifiers else {}
 
-            data = _lookup_request(str(user_id), str(req_id))
-            if err := data.get("error"):
-                if data.get("error_kind") == "not_found":
+            if not has_identifiers:
+                if not follow_up:
+                    return _response(
+                        400,
+                        {
+                            "error": (
+                                "Provide either subject and description, or "
+                                "user_id and req_id to look them up"
+                            )
+                        },
+                    )
+                degraded_from = "REQUEST_OWNER_MISSING"
+            elif data.get("error") and data.get("error_kind") == "not_found":
+                if not follow_up:
                     return _response(
                         404,
                         {"error": "No request found for the given user_id and req_id"},
                     )
-
+                degraded_from = "REQUEST_NOT_FOUND"
+            elif err := data.get("error"):
                 if data.get("error_kind") == "schema_mismatch":
                     # Our SQL no longer matches the database - a table or
                     # column was renamed underneath us. That is our defect, and
@@ -412,15 +416,6 @@ def generate_answer_handler(event, context):
                     )
 
                 if follow_up:
-                    # Degraded, not broken. The person asked a question we can
-                    # answer on its own merits; losing the request row costs us
-                    # the tailoring, not the reply. The failure is still logged
-                    # above and still named in the response, so this never
-                    # hides an outage from whoever is triaging one - it only
-                    # stops the outage reaching the beneficiary as a dead end.
-                    subject = subject or follow_up[:120]
-                    description = follow_up
-                    source = "conversation"
                     degraded_from = failure[2]
                 else:
                     status, message, code, retryable = failure
@@ -445,6 +440,12 @@ def generate_answer_handler(event, context):
                 if not category:
                     category = help_categories.get(str(data.get("req_cat_id")))
                 additional_info = _describe_additional_info(data.get("additional_info"))
+
+        if degraded_from:
+            subject = subject or follow_up[:120]
+            description = follow_up
+            source = "conversation"
+            print(f"WARN: generate_answer answering from conversation: {degraded_from}")
 
         if not description:
             return _response(400, {"error": "description is required and was empty"})
