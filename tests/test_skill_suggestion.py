@@ -1019,3 +1019,34 @@ def test_handler_round_trips_the_session(monkeypatch):
     assert again["statusCode"] == 200
     assert again["body"]["cached"] is True
     assert again["body"]["categories"] == first["categories"]
+
+
+def test_describe_add_more_then_repeat_the_first(monkeypatch):
+    """One volunteer's session: describe, add more, then repeat the first text."""
+    # Call 1: the volunteer describes a first skill.
+    first, groq1 = _session_call(
+        monkeypatch, "I'm a licensed electrician.",
+        payload={"skills": [_skill("3.3.3", 0.95, "licensed electrician")]},
+    )
+    assert len(groq1.calls) == 1
+    assert first["cached"] is False
+
+    # Call 2: they add more. Only the new text goes to the model.
+    second, groq2 = _session_call(
+        monkeypatch, "I also tutor maths at weekends.", first["session"],
+        payload={"skills": [_skill("4.3.1", 0.9, "tutor maths")]},
+    )
+    user_message = groq2.calls[0]["messages"][1]["content"]
+    assert "tutor maths" in user_message
+    assert "electrician" not in user_message
+    assert second["cached"] is False
+    assert [c["category_number"] for c in second["categories"]] == ["3.3.3", "4.3.1"]
+
+    # Call 3: they repeat the first description. No model call, nothing lost.
+    third, groq3 = _session_call(monkeypatch, "I'm a licensed electrician.", second["session"])
+    assert groq3.calls == []
+    assert third["cached"] is True
+    assert third["token_usage"]["total_tokens"] == 0
+    assert [c["category_number"] for c in third["categories"]] == ["3.3.3", "4.3.1"]
+    assert third["session"] == second["session"]
+

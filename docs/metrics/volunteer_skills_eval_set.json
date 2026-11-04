@@ -24,7 +24,9 @@
     "non_english": "Written in a language other than English.",
     "long": "Over 1000 characters. Rambling, with the skills buried in context.",
     "no_match": "States no skill the taxonomy covers. The right answer is an empty list, not a guess.",
-    "unmatched_skills": "States a real skill with no home in the taxonomy, which belongs in unmatched_skills."
+    "unmatched_skills": "States a real skill with no home in the taxonomy, which belongs in unmatched_skills.",
+    "medical_quoted": "Names a 5.1 medical skill in words the model can quote back. The evidence rule should keep it.",
+    "medical_paraphrased": "Describes 5.1 medical work without naming it, so the model is likely to quote a word not in the text and the evidence rule may drop it."
   },
   "cases": [
     {
@@ -1182,6 +1184,136 @@
           "skill": "cultural cuisine guidance",
           "accept": [
             "1.3.4"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "medical-quoted-nurse",
+      "description": "I am a registered nurse with six years of experience working in hospitals. I can help patients with general medical consultations and basic nursing care at community health camps.",
+      "language": "en",
+      "traits": [
+        "medical_quoted"
+      ],
+      "expected": [
+        {
+          "skill": "nursing consultation",
+          "accept": [
+            "5.1.1",
+            "5.1.11"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "medical-quoted-dentist",
+      "description": "I work as a licensed dentist and regularly provide dental examinations. I would like to volunteer by offering free dental checkups and oral health consultations.",
+      "language": "en",
+      "traits": [
+        "medical_quoted"
+      ],
+      "expected": [
+        {
+          "skill": "dentistry",
+          "accept": [
+            "5.1.3"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "medical-quoted-physiotherapist",
+      "description": "I am a certified physiotherapist and have experience helping patients recover from physical injuries. I can offer physiotherapy sessions and rehabilitation exercises.",
+      "language": "en",
+      "traits": [
+        "medical_quoted"
+      ],
+      "expected": [
+        {
+          "skill": "physiotherapy",
+          "accept": [
+            "5.1.6"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "medical-quoted-dermatologist",
+      "description": "I am a dermatologist with experience diagnosing and treating skin conditions. I can provide free dermatology consultations and skin examinations at local community clinics.",
+      "language": "en",
+      "traits": [
+        "medical_quoted"
+      ],
+      "expected": [
+        {
+          "skill": "dermatology",
+          "accept": [
+            "5.1.7"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "medical-paraphrase-nurse-care",
+      "description": "I have spent six years working in hospital wards, monitoring patients' vital signs, administering prescribed medications, and assisting with their daily care. I would like to use this experience to help people at community health camps.",
+      "language": "en",
+      "traits": [
+        "medical_paraphrased"
+      ],
+      "expected": [
+        {
+          "skill": "nursing consultation",
+          "accept": [
+            "5.1.1",
+            "5.1.11"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "medical-paraphrase-dental-treatment",
+      "description": "I regularly examine people's teeth, treat cavities, perform fillings, and advise families on maintaining good oral hygiene. I would be happy to offer these services at free community health camps.",
+      "language": "en",
+      "traits": [
+        "medical_paraphrased"
+      ],
+      "expected": [
+        {
+          "skill": "dentistry",
+          "accept": [
+            "5.1.3"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "medical-paraphrase-physical-recovery",
+      "description": "I help people regain movement after injuries by guiding them through stretching, strengthening exercises, and recovery routines. I also work with people who have difficulty walking or moving their joints.",
+      "language": "en",
+      "traits": [
+        "medical_paraphrased"
+      ],
+      "expected": [
+        {
+          "skill": "physiotherapy",
+          "accept": [
+            "5.1.6"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "medical-paraphrase-skin-treatment",
+      "description": "I examine unusual skin changes, help people manage acne and eczema, and provide advice on identifying early signs of skin-related problems. I would like to offer these services at community clinics.",
+      "language": "en",
+      "traits": [
+        "medical_paraphrased"
+      ],
+      "expected": [
+        {
+          "skill": "dermatology",
+          "accept": [
+            "5.1.7"
           ]
         }
       ]
