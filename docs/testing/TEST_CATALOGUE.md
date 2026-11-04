@@ -34,14 +34,14 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_emergency_s3_reader.py`](../../tests/test_emergency_s3_reader.py) | Unit | #334 | `services/emergency.py S3 reader` | 23 |
 | [`tests/test_generate_answer.py`](../../tests/test_generate_answer.py) | Contract | #169 | `generate_answer_handler` | 50 |
 | [`tests/test_import_blast_radius.py`](../../tests/test_import_blast_radius.py) | Integration | #169, #171 | `module-scope imports` | 4 |
-| [`tests/test_model_fallback.py`](../../tests/test_model_fallback.py) | Unit | #193 | `utils/model_fallback.py` | 24 |
+| [`tests/test_model_fallback.py`](../../tests/test_model_fallback.py) | Unit | #193 | `utils/model_fallback.py` | 51 |
 | [`tests/test_org_search_contract.py`](../../tests/test_org_search_contract.py) | Contract | #170 | `utils/search_orgs.py` | 24 |
 | [`tests/test_request_db_schema.py`](../../tests/test_request_db_schema.py) | Unit | #169 | `utils/request_db.py` | 54 |
 | [`tests/test_response_contract.py`](../../tests/test_response_contract.py) | Contract | #146, #169, #170 | `response envelopes` | 10 |
 | [`tests/test_router.py`](../../tests/test_router.py) | Integration | #171 | `lambda_function.lambda_handler` | 34 |
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
 | [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 57 |
-| | | | **Total** | **422** |
+| | | | **Total** | **449** |
 
 ## Every test
 
@@ -294,7 +294,7 @@ Cross-service blast radius at import time - issue #171.
 
 ### `test_model_fallback.py`
 
-*Unit · issue #193 · 24 tests*
+*Unit · issue #193 · 51 tests*
 
 Unit contract for the shared model fallback chain (issue #193).
 
@@ -313,8 +313,17 @@ Unit contract for the shared model fallback chain (issue #193).
 | `test_a_missing_routing_configuration_is_refused` | A missing routing configuration is refused. |
 | `test_a_duplicate_target_in_a_supplied_chain_is_tried_once` | The one-attempt-per-model bound also holds for a caller's own chain. |
 | `test_a_validator_that_raises_advances_the_chain` | A result that crashes validation is a failed attempt, not an outage. |
+| `test_groq_error_classification` | Groq error classification. |
+| `test_groq_connection_errors` | Groq connection errors. |
+| `test_google_client_error_classification` | Google client error classification. |
+| `test_google_server_error_classification` | Google server error classification. |
+| `test_google_api_core_errors` | Google api core errors. |
+| `test_langchain_wrapped_error` | Langchain wrapped error. |
+| `test_unknown_error` | Unknown error. |
+| `test_model_failover_warning_has_correct_error_class` | Model failover warning has correct error class. |
+| `test_all_failover_warnings_have_error_class` | All failover warnings have error class. |
 
-> 13 test functions expand to 24 cases through parametrisation.
+> 22 test functions expand to 51 cases through parametrisation.
 
 ### `test_org_search_contract.py`
 
