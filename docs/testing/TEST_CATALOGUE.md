@@ -41,7 +41,8 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_router.py`](../../tests/test_router.py) | Integration | #171 | `lambda_function.lambda_handler` | 34 |
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
 | [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 57 |
-| | | | **Total** | **422** |
+| [`tests/test_webapp_chat_contract.py`](../../tests/test_webapp_chat_contract.py) | Contract | #219 | `generate_answer_handler webapp payloads` | 5 |
+| | | | **Total** | **427** |
 
 ## Every test
 
@@ -527,3 +528,18 @@ The shared token counter (issue #159).
 | `test_an_unserialisable_record_degrades_to_totals_rather_than_vanishing` | Losing the labels is acceptable; losing the whole request is not. |
 
 > 44 test functions expand to 57 cases through parametrisation.
+
+### `test_webapp_chat_contract.py`
+
+*Contract · issue #219 · 5 tests*
+
+The exact payloads AI Chat sends, replayed against generate_answer - issue #219.
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_the_first_answer_is_generated_from_the_owners_request` | Opening AI Chat sends the owner's id and an empty history. |
+| `test_a_follow_up_without_user_id_is_answered` | The payload the chat sends today, and the empty bubble reported in #219. |
+| `test_a_follow_up_with_the_owners_user_id_is_answered` | The payload the chat sends once the webapp fix lands. |
+| `test_five_follow_ups_are_each_answered_with_the_earlier_turns` | Every question the chat allows gets an answer that can draw on the turns before it. |
+
+> 4 test functions expand to 5 cases through parametrisation.

@@ -49,6 +49,7 @@ FILE_META = {
     "test_token_usage.py": ("#159", "utils/token_usage.py"),
     "test_model_fallback.py": ("#193", "utils/model_fallback.py"),
     "test_client_factory.py": ("#193", "utils/client.py create_chat_model"),
+    "test_webapp_chat_contract.py": ("#219", "generate_answer_handler webapp payloads"),
 }
 
 HEADER = """# Test catalogue
