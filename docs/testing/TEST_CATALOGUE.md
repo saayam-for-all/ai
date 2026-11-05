@@ -108,7 +108,7 @@ Scoring, gating, fingerprinting and reporting in evaluation/ (issue #197, stack 
 | `test_known_gaps_are_run_but_never_scored` | A gap case changes neither the score nor the gate. |
 | `test_by_branch_counts_correct_and_total_per_expected_branch` | The per-branch table counts by the label's branch, not the answer's. |
 | `test_by_branch_names_the_general_branch` | General's id is 0.0.0.0.0, so its branch must not be reported as "?". |
-| `test_report_serialises_to_json_with_its_summary` | The committed JSON carries the numbers check_results reads. |
+| `test_report_serialises_to_json_with_its_summary` | A report's JSON form carries the summary that check_results reads. |
 | `test_markdown_lists_misses_and_gaps` | The human report names each miss, why it missed, and where gaps landed. |
 | `test_fingerprint_is_stable_between_calls` | Same code, same fingerprint; otherwise every run would look stale. |
 | `test_any_prompt_edit_changes_the_fingerprint` | A one-character change to the prompt the walk sends changes the fingerprint. |

@@ -205,7 +205,7 @@ def test_by_branch_names_the_general_branch():
 
 
 def test_report_serialises_to_json_with_its_summary():
-    """The committed JSON carries the numbers check_results reads."""
+    """A report's JSON form carries the summary that check_results reads."""
     data = json.loads(json.dumps(ev.evaluate([_case()], _answers("3.3.1")).to_dict()))
     assert data["passed"] is True and data["scored_cases"] == 1
     assert data["fingerprint"] == ev.fingerprint() and data["models"] == {"groq/m": 1}
