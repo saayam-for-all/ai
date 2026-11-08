@@ -66,7 +66,7 @@ Each firing prints a `GUARDRAIL` line, which CloudWatch counts per guardrail.
    - "house burned down, kids have no clothes" went to Housing;
    - "learn to cook healthy meals for my diabetic son" went to Health.
 
-   For now, the test that checks the 90% pass mark is marked as a known failure, with the router given as the reason, so the suite stays green. Once the router is fixed and the evaluation rerun, that test will pass. The suite then fails on purpose until someone removes the "known failure" label, so the label can't be left behind.
+   For now, the test that checks the 90% pass mark is marked as a known failure, with the router and the two model misses given as the reason, so the suite stays green. The router alone caps any model at 38 of 41 (93%), so once it is fixed and the evaluation rerun, that test will very likely pass. The suite then fails on purpose until someone removes the "known failure" label, so the label can't be left behind.
 3. **Fallback happens.** In the latest run, 3 of 87 model calls were answered by `gpt-oss-120b` instead of the primary model.
 4. **The taxonomy has no finance or general transport category.** Bills, car repairs, taxes and a ride to a job interview land in Utilities, General or Career.
 5. **Keyword rules misfire on real requests.** Our first injection rules flagged "can someone *act as* a mentor?" and "*pretend to be* my landlord so I can practise". That is why the injection check records instead of blocking. We need real traffic data before blocking anyone.

@@ -512,12 +512,14 @@ python -m pytest tests/test_golden_set.py tests/test_classification_eval.py \
 python -m pytest -m needs_network tests/test_classification_eval_gate.py
 ```
 
-**Current result: below the pass mark, on purpose.** The latest live run
-scored 36/41 (88%). Three of the misses are caused by the elderly router in
+**Current result: below the pass mark.** The latest live run scored 36/41
+(88%). Three of the five misses are caused by the elderly router in
 `utils/routing_for_categories.py`, which matches substrings ("senior" in high
 school, "aging" roof, "fall" in "falling") and then offers the model only
-Elderly sub-categories. `test_live_result_passes_the_pass_mark` is a strict
-`xfail` that names this; remove the marker once a fixed router passes.
+Elderly sub-categories. The other two are the model's own choices. The router
+alone caps any model at 38/41 (93%), so fixing it would very likely clear the
+mark. `test_live_result_passes_the_pass_mark` is a strict `xfail` that names
+both causes; remove the marker once a live run passes.
 
 ---
 

@@ -135,9 +135,10 @@ def test_live_result_was_measured_on_the_current_classifier():
     reason=(
         "Known failure, reported in #197 stack 5: the elderly router in "
         "utils/routing_for_categories.py diverts housing-10, housing-11 and "
-        "education-07 to Elderly-only choices: three misses no model can "
-        "avoid, which hold the score below the pass mark. Strict, so this "
-        "marker must be removed once a fixed router passes."
+        "education-07 to Elderly-only choices, three misses no model can "
+        "avoid. Together with the model's own misses (clothing-02, food-03) "
+        "they keep the score below the pass mark. Strict, so this marker "
+        "must be removed once a live run passes."
     ),
 )
 def test_live_result_passes_the_pass_mark():

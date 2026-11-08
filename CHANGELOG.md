@@ -37,7 +37,8 @@ Lives on `ai-tech-stack/issue-197/eval-guardrails`, not `dev`.
   or the golden set now fails the suite** until `python tools/run_golden_set.py` is rerun and
   its output committed.
 - `test_live_result_passes_the_pass_mark` is a strict `xfail`: the latest score is 36/41
-  (88%) against a 90% mark, held down by the elderly router's substring matches.
+  (88%) against a 90% mark. Three of the five misses come from the elderly router's
+  substring matches; the other two are the model's own choices.
 
 ### Token usage tracking & reasoning effort — [#194](https://github.com/saayam-for-all/ai/issues/194)
 
