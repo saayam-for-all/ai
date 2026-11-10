@@ -66,10 +66,13 @@ AREA_FRESH_SECONDS = 24 * 60 * 60
 AREA_STALE_SECONDS = 7 * 24 * 60 * 60
 
 # The shared list reaches back far enough for the longest window
-# disaster_check accepts, so one list serves every caller whatever their
-# window, and across midnight. A window reaching further back is asked for on
-# its own.
-COVER_HOURS = 168
+# disaster_check accepts, and an hour more, so one list serves every caller
+# whatever their window, and across midnight. The extra hour covers the
+# seconds between a request reading the clock and the list being fetched,
+# after USGS has answered: without it, a request made as midnight passed
+# would find the list starting a day after its window needs, and fetch the
+# list a second time. A window reaching further back is asked for on its own.
+COVER_HOURS = 169
 
 _LISTS = feed_cache.FeedCache(fresh_seconds=LIST_FRESH_SECONDS, stale_seconds=LIST_STALE_SECONDS, max_entries=1)
 # The recorded India area, 205 KB as JSON, takes about 1.5 MB once read, so
@@ -113,7 +116,12 @@ def fetch_events(latitude, longitude, search_radius_km, since):
         try:
             area = _AREAS.get((flood["event_id"], flood["episode_id"]), lambda: _affected_area(flood))
         except (KeyError, TypeError, ValueError, OverflowError) as e:
-            raise FeedError(f"GDACS affected area was not in the expected shape: {type(e).__name__}: {e}") from e
+            raise FeedError(
+                f"GDACS affected area of {_name(flood)} was not in the expected shape: {type(e).__name__}: {e}"
+            ) from e
+        # The event carries the list's retrieved_at, not the time its area was
+        # fetched. That is harmless: an area belongs to one update of one
+        # flood and never changes, so an area cached for days is still current.
         events.append(_event(flood, area.value))
     return feed_cache.FeedAnswer(events, retrieved_at, stale)
 
@@ -141,26 +149,49 @@ def _floods(from_date):
         "pageSize": PAGE_SIZE,
         "pageNumber": 1,
         "caller": "saayam",
-    })
+    }, "the flood list")
     if listing is None:
         return []
     try:
         features = _features(listing)
-        if len(features) >= PAGE_SIZE:
-            # A full page may have left floods on the next one, and a flood
-            # that is not looked at cannot be reported.
-            raise FeedError(f"GDACS returned a full page of {PAGE_SIZE}; the list may be incomplete")
-        return [_flood(feature) for feature in features]
-    except (KeyError, TypeError, ValueError, OverflowError) as e:
-        raise FeedError(f"GDACS payload was not in the expected shape: {type(e).__name__}: {e}") from e
+    except ValueError as e:
+        raise FeedError(f"GDACS payload was not in the expected shape: {e}") from e
+    if len(features) >= PAGE_SIZE:
+        # A full page may have left floods on the next one, and a flood that
+        # is not looked at cannot be reported.
+        raise FeedError(f"GDACS returned a full page of {PAGE_SIZE}; the list may be incomplete")
+    # The list is worldwide, so an error names the flood that failed.
+    floods = []
+    for feature in features:
+        try:
+            floods.append(_flood(feature))
+        except (KeyError, TypeError, ValueError, OverflowError) as e:
+            raise FeedError(
+                f"GDACS flood {_listed_id(feature)} was not in the expected shape: {type(e).__name__}: {e}"
+            ) from e
+    return floods
 
 
-def _get(url, params):
+def _listed_id(feature):
+    """The event ID a listed feature gives itself, for an error message."""
+    try:
+        return repr(feature["properties"]["eventid"])
+    except (KeyError, TypeError):
+        return "with no ID"
+
+
+def _name(flood):
+    """A flood and its update, for an error message."""
+    return f"flood {flood['event_id']} (update {flood['episode_id']})"
+
+
+def _get(url, params, what):
     """The decoded JSON object, or None when GDACS answers 204 No Content.
 
     GDACS answers a search with nothing to report with an empty 204, not an
     empty list. None is reserved for that: any other answer has to be a JSON
     object, or a 200 whose body is a bare ``null`` would read as "nothing".
+    ``what`` names the request in an error.
     """
     request = urllib.request.Request(
         f"{url}?{urllib.parse.urlencode(params)}",
@@ -174,13 +205,13 @@ def _get(url, params):
             body = response.read()
     except (OSError, http.client.HTTPException) as e:
         # GDACS reports its own overload as a 400, so every HTTP error counts.
-        raise FeedUnreachable(f"GDACS request failed: {type(e).__name__}: {e}") from e
+        raise FeedUnreachable(f"GDACS request for {what} failed: {type(e).__name__}: {e}") from e
     try:
         payload = json.loads(body.decode("utf-8-sig"))
     except ValueError as e:
-        raise FeedError(f"GDACS answer is not JSON: {e}") from e
+        raise FeedError(f"GDACS answer for {what} is not JSON: {e}") from e
     if not isinstance(payload, dict):
-        raise FeedError(f"GDACS answered with a JSON {type(payload).__name__}, not an object")
+        raise FeedError(f"GDACS answered {what} with a JSON {type(payload).__name__}, not an object")
     return payload
 
 
@@ -230,7 +261,7 @@ def _affected_area(flood):
         "eventid": flood["event_id"],
         "episodeid": flood["episode_id"],
         "polygontype": "Affected",
-    })
+    }, f"the affected area of {_name(flood)}")
     wanted = (flood["event_id"], flood["episode_id"])
     polygons = []
     for feature in _features(payload) if payload is not None else []:

@@ -589,18 +589,20 @@ Reading the fields:
   makes a negative answer traceable. Each feed's `status` is `ok`, `stale`
   (an earlier answer used while the feed is down, see Caching below) or
   `unavailable`, and `retrieved_at` is when that feed actually answered. A
-  detection can come back while another feed is down, and that feed is named
-  here as `unavailable`. A `false` is only ever returned when every feed
-  answered, freshly or with a stale answer inside its limit.
+  detection can come back while another feed is down, or from a feed's stale
+  answer, and that feed is named here. **A `false` is only ever returned when
+  every feed answered now, with `status: "ok"`.** A stale answer may be
+  missing an event the feed has published since, and a client that reads
+  only `disaster_detected` would never see the `stale` beside it.
 
 #### Status codes
 
 | Status | Meaning |
 |---|---|
-| 200 | Every feed answered, or one of them found something. Read `disaster_detected`. |
+| 200 | Every feed answered now, or one of them found something. Read `disaster_detected`. |
 | 400 | `latitude` or `longitude` missing, or a value out of range. `error` says which. |
 | 501 | `NEWS_SNIPPET_NOT_SUPPORTED` — the request carried a `news_snippet`. |
-| 502 | `DISASTER_CHECK_UNAVAILABLE` — a feed could not be reached or its answer could not be read, and nothing was detected. Retryable. |
+| 502 | `DISASTER_CHECK_UNAVAILABLE` — a feed could not be reached or its answer could not be read, or only an earlier answer could stand in for it, and nothing was detected. Retryable. |
 | 500 | An unexpected failure. The body is `{"error": "Disaster check failed"}`. |
 
 **A `502` or `500` body carries no `disaster_detected` field at all.** An
@@ -709,11 +711,13 @@ as the source wherever a flood finding is shown.
 #### Caching: one answer per feed, shared by every caller
 
 Both feeds are asked for a worldwide answer reaching back seven days, the
-longest window allowed. One answer per feed is kept in memory and shared by
-every caller, whatever their window; each request then keeps the events in
-its own window that reach its own location. USGS is asked for every
-magnitude 5+ earthquake worldwide (about 45 KB for a week). GDACS's flood
-list was already worldwide.
+longest window allowed, and an hour more. One answer per feed is kept in
+memory and shared by every caller, whatever their window; each request then
+keeps the events in its own window that reach its own location. USGS is
+asked for every magnitude 5+ earthquake worldwide (about 45 KB for a week).
+GDACS's flood list was already worldwide. The extra hour is for the seconds
+between a request reading the clock and a feed being asked: without it, a
+request made as midnight passed would fetch the flood list twice.
 
 | Answer | Reused for | Used past that while the feed cannot be reached | Where |
 | --- | --- | --- | --- |
@@ -724,7 +728,11 @@ list was already worldwide.
 - **`retrieved_at` is when the feed actually answered.** A cached answer is
   older than the request, and says so. An earlier answer that stands in while
   a feed cannot be reached is reported with `"status": "stale"` in
-  `sources_checked`, and still counts as that feed having answered.
+  `sources_checked`.
+- **A stale answer reports what it lists, but never backs a `false`.** While
+  GDACS is down, a flood in the earlier list is still reported. With nothing
+  found, the answer is a `502`, because the earlier list may be missing a
+  flood GDACS has raised to Orange since. Raised in the review of part 6.
 - **An earlier answer stands in only when the feed cannot be reached**: a
   network error, a timeout or an HTTP error, which includes GDACS's overload
   `400`. A feed that did answer, with something unreadable or incomplete such
@@ -743,11 +751,27 @@ list was already worldwide.
   Nothing is shared between Lambdas; a shared cache needs AWS, which is
   part 7.
 - **Rate limiting** of how often callers reach this service belongs to API
-  Gateway (part 7). Caching already bounds how often this service reaches the
-  feeds: once a minute for USGS and once every 15 minutes for GDACS, per
-  running Lambda, plus one request per flood update for its area.
+  Gateway, as a usage plan in part 7 (see the list below). Caching already
+  bounds how often this service reaches the feeds: once a minute for USGS and
+  once every 15 minutes for GDACS, per running Lambda, plus one request per
+  flood update for its area.
 
 These durations are first-pass values **awaiting review**.
+
+#### Still to build
+
+The rest of [#191](https://github.com/saayam-for-all/ai/issues/191), as
+tracked there. Each part is its own pull request.
+
+| Part | What | Notes |
+| ---: | --- | --- |
+| 3 | Wildfires by coordinates | |
+| 4 | The news-snippet query | A first draft for earthquakes is open in #238 |
+| 5 | The LLM cross-check, and `unverified` | |
+| 7 | Deployment: the API Gateway route and the Gemini key | Needs AWS access. Includes **caller rate limiting, as an API Gateway usage plan**; a shared cache, so that a cold start does not wait on every feed; and an overall deadline per request, so that a slow feed gives `502` rather than the gateway's `504` |
+| 8 | Polygons and corroboration | Simplifying large published areas; merging the same event reported twice |
+| 9 | Hand-off to Geospatial | Volunteer and victim searches use `impact_zone` when `boundary_source` is `authoritative`, never the fallback circle |
+| 10 | Monitoring | |
 
 #### Known limitations
 
@@ -807,8 +831,8 @@ returns anything else, such as CAP's `Unknown`, is treated as unavailable.
 
 | File | Proves |
 | --- | --- |
-| `test_disaster_check_contract.py` | Against responses recorded from USGS and GDACS: a location inside a known earthquake or flood is detected with the feed's record in `verified_by`; Chennai, 265 km from the centre of the recorded India flood, is in it, while Kochi, 74 km from any of its water, is not; a quiet location is a `false` from one call per feed; any feed outage with nothing found is `502` `DISASTER_CHECK_UNAVAILABLE` with no `disaster_detected` field; a `news_snippet` is a `501`; the body is an object on every path. |
-| `test_disaster_check.py` | An epicentre beyond the caller's radius is still found when its zone reaches them; a feed that did not answer is never a `false`; `confidence` is that of the most severe event; the zone is a closed counterclockwise ring that covers the modelled circle, including across the antimeridian and at a pole; query validation. |
+| `test_disaster_check_contract.py` | Against responses recorded from USGS and GDACS: a location inside a known earthquake or flood is detected with the feed's record in `verified_by`; Chennai, 265 km from the centre of the recorded India flood, is in it, while Kochi, 74 km from any of its water, is not; a quiet location is a `false` from one call per feed, including a request made as midnight passed; any feed outage with nothing found is `502` `DISASTER_CHECK_UNAVAILABLE` with no `disaster_detected` field, and so is a quiet location while GDACS's list is only stale; a `news_snippet` is a `501`; the body is an object on every path. |
+| `test_disaster_check.py` | An epicentre beyond the caller's radius is still found when its zone reaches them; a feed that did not answer, or answered only with a stale answer, is never a `false`, while a stale answer's events are still reported; an event a feed returns that cannot be used fails that feed, named in the log; `confidence` is that of the most severe event; the zone is a closed counterclockwise ring that covers the modelled circle, including across the antimeridian and at a pole; query validation. |
 | `test_usgs_earthquakes.py` | The worldwide query sent to USGS; the recorded payload becomes events with latitude and longitude the right way round; events before the window are left out; one answer is shared for a minute and never stands in once USGS is down; an unreachable feed, an unreadable answer, or an event with a NaN or out-of-range magnitude or position raises rather than returning an empty list. |
 | `test_gdacs_floods.py` | The queries sent to GDACS; the recorded India flood becomes an event with its affected area; `204` means no floods; a full page, a geometry answered for another event, a missing affected area, or an unreadable flood raises rather than returning an empty list. |
 | `test_geometry.py` | Distance to a published area: zero inside, to the nearest edge outside, holes counted as outside, the antimeridian measured the short way, checked against the 11,568 vertices of the recorded India flood. |

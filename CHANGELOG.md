@@ -20,11 +20,16 @@ team works and reviews in.
   *Observable difference:* a second request within those times asks no feed,
   and a negative answer no longer waits for GDACS each time.
 - While GDACS cannot be reached, its last flood list stands in for up to
-  6 hours, reported with `"status": "stale"` in `sources_checked`. A GDACS
-  that answers with something unreadable or incomplete is unavailable
-  instead, never stood in for. An earthquake answer never stands in.
-  *Observable difference:* a GDACS outage no longer turns every negative
-  answer into a `502`, for the first 6 hours.
+  6 hours, reported with `"status": "stale"` in `sources_checked`. It
+  reports the floods it lists, but never backs a `false`: it may be missing
+  a flood raised to Orange since, and a client reading only
+  `disaster_detected` would not see that it was stale (raised by Sameer in
+  the review of part 6). A GDACS that answers with something unreadable or
+  incomplete is unavailable instead, never stood in for. An earthquake
+  answer never stands in.
+  *Observable difference:* during a GDACS outage, a location inside a flood
+  from the earlier list is still detected; a quiet location is a `502`, as
+  before caching.
 - After a feed fails it is not asked again for 60 seconds, so callers are
   answered at once rather than each waiting 8 seconds.
 
@@ -37,7 +42,11 @@ team works and reviews in.
   seven days, and each request keeps its own window and location. Results for
   any one location are unchanged when USGS's answer is readable. One
   unreadable event anywhere now makes USGS unavailable for every caller,
-  where before it affected only callers whose query included it.
+  where before it affected only callers whose query included it, so the
+  logged error names the event, flood or request that failed.
+- Each shared answer reaches back an hour more than the longest window, so
+  a request made as midnight (or, for USGS, the hour) passes does not fetch
+  a feed twice.
 - A review status written in capitals (`REVIEWED`, as the Pacific Tsunami
   Warning Center writes it) is now graded `high`, like `reviewed`.
 - `fetch_events` returns a `FeedAnswer` (events, when the feed answered,

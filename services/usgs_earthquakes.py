@@ -55,10 +55,13 @@ VOLUNTEER_BAND_KM = 50
 # value awaiting review - see the README.
 FRESH_SECONDS = 60
 
-# The shared answer reaches this far back, the longest window disaster_check
-# accepts, so one answer serves every caller whatever their window. A window
-# reaching further back is asked for on its own.
-COVER_HOURS = 168
+# The shared answer reaches back an hour more than the longest window
+# disaster_check accepts, so one answer serves every caller whatever their
+# window. The extra hour covers the moment between a request reading the
+# clock and the answer being fetched: without it, a request made as the hour
+# turned would find the answer starting after its window, and fetch its own.
+# A window reaching further back is asked for on its own.
+COVER_HOURS = 169
 
 _ANSWERS = feed_cache.FeedCache(fresh_seconds=FRESH_SECONDS, stale_seconds=0, max_entries=1)
 
@@ -155,11 +158,23 @@ def _worldwide(start):
         raise FeedError("USGS payload has no list of features")
 
     # One unreadable feature fails the whole answer. Skipping it instead could
-    # drop the only event in the response and turn it into an all-clear.
-    try:
-        return [_to_event(feature) for feature in features]
-    except (KeyError, TypeError, ValueError) as e:
-        raise FeedError(f"USGS payload was not in the expected shape: {type(e).__name__}: {e}") from e
+    # drop the only event in the response and turn it into an all-clear. The
+    # answer is worldwide, so the error names the feature that failed.
+    events = []
+    for feature in features:
+        try:
+            events.append(_to_event(feature))
+        except (KeyError, TypeError, ValueError) as e:
+            raise FeedError(
+                f"USGS event {_feature_id(feature)} was not in the expected shape: {type(e).__name__}: {e}"
+            ) from e
+    return events
+
+
+def _feature_id(feature):
+    """The ID a feature gives itself, for an error message."""
+    feature_id = feature.get("id") if isinstance(feature, dict) else None
+    return repr(feature_id) if feature_id is not None else "with no ID"
 
 
 def _real(value, low, high):

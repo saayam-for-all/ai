@@ -92,8 +92,9 @@ def clock():
 # -------------------------------------------------------------------------
 
 def test_the_query_asks_usgs_for_every_earthquake_worldwide_in_the_longest_window():
-    """No location is sent, and the answer reaches back seven days, the
-    longest window allowed: one answer serves every caller."""
+    """No location is sent, and the answer reaches back seven days and an
+    hour, the longest window allowed and a margin: one answer serves every
+    caller."""
     with _replay(NONE) as urlopen:
         _fetch()
 
@@ -104,7 +105,7 @@ def test_the_query_asks_usgs_for_every_earthquake_worldwide_in_the_longest_windo
         "format": ["geojson"],
         "eventtype": ["earthquake"],
         "minmagnitude": ["5.0"],
-        "starttime": ["2023-01-30T12:00:00"],
+        "starttime": ["2023-01-30T11:00:00"],
         "orderby": ["magnitude"],
     }
     request = urlopen.call_args.args[0]
@@ -118,7 +119,19 @@ def test_the_start_is_rounded_down_to_the_hour_in_utc(clock):
     with _replay(NONE) as urlopen:
         _fetch(since=datetime(2023, 2, 5, 12, 0, 0, tzinfo=timezone.utc))
     _, query = _query(urlopen)
-    assert query["starttime"] == ["2023-01-30T12:00:00"]
+    assert query["starttime"] == ["2023-01-30T11:00:00"]
+
+
+def test_a_request_that_read_the_clock_before_the_hour_turned_is_still_covered(clock):
+    """Found while reviewing part 3: a request reads the clock, and the
+    shared answer is fetched a moment later. Read at 11:59:59 and fetched at
+    12:00:01, a seven-day window must still fit inside that answer, or the
+    request fetches a second one of its own."""
+    clock.now = datetime(2023, 2, 6, 12, 0, 1, tzinfo=timezone.utc)
+    read_at = datetime(2023, 2, 6, 11, 59, 59, tzinfo=timezone.utc)
+    with _replay(NONE) as urlopen:
+        _fetch(since=read_at - timedelta(hours=168))
+    assert urlopen.call_count == 1
 
 
 def test_a_window_reaching_back_past_the_shared_answer_is_asked_for_on_its_own(clock):
@@ -361,6 +374,24 @@ def test_an_event_that_cannot_be_trusted_fails_the_whole_answer(overrides):
     """
     with _listing(_feature(), _feature(**overrides)):
         with pytest.raises(usgs.FeedError):
+            _fetch()
+
+
+def test_the_error_names_the_earthquake_that_could_not_be_read():
+    """Raised in the review of part 6: the answer is worldwide, so one
+    unreadable event fails the feed for every caller, and the logged error
+    has to lead to it."""
+    unreadable = json.loads(_feature(mag=None))
+    unreadable["id"] = "us7000bad1"
+    with _listing(_feature(), json.dumps(unreadable)):
+        with pytest.raises(usgs.FeedError, match=r"^USGS event 'us7000bad1' was not in the expected shape: "):
+            _fetch()
+
+
+@pytest.mark.parametrize("feature", ["{}", "[]", '{"id": null}'])
+def test_an_event_without_an_id_is_still_named_in_the_error(feature):
+    with _answering('{"features": [' + feature + "]}"):
+        with pytest.raises(usgs.FeedError, match=r"^USGS event with no ID was not in the expected shape: "):
             _fetch()
 
 

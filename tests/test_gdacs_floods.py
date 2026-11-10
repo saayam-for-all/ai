@@ -420,6 +420,41 @@ def test_an_area_answered_with_nothing_usable_fails(gdacs_answers, area):
             _fetch()
 
 
+# Raised in the review of part 6: the list is worldwide, so one flood that
+# cannot be read fails the feed for every caller, and the logged error has to
+# lead to it.
+
+def test_the_error_names_the_flood_that_could_not_be_read(gdacs_answers):
+    with gdacs_answers(listing=_listing(china={"iscurrent": "yes"})):
+        with pytest.raises(gdacs.FeedError, match=r"^GDACS flood 1104081 was not in the expected shape: ValueError: "):
+            _fetch()
+
+
+@pytest.mark.parametrize("feature", [{}, [], {"properties": None}])
+def test_a_flood_without_an_id_is_still_named_in_the_error(gdacs_answers, feature):
+    listing = json.loads(_orange_india())
+    listing["features"].append(feature)
+    with gdacs_answers(listing=_bytes(listing)):
+        with pytest.raises(gdacs.FeedError, match=r"^GDACS flood with no ID was not in the expected shape: "):
+            _fetch()
+
+
+def test_the_error_names_the_flood_whose_area_could_not_be_read(gdacs_answers):
+    with gdacs_answers(area=_india_area(_short_ring)):
+        with pytest.raises(gdacs.FeedError, match=r"^GDACS affected area of flood 1104121 \(update 22\) was not in the expected shape: "):
+            _fetch()
+
+
+def test_the_error_names_the_request_that_failed(gdacs_answers):
+    with gdacs_answers(area=TimeoutError("timed out")):
+        with pytest.raises(gdacs.FeedUnreachable, match=r"^GDACS request for the affected area of flood 1104121 \(update 22\) failed: "):
+            _fetch()
+    feed_cache.clear_all()
+    with gdacs_answers(listing=b"[]"):
+        with pytest.raises(gdacs.FeedError, match=r"^GDACS answered the flood list with a JSON list, not an object$"):
+            _fetch()
+
+
 # -------------------------------------------------------------------------
 # The shared answer
 # -------------------------------------------------------------------------
@@ -517,6 +552,18 @@ def test_one_list_serves_every_window(gdacs_answers, clock):
         _answer(since=T0 - timedelta(hours=168))
         _answer(since=T0 - timedelta(hours=1))
         _answer()
+    assert len(_list_requests(urlopen)) == 1
+
+
+def test_a_request_that_read_the_clock_before_midnight_is_still_covered(gdacs_answers, clock):
+    """Found while reviewing part 3: a request reads the clock, and the list
+    is fetched seconds later, after USGS has answered. Read at 23:59:58 and
+    fetched at 00:00:03 the next day, a seven-day window must still fit inside
+    the shared list, or the list is fetched a second time."""
+    clock.now = datetime(2026, 10, 7, 0, 0, 3, tzinfo=timezone.utc)
+    read_at = datetime(2026, 10, 6, 23, 59, 58, tzinfo=timezone.utc)
+    with gdacs_answers() as urlopen:
+        _answer(since=read_at - timedelta(hours=168))
     assert len(_list_requests(urlopen)) == 1
 
 

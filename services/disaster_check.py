@@ -72,9 +72,11 @@ def _number(body, key, low, high, default=None, above_low=False):
 def check_location(latitude, longitude, radius_km, window_hours, now=None):
     """Events whose impact zone reaches the circle around a point.
 
-    A detection stands on the feed that made it. A negative answer needs
-    every feed to have answered: if any did not and nothing was found, this
-    raises DisasterCheckUnavailable rather than hand the caller
+    A detection stands on the feed that made it, even on an earlier answer
+    standing in while the feed cannot be reached. A negative answer needs
+    every feed to have answered now: if any did not, or only an earlier
+    answer stood in for it, and nothing was found, this raises
+    DisasterCheckUnavailable rather than hand the caller
     ``disaster_detected: false`` for an event type nobody was asked about.
     """
     now = now or feed_cache.utcnow()
@@ -90,14 +92,13 @@ def check_location(latitude, longitude, radius_km, window_hours, now=None):
         source = {"source": feed.SOURCE, "event_types": list(feed.EVENT_TYPES)}
         try:
             answer = feed.fetch_events(latitude, longitude, search_radius_km, since)
-            for event in answer.events:
-                _require_known_severity(event)
-            # Matched inside the guard as well, so an event this module cannot
-            # use takes down its own feed rather than the whole request.
-            reached = [event for event in answer.events if _reaches(event, latitude, longitude, radius_km)]
+            # Checked and matched inside the guard, so an event this module
+            # cannot use takes down its own feed rather than the whole request.
+            reached = _reached(answer.events, latitude, longitude, radius_km)
             # When the feed actually answered, which for a cached answer is
             # earlier than this request. A stale answer is one used because
-            # the feed could not be reached; it still counts as an answer.
+            # the feed could not be reached: what it lists is reported, but it
+            # may be missing an event published since, so it backs no `false`.
             retrieved_at = _iso(answer.retrieved_at)
         except Exception as e:
             # Fail closed: anything a feed raises, including a bug in its
@@ -109,9 +110,12 @@ def check_location(latitude, longitude, radius_km, window_hours, now=None):
         sources_checked.append({**source, "status": status, "retrieved_at": retrieved_at})
         events += [(event, feed.SOURCE, retrieved_at) for event in reached]
 
-    unavailable = [source["source"] for source in sources_checked if source["status"] == "unavailable"]
-    if unavailable and not events:
-        raise DisasterCheckUnavailable(f"no answer from: {', '.join(unavailable)}")
+    # Raised in the review of part 6: a client that reads only
+    # disaster_detected never sees a stale status, so a stale answer must not
+    # stand behind a `false`.
+    not_current = [source["source"] for source in sources_checked if source["status"] != "ok"]
+    if not_current and not events:
+        raise DisasterCheckUnavailable(f"no current answer from: {', '.join(not_current)}")
 
     events.sort(
         key=lambda found: (_SEVERITY_RANK[found[0]["severity"]], found[0]["radius_km"]),
@@ -127,6 +131,29 @@ def check_location(latitude, longitude, radius_km, window_hours, now=None):
         "events": [_render(event, source, retrieved_at) for event, source, retrieved_at in events],
         "sources_checked": sources_checked,
     }
+
+
+class UnusableEvent(ValueError):
+    """A feed returned an event this module cannot rank or place."""
+
+
+def _reached(events, latitude, longitude, radius_km):
+    """The events whose zone reaches the caller.
+
+    Every event is checked, not only those nearby. One that cannot be used
+    fails, named by its ID, so that a feed failing for every caller can be
+    traced to the record that caused it.
+    """
+    reached = []
+    for event in events:
+        try:
+            _require_known_severity(event)
+            if _reaches(event, latitude, longitude, radius_km):
+                reached.append(event)
+        except Exception as e:
+            event_id = event.get("event_id") if isinstance(event, dict) else None
+            raise UnusableEvent(f"event {event_id!r}: {type(e).__name__}: {e}") from e
+    return reached
 
 
 def _require_known_severity(event):
