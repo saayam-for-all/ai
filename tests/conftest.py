@@ -8,6 +8,7 @@ that individual test files stop re-declaring their own fakes, and so that the
 Anything that genuinely needs the network must be marked ``needs_network``,
 which ``pytest.ini`` excludes from the default run and from CI.
 """
+import io
 import json
 import sys
 from pathlib import Path
@@ -148,6 +149,36 @@ def no_database():
         LF, "_lookup_request",
         side_effect=AssertionError("the database was read when it should not have been"),
     )
+
+
+class _Response(io.BytesIO):
+    """Just enough of http.client.HTTPResponse for the feed adapters."""
+
+    def __init__(self, body=b"", status=200):
+        super().__init__(body)
+        self.status = status
+
+
+@pytest.fixture
+def web():
+    """Patch the network edge with canned answers, routed by URL prefix.
+
+    ``routes`` maps a URL prefix to the bytes of a 200 answer, to 204 for an
+    empty No Content answer, or to an exception to raise. The first matching
+    prefix wins, and a request that matches none fails the test - so a test
+    also proves which URLs were asked for.
+    """
+    def _patch(routes):
+        def answer(request, *args, **kwargs):
+            url = request.full_url
+            for prefix, reply in routes.items():
+                if url.startswith(prefix):
+                    if isinstance(reply, BaseException):
+                        raise reply
+                    return _Response(status=204) if reply == 204 else _Response(reply)
+            raise AssertionError(f"no canned answer for {url}")
+        return mock.patch("urllib.request.urlopen", side_effect=answer)
+    return _patch
 
 
 @pytest.fixture

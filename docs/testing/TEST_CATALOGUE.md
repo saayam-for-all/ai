@@ -29,12 +29,14 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_classification_resilience.py`](../../tests/test_classification_resilience.py) | Unit | - | `services/classification_service.py` | 10 |
 | [`tests/test_client_factory.py`](../../tests/test_client_factory.py) | Unit | #193 | `utils/client.py create_chat_model` | 9 |
 | [`tests/test_client_imports.py`](../../tests/test_client_imports.py) | Integration | #154 | `utils/client.py` | 2 |
-| [`tests/test_disaster_check.py`](../../tests/test_disaster_check.py) | Unit | #191 | `services/disaster_check.py` | 52 |
-| [`tests/test_disaster_check_contract.py`](../../tests/test_disaster_check_contract.py) | Contract | #191 | `disaster_check_handler` | 26 |
+| [`tests/test_disaster_check.py`](../../tests/test_disaster_check.py) | Unit | #191 | `services/disaster_check.py` | 60 |
+| [`tests/test_disaster_check_contract.py`](../../tests/test_disaster_check_contract.py) | Contract | #191 | `disaster_check_handler` | 41 |
 | [`tests/test_emergency_dataset.py`](../../tests/test_emergency_dataset.py) | Dataset | #146 | `services/emergency_numbers.json` | 17 |
 | [`tests/test_emergency_locale.py`](../../tests/test_emergency_locale.py) | Unit | #146 | `services/emergency.py` | 67 |
 | [`tests/test_emergency_s3_reader.py`](../../tests/test_emergency_s3_reader.py) | Unit | #334 | `services/emergency.py S3 reader` | 23 |
+| [`tests/test_gdacs_floods.py`](../../tests/test_gdacs_floods.py) | Unit | #191 | `services/gdacs_floods.py` | 61 |
 | [`tests/test_generate_answer.py`](../../tests/test_generate_answer.py) | Contract | #169 | `generate_answer_handler` | 50 |
+| [`tests/test_geometry.py`](../../tests/test_geometry.py) | Unit | #191 | `services/geometry.py` | 11 |
 | [`tests/test_import_blast_radius.py`](../../tests/test_import_blast_radius.py) | Integration | #169, #171 | `module-scope imports` | 4 |
 | [`tests/test_model_fallback.py`](../../tests/test_model_fallback.py) | Unit | #193 | `utils/model_fallback.py` | 24 |
 | [`tests/test_org_search_contract.py`](../../tests/test_org_search_contract.py) | Contract | #170 | `utils/search_orgs.py` | 24 |
@@ -44,7 +46,7 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
 | [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 57 |
 | [`tests/test_usgs_earthquakes.py`](../../tests/test_usgs_earthquakes.py) | Unit | #191 | `services/usgs_earthquakes.py` | 49 |
-| | | | **Total** | **548** |
+| | | | **Total** | **643** |
 
 ## Every test
 
@@ -128,7 +130,7 @@ Guard against the utils/client.py import regression that broke dev.
 
 ### `test_disaster_check.py`
 
-*Unit · issue #191 · 52 tests*
+*Unit · issue #191 · 60 tests*
 
 Which events reach a location, and the zone drawn around each - issue #191.
 
@@ -146,6 +148,12 @@ Which events reach a location, and the zone drawn around each - issue #191.
 | `test_a_bug_in_an_adapter_also_fails_closed` | Any exception from a feed is an unanswered question. |
 | `test_one_feed_down_does_not_hide_what_another_feed_found` | A detection stands on the feed that made it; the dead feed is named. |
 | `test_one_feed_down_is_never_a_negative_answer` | `false` needs every feed to have answered. |
+| `test_an_unknown_severity_takes_down_only_its_own_feed` | CAP's fifth value, "Unknown", is not on the scale events are ranked by. |
+| `test_an_unknown_severity_far_away_still_counts_against_its_feed` | Checked on every event the feed returns, not only the ones that reach the caller, so a feed with an unmapped scale is caught on its first answer. |
+| `test_an_event_with_a_published_area_is_judged_by_the_area` | An event with a published area is judged by the area. |
+| `test_a_published_area_is_rendered_as_it_was_published` | A published area is rendered as it was published. |
+| `test_an_area_the_check_cannot_read_takes_down_only_its_own_feed` | An area the check cannot read takes down only its own feed. |
+| `test_earthquakes_and_floods_are_ranked_together` | Earthquakes and floods are ranked together. |
 | `test_the_rendered_event_carries_its_evidence_and_its_zone` | The rendered event carries its evidence and its zone. |
 | `test_one_degree_of_latitude_is_about_111_km` | One degree of latitude is about 111 km. |
 | `test_distance_to_the_same_point_is_zero` | Distance to the same point is zero. |
@@ -157,11 +165,11 @@ Which events reach a location, and the zone drawn around each - issue #191.
 | `test_numeric_strings_and_zero_coordinates_are_accepted` | 0, 0 is a real place; a falsy check would reject it as missing. |
 | `test_an_unusable_query_is_refused_with_a_reason` | An unusable query is refused with a reason. |
 
-> 22 test functions expand to 52 cases through parametrisation.
+> 28 test functions expand to 60 cases through parametrisation.
 
 ### `test_disaster_check_contract.py`
 
-*Contract · issue #191 · 26 tests*
+*Contract · issue #191 · 41 tests*
 
 The disaster_check contract: the Lambda event in, the envelope out - issue #191.
 
@@ -170,22 +178,34 @@ The disaster_check contract: the Lambda event in, the envelope out - issue #191.
 | `test_a_location_inside_a_known_earthquake_is_detected` | A location inside a known earthquake is detected. |
 | `test_every_event_carries_every_field_of_the_contract` | Every event carries every field of the contract. |
 | `test_every_detection_is_backed_by_an_authoritative_source` | No event may reach a caller without the record that confirms it. |
-| `test_every_zone_says_it_is_modelled` | Every zone says it is modelled. |
+| `test_every_earthquake_zone_says_it_is_modelled` | Every earthquake zone says it is modelled. |
 | `test_small_aftershocks_far_from_the_caller_are_left_out` | The feed is searched widely; only zones that reach the caller count. |
 | `test_the_response_survives_json_serialisation` | API Gateway serialises the envelope; a datetime in it would be a 500. |
+| `test_a_location_inside_a_known_flood_is_detected` | Chennai is 265 km from the centre GDACS gives, and inside the flood. |
+| `test_a_flood_zone_is_the_area_gdacs_publishes` | A flood zone is the area gdacs publishes. |
+| `test_every_flood_detection_is_backed_by_its_gdacs_report` | Every flood detection is backed by its gdacs report. |
+| `test_a_flood_counts_when_it_comes_within_the_callers_radius` | Bengaluru is 26 km from the edge of the affected area. |
+| `test_the_published_area_decides_not_the_circle_around_it` | Kochi is 300 km from the centre, well inside the 384 km fallback circle, but 74 km from any water. It is not in this flood. |
+| `test_dry_ground_inside_a_flood_is_not_in_it` | A hole in the affected area is outside it, until the radius reaches the water. |
+| `test_a_flood_that_ended_before_the_window_is_not_fetched` | On 12 October the default 72-hour window starts on the 9th; the flood ended on the 7th and GDACS no longer marks it as running. |
+| `test_a_running_flood_is_reported_with_no_expiry` | While GDACS marks a flood as running, its end date is only the date of its last update, which can be days old. The flood stays in, open-ended. |
+| `test_a_flood_that_has_eased_to_green_is_not_reported` | As recorded, the India flood's latest grade is Green. Its own grade, Orange, is only the highest it ever reached. |
+| `test_a_flood_response_survives_json_serialisation` | A flood response survives json serialisation. |
 | `test_a_quiet_location_is_a_first_class_negative_answer` | A quiet location is a first class negative answer. |
-| `test_a_negative_answer_names_the_only_event_type_it_covers` | Earthquakes are the one feed so far; `false` is not an all-clear for floods. |
-| `test_a_feed_outage_is_an_explicit_error_never_an_all_clear` | A feed outage is an explicit error never an all clear. |
+| `test_a_negative_answer_names_what_it_covers` | `false` covers earthquakes and floods, and nothing else. |
+| `test_any_feed_outage_with_nothing_found_is_an_error_not_an_all_clear` | Any feed outage with nothing found is an error not an all clear. |
+| `test_an_earthquake_is_still_reported_while_gdacs_is_down` | A detection stands on its own feed; the dead one is named. |
+| `test_a_nearby_flood_without_its_area_is_an_outage` | No area, no way to tell who is in the flood - so no `false` either. |
 | `test_an_unreadable_feed_answer_is_an_outage_too` | An unreadable feed answer is an outage too. |
 | `test_an_outage_does_not_leak_the_feed_error` | An outage does not leak the feed error. |
 | `test_an_unexpected_failure_is_a_500_without_internals` | Nothing escapes the handler: a direct invoke has no router to catch it. |
-| `test_a_news_snippet_is_refused_by_name_without_touching_the_feed` | The snippet path is not built; ignoring the snippet would be a guess. |
+| `test_a_news_snippet_is_refused_by_name_without_touching_the_feeds` | The snippet path is not built; ignoring the snippet would be a guess. |
 | `test_an_unusable_query_is_a_400_that_says_why` | An unusable query is a 400 that says why. |
 | `test_a_body_that_is_not_an_object_is_a_400` | A body that is not an object is a 400. |
 | `test_the_router_reaches_the_real_handler` | `"service": "disaster_check"` in the body, as the issue specifies. |
 | `test_a_direct_invoke_where_the_event_is_the_payload` | Another Lambda invoking this one sends no `body` wrapper. |
 
-> 17 test functions expand to 26 cases through parametrisation.
+> 29 test functions expand to 41 cases through parametrisation.
 
 ### `test_emergency_dataset.py`
 
@@ -284,6 +304,37 @@ Unit tests for issue #334 - S3 dataset loader with caching and zero-downtime fal
 
 > 16 test functions expand to 23 cases through parametrisation.
 
+### `test_gdacs_floods.py`
+
+*Unit · issue #191 · 61 tests*
+
+The GDACS flood adapter, replayed from recorded responses - issue #191, part 2.
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_the_list_query_asks_for_floods_that_reached_orange_or_red` | From ten days before the window, so a flood still running is not dropped for an end date that has not caught up with it. |
+| `test_the_area_is_requested_by_id_and_only_the_affected_part` | The listing carries a geometry URL; it is not followed, and the full geometry (1.4 MB for this flood, against 200 KB) is not asked for. |
+| `test_a_recorded_flood_becomes_a_feed_neutral_event` | A recorded flood becomes a feed neutral event. |
+| `test_a_flood_that_has_eased_to_green_is_not_reported` | As recorded: both floods once reached Orange, and both are now Green. |
+| `test_the_latest_grade_maps_onto_the_shared_severity_scale` | The lagrade maps onto the shared severity scale. |
+| `test_a_running_flood_counts_whatever_its_end_date_says` | GDACS updates a running flood every one to nine days, and its end date is the date of the last update until then. A running flood is open-ended. |
+| `test_an_area_published_as_a_single_polygon_is_read_too` | China's affected area is one Polygon, where India's is a MultiPolygon. |
+| `test_positions_are_reduced_to_longitude_and_latitude` | An altitude is dropped rather than passed through: an unchecked NaN in it would make the whole response invalid JSON. |
+| `test_the_evidence_link_is_built_from_the_ids_not_taken_from_the_payload` | The evidence link is built from the ids not taken from the payload. |
+| `test_no_content_means_no_floods` | GDACS answers an empty search with 204 and no body. |
+| `test_a_flood_that_ended_before_the_window_is_skipped` | A flood that ended before the window is skipped. |
+| `test_a_nearby_flood_that_ended_before_the_window_is_not_fetched` | China, asked about from near China after it ended on 27 September. |
+| `test_a_flood_too_far_away_is_not_fetched` | A flood too far away is not fetched. |
+| `test_an_unreachable_list_raises` | An unreachable list raises. |
+| `test_an_unreachable_area_raises` | An unreachable area raises. |
+| `test_a_full_page_is_not_trusted` | GDACS pages at 100. A full page may have left a flood on the next. |
+| `test_an_unreadable_list_raises_rather_than_reporting_nothing` | An unreadable list raises rather than reporting nothing. |
+| `test_a_flood_that_cannot_be_trusted_fails_the_whole_answer` | A flood is not skipped for being unreadable: it might be the one covering the caller. |
+| `test_an_area_that_cannot_be_trusted_fails_the_whole_answer` | GDACS answers a request for an unknown ID with another event's geometry, and a flood with no area cannot be placed - so neither is passed over quietly. |
+| `test_an_area_answered_with_nothing_usable_fails` | An area answered with nothing usable fails. |
+
+> 20 test functions expand to 61 cases through parametrisation.
+
 ### `test_generate_answer.py`
 
 *Contract · issue #169 · 50 tests*
@@ -338,6 +389,26 @@ Tests for the generate_answer endpoint - issue #169.
 | `test_absent_gender_and_age_stay_absent` | Absent gender and age stay absent. |
 
 > 44 test functions expand to 50 cases through parametrisation.
+
+### `test_geometry.py`
+
+*Unit · issue #191 · 11 tests*
+
+Distances to published areas - issue #191, part 2.
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_a_point_inside_an_area_is_at_distance_zero` | A point inside an area is at distance zero. |
+| `test_a_point_outside_is_at_the_distance_of_the_nearest_edge` | A point outside is at the distance of the nearest edge. |
+| `test_a_point_beyond_a_corner_is_measured_to_the_corner` | A point beyond a corner is measured to the corner. |
+| `test_a_point_in_a_hole_is_outside_and_measured_to_the_hole_edge` | Dry ground in the middle of a flood is not in the flood. |
+| `test_a_multipolygon_is_measured_to_its_nearest_part` | A multipolygon is measured to its nearest part. |
+| `test_a_ring_that_does_not_repeat_its_first_position_is_still_closed` | A ring that does not repeat its first position is still closed. |
+| `test_an_area_across_the_antimeridian_is_measured_the_short_way` | Fiji's floods sit on the line: 179.9 and -179.9 are 22 km apart. |
+| `test_positions_with_an_altitude_are_accepted` | Positions with an altitude are accepted. |
+| `test_the_farthest_vertex_sets_the_covering_radius` | The farthest vertex sets the covering radius. |
+| `test_anything_but_a_polygon_is_not_an_area` | Anything but a polygon is not an area. |
+| `test_the_recorded_flood_agrees_with_measuring_every_vertex` | Against 11,568 real vertices: the edge distance can only be shorter than the nearest vertex, and with vertices this dense, barely. |
 
 ### `test_import_blast_radius.py`
 

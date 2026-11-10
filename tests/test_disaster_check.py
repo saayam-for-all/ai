@@ -186,6 +186,82 @@ def test_one_feed_down_is_never_a_negative_answer():
 
 
 # -------------------------------------------------------------------------
+# Severity outside the shared scale
+# -------------------------------------------------------------------------
+
+def test_an_unknown_severity_takes_down_only_its_own_feed():
+    """CAP's fifth value, "Unknown", is not on the scale events are ranked by.
+
+    Passed through, it used to raise a KeyError in the sort and turn the whole
+    request into a 500, earthquake findings included. Now the feed that sent
+    it counts as unavailable and the others still answer.
+    """
+    careless = _Feed([_event("weather-1", severity="unknown")], source="ALERTS", event_types=("storm",))
+    quakes = _Feed([_event("quake-1")], source="USGS")
+    result = _check(careless, quakes)
+    assert [e["event_id"] for e in result["events"]] == ["quake-1"]
+    assert [(s["source"], s["status"]) for s in result["sources_checked"]] == [
+        ("ALERTS", "unavailable"), ("USGS", "ok"),
+    ]
+
+
+def test_an_unknown_severity_far_away_still_counts_against_its_feed():
+    """Checked on every event the feed returns, not only the ones that reach
+    the caller, so a feed with an unmapped scale is caught on its first answer."""
+    careless = _Feed([_event("weather-1", latitude=60.0, severity="unknown")], source="ALERTS")
+    with pytest.raises(dc.DisasterCheckUnavailable):
+        _check(careless)
+
+
+# -------------------------------------------------------------------------
+# Events with a published area
+# -------------------------------------------------------------------------
+
+# A strip two degrees long and a tenth of a degree high along the equator.
+STRIP = {"type": "MultiPolygon", "coordinates": [[[[0, 0], [2, 0], [2, 0.1], [0, 0.1], [0, 0]]]]}
+
+
+def _flood(**overrides):
+    return {**_event("flood-1", latitude=0.05, longitude=1.0, radius_km=111.3, severity="severe",
+                     confidence="medium"), "area": STRIP, **overrides}
+
+
+@pytest.mark.parametrize("latitude,longitude,radius_km,detected", [
+    (0.05, 1.9, 1.0, True),      # inside the strip, 100 km from its centre
+    (0.6, 1.0, 10.0, False),     # 56 km from the strip, though inside the covering circle
+    (0.6, 1.0, 60.0, True),      # the same place, with a radius that reaches the strip
+])
+def test_an_event_with_a_published_area_is_judged_by_the_area(latitude, longitude, radius_km, detected):
+    result = _check(_Feed([_flood()]), latitude=latitude, longitude=longitude, radius_km=radius_km)
+    assert result["disaster_detected"] is detected
+
+
+def test_a_published_area_is_rendered_as_it_was_published():
+    (event,) = _check(_Feed([_flood()], source="GDACS"), latitude=0.05, longitude=1.0)["events"]
+    assert event["impact_zone"] == STRIP
+    assert event["boundary_source"] == "authoritative"
+    assert event["impact_zone_fallback"] == {"center": [0.05, 1.0], "radius_km": 111.3}
+    assert event["advisory"].endswith("The impact zone is the affected area published by GDACS.")
+
+
+def test_an_area_the_check_cannot_read_takes_down_only_its_own_feed():
+    broken = _Feed([_flood(area={"type": "Point", "coordinates": [1, 0]})], source="GDACS")
+    quakes = _Feed([_event("quake-1")], source="USGS")
+    result = _check(broken, quakes)
+    assert [e["event_id"] for e in result["events"]] == ["quake-1"]
+    assert result["sources_checked"][0]["status"] == "unavailable"
+
+
+def test_earthquakes_and_floods_are_ranked_together():
+    events = _check(
+        _Feed([_flood()], source="GDACS"),
+        _Feed([_event("quake-1", radius_km=100.0, severity="extreme")], source="USGS"),
+        latitude=0.05, longitude=1.0,
+    )["events"]
+    assert [e["event_id"] for e in events] == ["quake-1", "flood-1"]
+
+
+# -------------------------------------------------------------------------
 # The rendered event
 # -------------------------------------------------------------------------
 
