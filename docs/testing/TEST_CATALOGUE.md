@@ -26,6 +26,7 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | File | Kind | Issue | Covers | Tests |
 | --- | --- | --- | --- | ---: |
 | [`tests/test_answer_conversation.py`](../../tests/test_answer_conversation.py) | Unit | #183 | `utils/__init__.py prompt assembly` | 24 |
+| [`tests/test_answer_memory.py`](../../tests/test_answer_memory.py) | Unit | #197 | `utils/__init__.py memory_context` | 4 |
 | [`tests/test_classification_resilience.py`](../../tests/test_classification_resilience.py) | Unit | - | `services/classification_service.py` | 10 |
 | [`tests/test_client_factory.py`](../../tests/test_client_factory.py) | Unit | #193 | `utils/client.py create_chat_model` | 9 |
 | [`tests/test_client_imports.py`](../../tests/test_client_imports.py) | Integration | #154 | `utils/client.py` | 2 |
@@ -34,14 +35,22 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_emergency_s3_reader.py`](../../tests/test_emergency_s3_reader.py) | Unit | #334 | `services/emergency.py S3 reader` | 23 |
 | [`tests/test_generate_answer.py`](../../tests/test_generate_answer.py) | Contract | #169 | `generate_answer_handler` | 50 |
 | [`tests/test_import_blast_radius.py`](../../tests/test_import_blast_radius.py) | Integration | #169, #171 | `module-scope imports` | 4 |
+| [`tests/test_lambda_session_memory.py`](../../tests/test_lambda_session_memory.py) | Integration | #197 | `generate_answer_handler session memory` | 11 |
+| [`tests/test_memory_controls.py`](../../tests/test_memory_controls.py) | Integration | #197 | `local_memory_controls_handler` | 5 |
+| [`tests/test_memory_integration.py`](../../tests/test_memory_integration.py) | Integration | #197 | `session_memory + SQLite store` | 1 |
+| [`tests/test_memory_summarizer.py`](../../tests/test_memory_summarizer.py) | Unit | #197 | `services/memory_summarizer.py` | 5 |
+| [`tests/test_memory_validation.py`](../../tests/test_memory_validation.py) | Unit | #197 | `services/memory_validation.py` | 13 |
 | [`tests/test_model_fallback.py`](../../tests/test_model_fallback.py) | Unit | #193 | `utils/model_fallback.py` | 24 |
 | [`tests/test_org_search_contract.py`](../../tests/test_org_search_contract.py) | Contract | #170 | `utils/search_orgs.py` | 24 |
 | [`tests/test_request_db_schema.py`](../../tests/test_request_db_schema.py) | Unit | #169 | `utils/request_db.py` | 54 |
 | [`tests/test_response_contract.py`](../../tests/test_response_contract.py) | Contract | #146, #169, #170 | `response envelopes` | 10 |
 | [`tests/test_router.py`](../../tests/test_router.py) | Integration | #171 | `lambda_function.lambda_handler` | 34 |
+| [`tests/test_session_memory_corrections.py`](../../tests/test_session_memory_corrections.py) | Integration | #197 | `services/session_memory.py corrections` | 1 |
+| [`tests/test_session_memory_privacy.py`](../../tests/test_session_memory_privacy.py) | Integration | #197 | `services/session_memory.py redaction` | 16 |
+| [`tests/test_session_sqlite.py`](../../tests/test_session_sqlite.py) | Integration | #197 | `services/sqlite_memory_store.py` | 21 |
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
 | [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 57 |
-| | | | **Total** | **422** |
+| | | | **Total** | **499** |
 
 ## Every test
 
@@ -75,6 +84,19 @@ What the model is actually asked, turn by turn - issue #183.
 | `test_location_gender_and_age_still_reach_the_system_prompt` | Location gender and age still reach the system prompt. |
 
 > 20 test functions expand to 24 cases through parametrisation.
+
+### `test_answer_memory.py`
+
+*Unit · issue #197 · 4 tests*
+
+Tests for memory-aware answer generation.
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_memory_reaches_answer_prompt` | Memory reaches answer prompt. |
+| `test_no_memory_preserves_existing_message_flow` | No memory preserves existing message flow. |
+| `test_oversized_memory_is_rejected` | Oversized memory is rejected. |
+| `test_wrapper_forwards_memory` | Wrapper forwards memory. |
 
 ### `test_classification_resilience.py`
 
@@ -292,6 +314,82 @@ Cross-service blast radius at import time - issue #171.
 
 > 3 test functions expand to 4 cases through parametrisation.
 
+### `test_lambda_session_memory.py`
+
+*Integration · issue #197 · 11 tests*
+
+Test the local session-memory integration in the Lambda handler.
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_memory_is_disabled_by_default` | Memory is disabled by default. |
+| `test_lambda_restores_sqlite_session_memory` | Lambda restores sqlite session memory. |
+| `test_different_session_does_not_inherit_memory` | Different session does not inherit memory. |
+| `test_value_error_from_answer_generation_is_not_a_bad_request` | Value error from answer generation is not a bad request. |
+| `test_invalid_session_id_is_still_a_bad_request` | Invalid session id is still a bad request. |
+| `test_memory_config_error_answers_without_memory` | Memory config error answers without memory. |
+| `test_version_conflict_answers_without_memory` | Version conflict answers without memory. |
+| `test_deleted_session_is_gone_not_bad_request` | Deleted session is gone not bad request. |
+| `test_memory_modules_are_not_imported_when_demo_is_off` | Production must not load, or depend on, the demo's memory code. |
+| `test_oversized_history_answers_without_memory` | Past 500 messages the chat loses memory, not its answers. |
+| `test_restarted_history_answers_without_the_old_memory` | A transcript restarted under the same session_id is still answered. |
+
+### `test_memory_controls.py`
+
+*Integration · issue #197 · 5 tests*
+
+Tests for local session memory controls.
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_user_can_view_saved_memory` | User can view saved memory. |
+| `test_deleting_memory_invalidates_session` | Deleting memory invalidates session. |
+| `test_memory_controls_disabled_by_default` | Memory controls disabled by default. |
+| `test_invalid_session_id_is_rejected` | Invalid session id is rejected. |
+| `test_unusable_store_path_returns_503` | Unusable store path returns 503. |
+
+### `test_memory_integration.py`
+
+*Integration · issue #197 · 1 tests*
+
+Offline integration test for SQLite-backed session memory.
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_complete_memory_pipeline_across_requests` | Verify rolling summary persistence across multiple requests. |
+
+### `test_memory_summarizer.py`
+
+*Unit · issue #197 · 5 tests*
+
+Offline tests for the real memory summarization adapter.
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_summarizer_uses_conversation_facts` | Verify that real conversation data reaches the model adapter. |
+| `test_summarizer_uses_existing_memory` | Verify that prior memory is included in the next summary request. |
+| `test_empty_batch_does_not_call_model` | An empty batch should preserve memory without model usage. |
+| `test_groq_failure_falls_back_to_gemini` | A Groq error should allow Gemini to produce the memory. |
+| `test_overlong_summary_is_returned_not_rejected` | An overlong summary is capped by session_memory, not discarded here. |
+
+### `test_memory_validation.py`
+
+*Unit · issue #197 · 13 tests*
+
+Tests for validating conversation memory inputs.
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_invalid_messages_are_removed` | Invalid messages are removed. |
+| `test_non_string_content_is_kept_as_the_prompt_keeps_it` | Non string content is kept as the prompt keeps it. |
+| `test_memory_and_prompt_normalizers_agree` | Both normalizers must keep the same messages, in the same order. |
+| `test_long_messages_are_truncated` | Long messages are truncated. |
+| `test_old_messages_are_not_discarded` | Old messages are not discarded. |
+| `test_oversized_transcript_is_rejected` | Oversized transcript is rejected. |
+| `test_session_memory_processes_normalized_history` | Verify invalid roles are excluded before summarization. |
+
+> 7 test functions expand to 13 cases through parametrisation.
+
 ### `test_model_fallback.py`
 
 *Unit · issue #193 · 24 tests*
@@ -450,6 +548,58 @@ Router-level regression tests - issue #171.
 | `test_routed_emergency_can_still_ask_for_one_service` | Routing in the query string leaves the body free to name the service. |
 
 > 16 test functions expand to 34 cases through parametrisation.
+
+### `test_session_memory_corrections.py`
+
+*Integration · issue #197 · 1 tests*
+
+Regression tests for changing facts in session memory.
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_corrected_schedule_survives_expiration` | Corrected schedule survives expiration. |
+
+### `test_session_memory_privacy.py`
+
+*Integration · issue #197 · 16 tests*
+
+Privacy and deletion regression tests for session memory.
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_secret_not_sent_to_summarizer` | Sensitive values must not reach the memory summarizer. |
+| `test_sqlite_does_not_store_raw_transcript` | SQLite should persist summaries, not the original conversation. |
+| `test_deleted_session_cannot_be_recreated` | An old transcript must not recreate a deleted session. |
+| `test_redaction_that_lengthens_summary_does_not_stick_session` | A summary inside the cap must not leave it once secrets are redacted. |
+| `test_overlong_model_summary_is_capped_and_saved` | A 2100-char model summary is stored cut to the cap, so the cursor moves. |
+| `test_redaction_keeps_ordinary_prose_and_postal_codes` | Redaction keeps ordinary prose and postal codes. |
+| `test_redaction_removes_numeric_codes` | Redaction removes numeric codes. |
+| `test_bare_pin_label_is_redacted_even_when_it_may_be_a_postal_code` | A six-digit UPI PIN and a postal code look identical after "PIN:". |
+
+> 8 test functions expand to 16 cases through parametrisation.
+
+### `test_session_sqlite.py`
+
+*Integration · issue #197 · 21 tests*
+
+Offline tests of SQLite-backed, session-scoped summarized memory.
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_summary_is_durable_but_raw_turns_are_not` | Summary is durable but raw turns are not. |
+| `test_every_turn_is_in_the_summary_or_the_prompt_window` | Every turn is in the summary or the prompt window. |
+| `test_new_session_starts_empty_and_delete_is_scoped` | New session starts empty and delete is scoped. |
+| `test_redact_secrets_before_summarizer_and_db_write` | Redact secrets before summarizer and db write. |
+| `test_editing_summarized_history_restarts_the_summary` | An edited transcript is a different conversation: summarize it afresh. |
+| `test_trimmed_history_drops_the_stale_summary` | A transcript shorter than what was summarized must not reuse it. |
+| `test_long_backlog_is_summarized_a_bounded_share_per_request` | 400 messages on a new session must not mean 76 model calls at once. |
+| `test_each_batch_is_saved_before_the_next_runs` | A failure partway through keeps the batches already summarized. |
+| `test_sqlite_optimistic_locking` | Sqlite optimistic locking. |
+| `test_expiry_removes_access_to_old_summary` | Expiry removes access to old summary. |
+| `test_deleted_session_cannot_recreate_memory` | Deleted session cannot recreate memory. |
+| `test_deletion_does_not_affect_new_session` | Deletion does not affect new session. |
+
+> 12 test functions expand to 21 cases through parametrisation.
 
 ### `test_subject_generator.py`
 

@@ -1,3 +1,6 @@
+import os
+import re
+from pathlib import Path
 import json
 from utils.subject_generator import generate_subject_from_description
 from services.classification_service import predict_categories
@@ -315,6 +318,176 @@ def emergency_contacts_handler(event, context):
         return _proxy_response(500, {"error": "Emergency services lookup failed"})
 
 
+class _MemoryRequestRejected(Exception):
+    """A session-memory error the caller must see, with its HTTP status.
+
+    Defined here, not in services/, so generate_answer_handler can catch it
+    without importing the memory modules on requests where the demo is off.
+    """
+
+    def __init__(self, status, message):
+        super().__init__(message)
+        self.status = status
+        self.message = message
+
+
+def _local_session_memory(body, conversation_history):
+    """Retrieve session memory for the local SQLite demo only."""
+
+    if os.getenv("SAAYAM_SESSION_MEMORY_DEMO") != "1":
+        return None
+
+    # A local SQLite file is not safe as shared Lambda persistence.
+    if os.getenv("AWS_LAMBDA_FUNCTION_NAME") or os.getenv("AWS_EXECUTION_ENV"):
+        return None
+
+    session_id = body.get("session_id")
+
+    if session_id is None:
+        return None
+
+    if (
+        not isinstance(session_id, str)
+        or not re.fullmatch(r"[A-Za-z0-9_-]{8,128}", session_id)
+    ):
+        raise _MemoryRequestRejected(400, "Invalid session memory request")
+
+    if conversation_history is None:
+        return None
+
+    # Lazy imports preserve behavior for unrelated Lambda services.
+    from services.memory_validation import InvalidMemoryRequest
+    from services.sqlite_memory_store import SQLiteMemoryStore, SessionDeleted
+    from services.session_memory import update_session_memory
+    from services.memory_summarizer import summarize_memory
+
+    try:
+        db_path = Path(
+            os.getenv(
+                "SAAYAM_MEMORY_SQLITE_PATH",
+                ".local/session_memory.db",
+            )
+        )
+
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+
+        store = SQLiteMemoryStore(db_path)
+
+        memory, _ = update_session_memory(
+            store,
+            session_id,
+            conversation_history,
+            summarize_memory,
+        )
+
+    except SessionDeleted:
+        raise _MemoryRequestRejected(410, "Session deleted. Start a new session.")
+
+    except InvalidMemoryRequest:
+        raise _MemoryRequestRejected(400, "Invalid session memory request")
+
+    except Exception as e:
+        # Memory is optional context. A model chain outage, a broken route,
+        # a VersionConflict from two tabs on one session or a locked SQLite
+        # file costs the answer its memory, not the answer itself.
+        print(
+            "WARNING: generate_answer session memory unavailable, "
+            f"answering without it: {type(e).__name__}: {e}"
+        )
+        return None
+
+    return memory or None
+
+def _local_memory_controls_store():
+    """Return the SQLite demo store only outside AWS Lambda."""
+    if os.getenv("SAAYAM_SESSION_MEMORY_DEMO") != "1":
+        return None
+
+    if os.getenv("AWS_LAMBDA_FUNCTION_NAME") or os.getenv("AWS_EXECUTION_ENV"):
+        return None
+
+    from services.sqlite_memory_store import SQLiteMemoryStore
+
+    db_path = Path(
+        os.getenv(
+            "SAAYAM_MEMORY_SQLITE_PATH",
+            ".local/session_memory.db",
+        )
+    )
+
+    return SQLiteMemoryStore(db_path)
+
+
+def local_memory_controls_handler(event, context):
+    """Local-only, non-routed handler for viewing or deleting memory."""
+    try:
+        # The store constructor creates directories and opens SQLite, so a bad
+        # SAAYAM_MEMORY_SQLITE_PATH must land in the 503 branch below.
+        store = _local_memory_controls_store()
+    except Exception:
+        return _response(
+            503,
+            {"error": "Memory controls temporarily unavailable"},
+        )
+
+    if store is None:
+        return _response(404, {"error": "Memory controls unavailable"})
+
+    try:
+        body = _parse_event_body(event)
+
+        if not isinstance(body, dict):
+            raise ValueError("Invalid request")
+
+        session_id = body.get("session_id")
+        action = body.get("action")
+
+        if not isinstance(session_id, str) or not re.fullmatch(
+            r"[A-Za-z0-9_-]{8,128}", session_id
+        ):
+            raise ValueError("Invalid session identifier")
+
+        if action == "view":
+            state, _ = store.load(session_id)
+
+            return _response(
+                200,
+                {
+                    "session_id": session_id,
+                    "memory": state.get("memory", ""),
+                },
+            )
+
+        if action == "delete":
+            store.delete(session_id)
+
+            return _response(
+                200,
+                {
+                    "message": "Session memory deleted",
+                    "new_session_required": True,
+                },
+            )
+
+        return _response(400, {"error": "Unsupported memory action"})
+
+    except ValueError as error:
+        from services.sqlite_memory_store import SessionDeleted
+
+        if isinstance(error, SessionDeleted):
+            return _response(
+                410,
+                {"error": "Session deleted. Start a new session."},
+            )
+
+        return _response(400, {"error": "Invalid memory request"})
+
+    except Exception:
+        return _response(
+            503,
+            {"error": "Memory controls temporarily unavailable"},
+        )
+
 # 4. Generate Answer
 def generate_answer_handler(event, context):
     """AWS Lambda entry point for generate_answer service.
@@ -461,17 +634,35 @@ def generate_answer_handler(event, context):
                 f"{description}\n\n"
                 f"Additional details provided with this request:\n{additional_info}"
             )
+        # Only a client error in the memory lookup may answer 400. A ValueError
+        # raised while generating the answer - "Gemini client not initialized"
+        # when Groq has already failed - is a provider outage, not a bad
+        # request, and server-side memory failures degrade to no memory.
+        try:
+            memory_context = _local_session_memory(
+                body,
+                conversation_history,
+            )
+
+        except _MemoryRequestRejected as rejected:
+            return _response(rejected.status, {"error": rejected.message})
 
         try:
-            answer = generate_ai_answer(
-                category=category,
-                subject=subject,
-                description=description,
-                location=location,
-                gender=body.get("gender"),
-                age=body.get("age"),
-                conversation_history=conversation_history,
-            )
+            answer_kwargs = {
+                "category": category,
+                "subject": subject,
+                "description": description,
+                "location": location,
+                "gender": body.get("gender"),
+                "age": body.get("age"),
+                "conversation_history": conversation_history,
+            }
+
+            if memory_context:
+                answer_kwargs["memory_context"] = memory_context
+
+            answer = generate_ai_answer(**answer_kwargs)
+
         except Exception as e:
             # Reporting a model failure as a 200 whose answer is the string
             # "Error: Failed to generate answer" hid Groq outages and retired

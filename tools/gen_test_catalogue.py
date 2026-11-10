@@ -49,6 +49,15 @@ FILE_META = {
     "test_token_usage.py": ("#159", "utils/token_usage.py"),
     "test_model_fallback.py": ("#193", "utils/model_fallback.py"),
     "test_client_factory.py": ("#193", "utils/client.py create_chat_model"),
+    "test_lambda_session_memory.py": ("#197", "generate_answer_handler session memory"),
+    "test_answer_memory.py": ("#197", "utils/__init__.py memory_context"),
+    "test_session_sqlite.py": ("#197", "services/sqlite_memory_store.py"),
+    "test_session_memory_privacy.py": ("#197", "services/session_memory.py redaction"),
+    "test_session_memory_corrections.py": ("#197", "services/session_memory.py corrections"),
+    "test_memory_validation.py": ("#197", "services/memory_validation.py"),
+    "test_memory_summarizer.py": ("#197", "services/memory_summarizer.py"),
+    "test_memory_controls.py": ("#197", "local_memory_controls_handler"),
+    "test_memory_integration.py": ("#197", "session_memory + SQLite store"),
 }
 
 HEADER = """# Test catalogue

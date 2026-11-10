@@ -17,3 +17,6 @@ utils/*.pyc
 
 # Local-only dev harness (injects a local key; never deploy or commit)
 local_dev_harness.py
+
+# Local Agentic Memory development artifacts
+.local/
