@@ -165,9 +165,8 @@ def test_classification_failover_never_logs_the_description(monkeypatch, capsys,
         chat=SimpleNamespace(completions=SimpleNamespace(create=raise_groq))
     )
     gemini_stub = SimpleNamespace(models=SimpleNamespace(generate_content=raise_gemini))
-    monkeypatch.setattr(cs, "client", groq_stub)
-    monkeypatch.setattr(cs, "_use_groq", True)
-    monkeypatch.setattr(cs, "_gemini_client", gemini_stub)
+    monkeypatch.setattr(cs, "get_groq_client", lambda: groq_stub)
+    monkeypatch.setattr(cs, "get_gemini_client", lambda: gemini_stub)
     caplog.set_level(logging.DEBUG)
 
     with pytest.raises(ModelChainExhausted):

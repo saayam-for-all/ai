@@ -269,6 +269,24 @@ def test_an_unconfigured_provider_is_skipped_not_fatal():
     assert len(result["organizations"]) == 1
 
 
+def test_with_no_groq_key_the_real_loaders_serve_gemini():
+    """With only a Gemini key, the real loaders skip Groq and serve Gemini."""
+    import utils.client as client_module
+
+    gemini_model = object()
+    with mock.patch.object(client_module, "_load_keys",
+                           return_value=(None, "test-gemini-key")), \
+         mock.patch.object(client_module, "ChatGoogleGenerativeAI",
+                           return_value=gemini_model), \
+         mock.patch.object(SO, "_invoke_provider", return_value=ROWS) as invoked, \
+         mock.patch.object(SO, "build_prompt", return_value=object()):
+        result = SO.find_organizations("food", "no groceries", "San Jose, CA")
+
+    assert invoked.call_count == 1
+    assert invoked.call_args.args[0] is gemini_model
+    assert result["organizations"][0]["organization_name"] == "Second Harvest Food Bank"
+
+
 def test_every_provider_failing_raises_rather_than_returning_an_empty_success():
     with mock.patch.object(SO, "_providers",
                            return_value=[("groq", lambda: None),

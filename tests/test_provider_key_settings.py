@@ -5,9 +5,6 @@ points GROQ_PARAM_NAME at a test-only key and sets GEMINI_PARAM_NAME to an empty
 string. It must then ask Parameter Store for the Groq key alone, because a single
 name its role cannot read would fail the whole request.
 """
-import importlib
-
-import boto3
 import pytest
 
 import utils.client as client_module
@@ -30,40 +27,36 @@ class _RecordingSSM:
 
 
 @pytest.fixture
-def reload_client(monkeypatch):
-    """Reload utils.client under the given settings with a recording Parameter Store."""
+def load_keys(monkeypatch):
+    """Load the keys under the given names with a recording Parameter Store."""
     calls = []
 
-    def _reload(**settings):
-        for name in ("GROQ_PARAM_NAME", "GEMINI_PARAM_NAME"):
-            monkeypatch.delenv(name, raising=False)
-        for name, value in settings.items():
-            monkeypatch.setenv(name, value)
-        monkeypatch.setattr(boto3, "client", lambda *a, **k: _RecordingSSM(calls))
-        importlib.reload(client_module)
-        return client_module, calls
+    def _load(groq=LIVE_GROQ, gemini=LIVE_GEMINI):
+        monkeypatch.setattr(client_module, "GROQ_PARAM", groq)
+        monkeypatch.setattr(client_module, "GEMINI_PARAM", gemini)
+        monkeypatch.setattr(
+            client_module,
+            "boto3",
+            type("RecordingBoto3", (), {"client": staticmethod(lambda *a, **k: _RecordingSSM(calls))}),
+        )
+        return client_module._load_keys(), calls
 
-    yield _reload
-    monkeypatch.undo()
-    importlib.reload(client_module)
+    return _load
 
 
-def test_the_deployed_functions_keep_the_default_names(reload_client):
-    c, calls = reload_client()
+def test_the_deployed_functions_keep_the_default_names(load_keys):
+    keys, calls = load_keys()
     assert calls == [[LIVE_GROQ, LIVE_GEMINI]]
-    assert c.GROQ_API_KEY == f"key-for-{LIVE_GROQ}"
-    assert c.GEMINI_API_KEY == f"key-for-{LIVE_GEMINI}"
+    assert keys == (f"key-for-{LIVE_GROQ}", f"key-for-{LIVE_GEMINI}")
 
 
-def test_the_test_function_asks_only_for_its_own_groq_key(reload_client):
-    c, calls = reload_client(GROQ_PARAM_NAME=TEST_GROQ, GEMINI_PARAM_NAME="")
+def test_the_test_function_asks_only_for_its_own_groq_key(load_keys):
+    keys, calls = load_keys(groq=TEST_GROQ, gemini="")
     assert calls == [[TEST_GROQ]]
-    assert c.GROQ_API_KEY == f"key-for-{TEST_GROQ}"
-    assert c.GEMINI_API_KEY is None
+    assert keys == (f"key-for-{TEST_GROQ}", None)
 
 
-def test_no_names_means_no_request_and_no_keys(reload_client):
-    c, calls = reload_client(GROQ_PARAM_NAME="", GEMINI_PARAM_NAME="")
+def test_no_names_means_no_request_and_no_keys(load_keys):
+    keys, calls = load_keys(groq="", gemini="")
     assert calls == []
-    assert c.GROQ_API_KEY is None
-    assert c.GEMINI_API_KEY is None
+    assert keys == (None, None)
