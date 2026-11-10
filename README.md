@@ -573,6 +573,16 @@ Reading the fields:
   publishes, and `boundary_source` is `authoritative`.
   **`impact_zone_fallback.center` is `[latitude, longitude]`**, as in the
   issue's contract. The two orders differ.
+- **When `boundary_source` is `authoritative`, decide who is affected from
+  `impact_zone`, never from `impact_zone_fallback`.** Around a published
+  area the fallback circle is drawn to cover all of it, so it also covers
+  places outside it, and is for display only. Alerting everyone inside it
+  would be a false alert: the recorded India flood's circle reaches 384.2 km
+  and takes in Kochi, which is 74 km from any of the flood's water.
+- **A response with a flood in it is large**, because `impact_zone` is the
+  area as GDACS publishes it: about 200 to 350 KB per flood, against a few
+  KB for an earthquake. The recorded India area is 204,712 bytes on its own.
+  Simplifying the shape is planned for part 8.
 - **`expires_at`** is `null` for a flood GDACS still marks as running.
 - **`llm_cross_check`** is `null`: no model runs on the coordinate path.
 - **`sources_checked`** is an addition to the issue's contract. It is what
@@ -645,10 +655,12 @@ each flood: a MultiPolygon, with `boundary_source: "authoritative"`.
 - **A flood counts** when the caller's location is inside its affected area,
   or within `radius_km` of its edge. Holes in the area are outside it: dry
   ground in the middle of a flood is not in the flood.
-- **`impact_zone_fallback`** is centred where GDACS puts the flood and is
-  wide enough to cover the whole affected area, so it is much larger than the
-  area itself. The area decides; the circle is for clients that cannot draw
-  a polygon.
+- **`impact_zone_fallback` is for display only.** It is centred where GDACS
+  puts the flood and is wide enough to cover the whole affected area, so it
+  is much larger than the area itself. The area decides; the circle is for
+  clients that cannot draw a polygon. An alert, or a search for people or
+  volunteers in the flood, must use `impact_zone`: everyone in Kochi is
+  inside the India flood's circle and none of them is in the flood.
 - **The alert level is the latest one.** GDACS updates a flood every one to
   nine days and grades each update. The flood's own grade is the highest it
   has ever reached, so a flood that was Orange for a day and Green for weeks
@@ -678,8 +690,9 @@ otherwise turn into a false all-clear:
   list. That, or a well-formed empty list, is read as "no floods". Any other
   answer that is not a JSON object, such as a bare `null`, fails the check.
 - GDACS reports its own overload as a `400` carrying a database timeout, and
-  has taken over 20 seconds to answer. Both count as GDACS being unavailable;
-  the adapter waits 8 seconds per request.
+  has taken over 20 seconds to answer a request sent without a time limit.
+  Both count as GDACS being unavailable; the adapter waits 8 seconds for
+  each answer.
 - Results come in pages of at most 100. A full page fails the check rather
   than risk a flood left on the next page.
 - A geometry request for an ID GDACS does not know returns another event's
@@ -750,16 +763,26 @@ These durations are first-pass values **awaiting review**.
   affected area, measured in October 2026, and over 20 s while it was
   overloaded. With caching, only the first request in 15 minutes waits for
   it, per running Lambda. The first request after a cold start still does.
+- **The time budget behind API Gateway (part 7).** The feeds are asked one
+  after another: USGS, the flood list, then each nearby flood's area. The
+  8-second limit applies to each wait for data, not to a whole request,
+  because that is how `urlopen`'s `timeout` works, so an answer that keeps
+  trickling in can take longer. A check that waits on several of them, as
+  the first one after a cold start can, may pass API Gateway's 29-second
+  integration timeout, and the caller then gets the gateway's `504` instead
+  of `502 DISASTER_CHECK_UNAVAILABLE`. Part 7 should give each request an
+  overall deadline.
 - One answer is shared worldwide, so one event in it that cannot be read
   makes that feed unavailable for every caller, not only those near it. That
   fails safe, as a `502`, and USGS and GDACS answers are well-formed in
   practice. Before caching, an unreadable earthquake affected only callers
-  whose location query included it.
+  whose location query included it. The error logged names the event that
+  could not be read.
 - The same earthquake occasionally appears twice, when two networks report
   it and USGS has not yet merged their reports: on 20 October 2026 a Vanuatu
   earthquake was listed as both `pt26293000` (M6.6) and `us6000u3jl` (M6.3).
   Nothing merges them.
-- A flood's affected area is returned as GDACS publishes it, up to about
+- A flood's affected area is returned as GDACS publishes it, about 200 to
   350 KB for a large flood. Nothing simplifies it yet.
 - Flood findings are forecasts, and with only Orange and Red alerts
   reported they are rare: 2 of the 100 most recent GDACS floods.

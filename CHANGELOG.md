@@ -60,6 +60,9 @@ team works and reviews in.
   floods, affected areas reached 5 km to 567 km from their centres.
   *Observable difference:* against the recorded India flood, Chennai, 265 km
   from its centre, is in it; Kochi, 74 km from any of its water, is not.
+  `impact_zone_fallback` is drawn to cover the whole area, Kochi included,
+  so it is for display only: alerts must use `impact_zone`. A response with
+  a flood in it is about 200 to 350 KB.
 - A flood GDACS marks as running is reported with `expires_at: null`. Its
   end date is only the date of its latest update, which can be days old.
 - `services/geometry.py`: the distance from a point to a published area. The
