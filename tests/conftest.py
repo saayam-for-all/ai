@@ -21,6 +21,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 import lambda_function as LF  # noqa: E402
+from services import feed_cache  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -46,6 +47,19 @@ def _no_network(request):
         )
     with mock.patch("urllib.request.urlopen", side_effect=_blocked):
         yield
+
+
+@pytest.fixture(autouse=True)
+def _empty_feed_caches():
+    """Start and end every test with nothing cached.
+
+    The disaster_check feeds keep answers in module-level caches. An answer
+    left by one test would let the next pass without ever asking the feed
+    it claims to test.
+    """
+    feed_cache.clear_all()
+    yield
+    feed_cache.clear_all()
 
 
 # ---------------------------------------------------------------------------
