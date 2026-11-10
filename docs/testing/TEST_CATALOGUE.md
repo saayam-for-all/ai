@@ -36,7 +36,7 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_emergency_s3_reader.py`](../../tests/test_emergency_s3_reader.py) | Unit | #334 | `services/emergency.py S3 reader` | 23 |
 | [`tests/test_feed_cache.py`](../../tests/test_feed_cache.py) | Unit | #191 | `services/feed_cache.py` | 21 |
 | [`tests/test_gdacs_floods.py`](../../tests/test_gdacs_floods.py) | Unit | #191 | `services/gdacs_floods.py` | 89 |
-| [`tests/test_gdacs_wildfires.py`](../../tests/test_gdacs_wildfires.py) | Unit | #191 | `services/gdacs_wildfires.py` | 101 |
+| [`tests/test_gdacs_wildfires.py`](../../tests/test_gdacs_wildfires.py) | Unit | #191 | `services/gdacs_wildfires.py` | 137 |
 | [`tests/test_generate_answer.py`](../../tests/test_generate_answer.py) | Contract | #169 | `generate_answer_handler` | 50 |
 | [`tests/test_geometry.py`](../../tests/test_geometry.py) | Unit | #191 | `services/geometry.py` | 11 |
 | [`tests/test_import_blast_radius.py`](../../tests/test_import_blast_radius.py) | Integration | #169, #171 | `module-scope imports` | 4 |
@@ -48,7 +48,7 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
 | [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 57 |
 | [`tests/test_usgs_earthquakes.py`](../../tests/test_usgs_earthquakes.py) | Unit | #191 | `services/usgs_earthquakes.py` | 71 |
-| | | | **Total** | **847** |
+| | | | **Total** | **883** |
 
 ## Every test
 
@@ -417,7 +417,7 @@ The GDACS flood adapter, replayed from recorded responses - issue #191, part 2.
 
 ### `test_gdacs_wildfires.py`
 
-*Unit · issue #191 · 101 tests*
+*Unit · issue #191 · 137 tests*
 
 The GDACS wildfire adapter, replayed from recorded responses - issue #191, part 3.
 
@@ -431,7 +431,8 @@ The GDACS wildfire adapter, replayed from recorded responses - issue #191, part 
 | `test_holes_in_a_burned_area_are_filled` | Unburned ground surrounded by fire is in the fire zone. |
 | `test_a_burned_area_in_several_parts_keeps_every_part` | A burned area in several parts keeps every part. |
 | `test_a_red_fire_as_recorded` | France, July 2026: 47,910 ha in two parts, one with 24 holes. |
-| `test_a_fire_whose_latest_grade_is_green_is_not_reported` | The fire's own grade is the highest it reached. Its latest update's grade is where it stands now. |
+| `test_a_fire_that_has_stopped_with_its_latest_grade_green_is_not_reported` | The fire's own grade is the highest it reached. Once it has stopped, its latest update's grade decides. |
+| `test_a_burning_fire_that_eased_to_green_is_still_reported_at_its_own_grade` | Raised in the review of part 3. GDACS filters the list on a fire's own grade, so one that eased to Green at its latest update is still listed, and while it burns, people in its burned area are still in a fire. |
 | `test_the_latest_grade_maps_onto_the_shared_severity_scale` | The lagrade maps onto the shared severity scale. |
 | `test_a_burning_fire_counts_whatever_its_end_date_says` | While a fire burns, its end date trails real time by one to three days. A burning fire is open-ended. |
 | `test_a_fire_burns_until_the_end_of_its_last_day` | Both Los Angeles fires were last dated 12 January. A window opening late that day still finds them; one opening after it does not, and their areas are not fetched. |
@@ -445,7 +446,15 @@ The GDACS wildfire adapter, replayed from recorded responses - issue #191, part 
 | `test_a_full_page_is_not_trusted` | GDACS pages at 100. A full page may have left a fire on the next. |
 | `test_an_unreadable_list_raises_rather_than_reporting_nothing` | An unreadable list raises rather than reporting nothing. |
 | `test_a_fire_that_cannot_be_trusted_fails_the_whole_answer` | A fire is not skipped for being unreadable: it might be the one covering the caller. |
-| `test_a_burned_area_that_cannot_be_trusted_fails_the_whole_answer` | Geometry for another event, or a fire with no area, cannot place the fire - so neither is passed over quietly. Holes are checked too, though they are filled, and a hole listed before the outline would otherwise become the whole zone. |
+| `test_the_error_names_the_fire_that_could_not_be_read` | The error names the fire that could not be read. |
+| `test_a_fire_without_an_id_is_still_named_in_the_error` | A fire without an id is still named in the error. |
+| `test_the_error_names_the_fire_whose_burned_area_could_not_be_read` | The error names the fire whose burned area could not be read. |
+| `test_the_error_names_the_request_that_failed` | The error names the request that failed. |
+| `test_a_burned_area_that_cannot_be_trusted_fails_the_whole_answer` | Geometry for another event, or a fire with no area, cannot place the fire - so neither is passed over quietly. Holes are checked too, though they are filled. A later ring that is not inside the first is not a hole, and dropping it would drop burned ground. |
+| `test_the_patch_beside_the_outline_is_inside_its_bounds` | So the test above proves more than a check on bounds alone could. |
+| `test_inside_follows_the_even_odd_rule` | Inside follows the even odd rule. |
+| `test_inside_agrees_with_the_distance_to_each_recorded_outline` | Across a grid over each outline, inside exactly where geometry.distance_to_area_km says the distance is zero. The grid points are the centres of its cells, so none lies on the outline itself, where either answer would do. |
+| `test_every_recorded_hole_lies_inside_its_outline` | Every recorded hole lies inside its outline. |
 | `test_a_burned_area_answered_with_nothing_usable_fails` | A burned area answered with nothing usable fails. |
 | `test_the_fire_list_and_areas_are_reused_for_15_minutes` | The fire list and areas are reused for 15 minutes. |
 | `test_after_15_minutes_the_list_is_fetched_again_but_the_areas_are_not` | A burned area belongs to one update of one fire and never changes. |
@@ -458,13 +467,14 @@ The GDACS wildfire adapter, replayed from recorded responses - issue #191, part 
 | `test_a_stale_list_cannot_place_a_fire_whose_burned_area_was_never_fetched` | The list stands in, but the area of a fire nobody nearby has asked about yet cannot be fetched - so there is no answer, not a `false`. |
 | `test_an_unreadable_list_is_not_cached` | An unreadable list is not cached. |
 | `test_one_list_serves_every_window` | One list serves every window. |
+| `test_a_request_that_read_the_clock_before_midnight_is_still_covered` | A request reads the clock, then USGS and the flood list are fetched before this list. If midnight passes in between, the shared list must still reach back to the start of the longest window. |
 | `test_the_last_list_stands_in_across_midnight` | The list fetched at 23:30 still stands in at 00:05 the next day. |
 | `test_an_answer_that_came_back_unreadable_never_lets_the_old_list_stand_in` | GDACS answered, so it may be listing a fire the old list does not have. Reported as unavailable, not as the old list's "nothing". |
 | `test_a_burned_area_stands_in_for_up_to_7_days` | An area belongs to one update of one fire and never changes. |
 | `test_a_window_reaching_back_past_the_shared_list_is_asked_for_on_its_own` | A window reaching back past the shared list is asked for on its own. |
 | `test_only_a_gdacs_that_could_not_be_reached_counts_as_unreachable` | Only a gdacs that could not be reached counts as unreachable. |
 
-> 40 test functions expand to 101 cases through parametrisation.
+> 50 test functions expand to 137 cases through parametrisation.
 
 ### `test_generate_answer.py`
 

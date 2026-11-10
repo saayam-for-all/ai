@@ -15,8 +15,12 @@ team works and reviews in.
 **Added**
 
 - Wildfires, from GDACS, which takes them from the European Commission's
-  Global Wildfire Information System. A fire is reported while the grade of
-  its latest update is Orange or Red. No API key is involved.
+  Global Wildfire Information System. A burning fire is reported while its
+  own grade, the highest it reached, is Orange or Red; a stopped fire while
+  its latest update's grade is. No API key is involved.
+  *Observable difference:* a burning fire that eased to Green is still
+  reported, as `severe` or `extreme`, to callers in its burned area.
+  Raised in the review of part 3.
   *Observable difference:* a location inside the burned area of a current
   Orange or Red fire answers `disaster_detected: true` with a `wildfire`
   event, and `sources_checked` has a third row, `GDACS` with
@@ -32,6 +36,14 @@ team works and reviews in.
   marks it as burning, with `expires_at: null`.
 - The wildfire list is cached like the flood list, and each burned area by
   fire and update.
+- Every later ring of a burned polygon must lie inside its first, checked
+  position by position, since only the first is kept. Raised in the review
+  of part 3.
+  *Observable difference:* a burned area with a hole listed first, or with a
+  second burned patch written as an extra ring, is a `502` near that fire
+  rather than a zone missing burned ground.
+- An error logged for the wildfire feed names the fire, or the request,
+  that failed.
 - `tests/fixtures/gdacs/`: every Orange and Red fire since 27 December 2024,
   and the burned areas of the two Los Angeles fires of January 2025 and of a
   Red fire in France in July 2026, recorded from GDACS.

@@ -267,13 +267,25 @@ def test_a_red_fire_as_recorded(gdacs_answers, clock):
     assert fire["radius_km"] == pytest.approx(23.92, abs=0.01)
 
 
-def test_a_fire_whose_latest_grade_is_green_is_not_reported(gdacs_answers):
-    """The fire's own grade is the highest it reached. Its latest update's
-    grade is where it stands now."""
+def test_a_fire_that_has_stopped_with_its_latest_grade_green_is_not_reported(gdacs_answers):
+    """The fire's own grade is the highest it reached. Once it has stopped,
+    its latest update's grade decides."""
     with gdacs_answers(listing=_palisades(episodealertlevel="Green")) as urlopen:
         events = _fetch()
     assert [e["event_id"] for e in events] == ["gdacs-WF-1023277"]
     assert not [u for u in _area_requests(urlopen) if "eventid=1023255&" in u]
+
+
+def test_a_burning_fire_that_eased_to_green_is_still_reported_at_its_own_grade(gdacs_answers):
+    """Raised in the review of part 3. GDACS filters the list on a fire's own
+    grade, so one that eased to Green at its latest update is still listed,
+    and while it burns, people in its burned area are still in a fire."""
+    with gdacs_answers(listing=_palisades(iscurrent="true", episodealertlevel="Green")):
+        palisades, _ = _fetch()
+    assert palisades["event_id"] == "gdacs-WF-1023255"
+    assert palisades["severity"] == "severe"
+    assert palisades["headline"] == "Orange wildfire alert: Forest fires in United States"
+    assert palisades["expires_at"] is None
 
 
 @pytest.mark.parametrize("level,severity", [("Orange", "severe"), ("Red", "extreme")])
@@ -416,6 +428,9 @@ def test_an_unreadable_list_raises_rather_than_reporting_nothing(gdacs_answers, 
     {"eventtype": None},
     {"episodealertlevel": "Unknown"},
     {"episodealertlevel": None},
+    {"alertlevel": "Unknown"},
+    {"alertlevel": None},
+    {"alertlevel": "Unknown", "iscurrent": "true"},
     {"iscurrent": "yes"},
     {"iscurrent": True},
     {"iscurrent": None},
@@ -438,6 +453,49 @@ def test_a_fire_that_cannot_be_trusted_fails_the_whole_answer(gdacs_answers, ove
     covering the caller."""
     with gdacs_answers(listing=_palisades(**overrides)):
         with pytest.raises(wildfires.FeedError):
+            _fetch()
+
+
+# The list is worldwide, so an error that does not say which fire failed
+# leaves the logs with nothing to look up. Raised in the review of part 3.
+
+def test_the_error_names_the_fire_that_could_not_be_read(gdacs_answers):
+    with gdacs_answers(listing=_palisades(iscurrent="yes")):
+        with pytest.raises(wildfires.FeedError, match=r"^GDACS fire 1023255 was not in the expected shape: "):
+            _fetch()
+
+
+@pytest.mark.parametrize("feature", [{}, [], {"properties": None}, {"properties": {}}])
+def test_a_fire_without_an_id_is_still_named_in_the_error(gdacs_answers, feature):
+    listing = _recorded(LISTING)
+    listing["features"].append(feature)
+    with gdacs_answers(listing=_bytes(listing)):
+        with pytest.raises(wildfires.FeedError, match=r"^GDACS fire with no ID was not in the expected shape: "):
+            _fetch()
+
+
+def test_the_error_names_the_fire_whose_burned_area_could_not_be_read(gdacs_answers):
+    with gdacs_answers(area=_palisades_area(_short_ring)):
+        with pytest.raises(
+            wildfires.FeedError,
+            match=r"^GDACS burned area of fire 1023255 \(update 13\) was not in the expected shape: ",
+        ):
+            _fetch()
+
+
+@pytest.mark.parametrize("answers,message", [
+    ({"area": TimeoutError("timed out")},
+     r"^GDACS request for the burned area of fire 1023255 \(update 13\) failed: TimeoutError"),
+    ({"area": b"<html>Bad Gateway</html>"},
+     r"^GDACS answer for the burned area of fire 1023255 \(update 13\) is not JSON"),
+    ({"listing": urllib.error.URLError("no route to host")},
+     r"^GDACS request for the wildfire list failed: URLError"),
+    ({"listing": b"[]"},
+     r"^GDACS answered the wildfire list with a JSON list, not an object$"),
+])
+def test_the_error_names_the_request_that_failed(gdacs_answers, answers, message):
+    with gdacs_answers(**answers):
+        with pytest.raises(wildfires.FeedError, match=message):
             _fetch()
 
 
@@ -516,19 +574,117 @@ def _hole_first(area):
     rings[0], rings[1] = rings[1], rings[0]
 
 
+def _patch_beside_the_outline(outline):
+    """A small square inside the outline's bounds but outside the outline.
+
+    Found on a grid over the bounds, so it is the same square every run.
+    """
+    west, east = min(p[0] for p in outline), max(p[0] for p in outline)
+    south, north = min(p[1] for p in outline), max(p[1] for p in outline)
+    area = {"type": "Polygon", "coordinates": [outline]}
+    for i in range(1, 20):
+        for j in range(1, 20):
+            longitude, latitude = west + (east - west) * i / 20, south + (north - south) * j / 20
+            if distance_to_area_km(latitude, longitude, area) > 0.5:
+                d = 0.001
+                return [[longitude - d, latitude - d], [longitude + d, latitude - d], [longitude + d, latitude + d],
+                        [longitude - d, latitude + d], [longitude - d, latitude - d]]
+    raise AssertionError("no point of the grid lies outside the outline")
+
+
+def _second_patch_as_a_ring(area):
+    """Raised in the review of part 3: some exporters write a second burned
+    patch as an extra ring of the same polygon. Inside the outline's bounds,
+    a check on bounds alone would take it for a hole and drop it."""
+    _rings(area).append(_patch_beside_the_outline(_rings(area)[0]))
+
+
 @pytest.mark.parametrize("change", [
     _other_event, _other_episode, _other_type, _centroid_only, _point_area, _short_ring, _short_hole,
     _nan_position, _nan_in_a_hole, _out_of_range_position, _one_number_position, _empty_position, _no_rings,
-    _hole_first,
+    _hole_first, _second_patch_as_a_ring,
 ])
 def test_a_burned_area_that_cannot_be_trusted_fails_the_whole_answer(gdacs_answers, change):
     """Geometry for another event, or a fire with no area, cannot place the
     fire - so neither is passed over quietly. Holes are checked too, though
-    they are filled, and a hole listed before the outline would otherwise
-    become the whole zone."""
+    they are filled. A later ring that is not inside the first is not a hole,
+    and dropping it would drop burned ground."""
     with gdacs_answers(area=_palisades_area(change)):
         with pytest.raises(wildfires.FeedError):
             _fetch()
+
+
+def _trimmed(ring):
+    # As the adapter reads a ring: longitude and latitude only.
+    return [position[:2] for position in ring]
+
+
+def test_the_patch_beside_the_outline_is_inside_its_bounds():
+    """So the test above proves more than a check on bounds alone could."""
+    outline = _trimmed(_rings(_recorded(PALISADES_AREA))[0])
+    patch = _patch_beside_the_outline(outline)
+    assert all(min(p[0] for p in outline) <= x <= max(p[0] for p in outline) for x, _ in patch)
+    assert all(min(p[1] for p in outline) <= y <= max(p[1] for p in outline) for _, y in patch)
+    assert not any(wildfires._inside(outline, patch))
+
+
+# A U shape: the notch between its arms is outside it.
+U_SHAPE = [[0, 0], [3, 0], [3, 3], [2, 3], [2, 1], [1, 1], [1, 3], [0, 3], [0, 0]]
+
+
+@pytest.mark.parametrize("point,inside", [
+    ([0.5, 2], True),     # in the left arm
+    ([2.5, 2], True),     # in the right arm
+    ([1.5, 0.5], True),   # in the base
+    ([1.5, 2], False),    # in the notch
+    ([0.5, 1], True),     # level with the notch's floor, whose vertices the ray passes
+    # A point on the ring itself counts as one side or the other, by a rule
+    # that counts each vertex once: inside on the south and west edges,
+    # outside on the north and east.
+    ([0.5, 0], True),
+    ([0, 2], True),
+    ([0.5, 3], False),
+    ([3, 2], False),
+    ([-1, 2], False),
+    ([4, 2], False),
+    ([1.5, 4], False),
+    ([1.5, -1], False),
+])
+def test_inside_follows_the_even_odd_rule(point, inside):
+    assert wildfires._inside(U_SHAPE, [point]) == [inside]
+
+
+def _recorded_polygons(name):
+    for feature in _recorded(name)["features"]:
+        if feature["properties"]["Class"] != "Poly_area":
+            continue
+        geometry = feature["geometry"]
+        for polygon in [geometry["coordinates"]] if geometry["type"] == "Polygon" else geometry["coordinates"]:
+            yield [_trimmed(ring) for ring in polygon]
+
+
+@pytest.mark.parametrize("name", [PALISADES_AREA, EATON_AREA, FRANCE_AREA])
+def test_inside_agrees_with_the_distance_to_each_recorded_outline(name):
+    """Across a grid over each outline, inside exactly where
+    geometry.distance_to_area_km says the distance is zero. The grid points
+    are the centres of its cells, so none lies on the outline itself, where
+    either answer would do."""
+    for polygon in _recorded_polygons(name):
+        outline = polygon[0]
+        area = {"type": "Polygon", "coordinates": [outline]}
+        west, east = min(p[0] for p in outline), max(p[0] for p in outline)
+        south, north = min(p[1] for p in outline), max(p[1] for p in outline)
+        grid = [[west + (east - west) * (i + 0.5) / 30, south + (north - south) * (j + 0.5) / 30]
+                for i in range(30) for j in range(30)]
+        expected = [distance_to_area_km(latitude, longitude, area) == 0 for longitude, latitude in grid]
+        assert wildfires._inside(outline, grid) == expected
+        assert 100 < sum(expected) < len(grid) - 100
+
+
+@pytest.mark.parametrize("name", [PALISADES_AREA, EATON_AREA, FRANCE_AREA])
+def test_every_recorded_hole_lies_inside_its_outline(name):
+    for polygon in _recorded_polygons(name):
+        wildfires._require_outline_first(polygon)
 
 
 @pytest.mark.parametrize("area", [204, b"null", b"[]"])
@@ -658,6 +814,17 @@ def test_one_list_serves_every_window(gdacs_answers, clock):
         _answer(since=T0 - timedelta(hours=168))
         _answer(since=T0 - timedelta(hours=1))
         _answer()
+    assert len(_list_requests(urlopen)) == 1
+
+
+def test_a_request_that_read_the_clock_before_midnight_is_still_covered(gdacs_answers, clock):
+    """A request reads the clock, then USGS and the flood list are fetched
+    before this list. If midnight passes in between, the shared list must
+    still reach back to the start of the longest window."""
+    asked_at = datetime(2025, 1, 9, 23, 59, 58, tzinfo=timezone.utc)
+    clock.now = asked_at + timedelta(seconds=5)
+    with gdacs_answers() as urlopen:
+        _answer(since=asked_at - timedelta(hours=168))
     assert len(_list_requests(urlopen)) == 1
 
 

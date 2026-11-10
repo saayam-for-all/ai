@@ -18,6 +18,7 @@ This is a copy of services/gdacs_floods.py with the wildfire differences, so
 that the flood adapter, still under review, is left as it is. The GDACS code
 the two have in common can move to one shared module once both are merged.
 """
+import bisect
 import http.client
 import json
 import urllib.parse
@@ -124,7 +125,12 @@ def fetch_events(latitude, longitude, search_radius_km, since):
             # leave out ground that has burned since.
             area = _AREAS.get((fire["event_id"], fire["episode_id"]), lambda: _burned_area(fire))
         except (KeyError, TypeError, ValueError, OverflowError) as e:
-            raise FeedError(f"GDACS burned area was not in the expected shape: {type(e).__name__}: {e}") from e
+            raise FeedError(
+                f"GDACS burned area of {_name(fire)} was not in the expected shape: {type(e).__name__}: {e}"
+            ) from e
+        # The event carries the list's retrieved_at, not the time its area was
+        # fetched. That is harmless: an area belongs to one update of one fire
+        # and never changes, so an area cached for days is still current.
         events.append(_event(fire, area.value))
     return feed_cache.FeedAnswer(events, retrieved_at, stale)
 
@@ -153,26 +159,49 @@ def _fires(from_date):
         "pageSize": PAGE_SIZE,
         "pageNumber": 1,
         "caller": "saayam",
-    })
+    }, "the wildfire list")
     if listing is None:
         return []
     try:
         features = _features(listing)
-        if len(features) >= PAGE_SIZE:
-            # A full page may have left fires on the next one, and a fire
-            # that is not looked at cannot be reported.
-            raise FeedError(f"GDACS returned a full page of {PAGE_SIZE}; the list may be incomplete")
-        return [_fire(feature) for feature in features]
-    except (KeyError, TypeError, ValueError, OverflowError) as e:
-        raise FeedError(f"GDACS payload was not in the expected shape: {type(e).__name__}: {e}") from e
+    except ValueError as e:
+        raise FeedError(f"GDACS payload was not in the expected shape: {e}") from e
+    if len(features) >= PAGE_SIZE:
+        # A full page may have left fires on the next one, and a fire that is
+        # not looked at cannot be reported.
+        raise FeedError(f"GDACS returned a full page of {PAGE_SIZE}; the list may be incomplete")
+    # The list is worldwide, so an error names the fire that failed.
+    fires = []
+    for feature in features:
+        try:
+            fires.append(_fire(feature))
+        except (KeyError, TypeError, ValueError, OverflowError) as e:
+            raise FeedError(
+                f"GDACS fire {_listed_id(feature)} was not in the expected shape: {type(e).__name__}: {e}"
+            ) from e
+    return fires
 
 
-def _get(url, params):
+def _listed_id(feature):
+    """The event ID a listed feature gives itself, for an error message."""
+    try:
+        return repr(feature["properties"]["eventid"])
+    except (KeyError, TypeError):
+        return "with no ID"
+
+
+def _name(fire):
+    """A fire and its update, for an error message."""
+    return f"fire {fire['event_id']} (update {fire['episode_id']})"
+
+
+def _get(url, params, what):
     """The decoded JSON object, or None when GDACS answers 204 No Content.
 
     GDACS answers a search with nothing to report with an empty 204, not an
     empty list. None is reserved for that: any other answer has to be a JSON
     object, or a 200 whose body is a bare ``null`` would read as "nothing".
+    ``what`` names the request in an error.
     """
     request = urllib.request.Request(
         f"{url}?{urllib.parse.urlencode(params)}",
@@ -187,13 +216,13 @@ def _get(url, params):
     except (OSError, http.client.HTTPException) as e:
         # GDACS reports its own overload as a 400, and a fire or update it does
         # not know as a 404 or a 400, so every HTTP error counts.
-        raise FeedUnreachable(f"GDACS request failed: {type(e).__name__}: {e}") from e
+        raise FeedUnreachable(f"GDACS request for {what} failed: {type(e).__name__}: {e}") from e
     try:
         payload = json.loads(body.decode("utf-8-sig"))
     except ValueError as e:
-        raise FeedError(f"GDACS answer is not JSON: {e}") from e
+        raise FeedError(f"GDACS answer for {what} is not JSON: {e}") from e
     if not isinstance(payload, dict):
-        raise FeedError(f"GDACS answered with a JSON {type(payload).__name__}, not an object")
+        raise FeedError(f"GDACS answered {what} with a JSON {type(payload).__name__}, not an object")
     return payload
 
 
@@ -212,18 +241,23 @@ def _fire(feature):
     if properties["eventtype"] != EVENT_TYPE:
         raise ValueError(f"listed as a {properties['eventtype']!r} event, not a wildfire")
     longitude, latitude = feature["geometry"]["coordinates"][:2]
-    # The level of the latest update, which is where the fire stands now. The
-    # fire's own level is the highest it has reached.
-    alert_level = properties["episodealertlevel"]
-    if alert_level not in SEVERITY:
-        raise ValueError(f"unknown alert level {alert_level!r}")
     running = properties["iscurrent"]
     if running not in ("true", "false"):
         raise ValueError(f"iscurrent is {running!r}")
+    # A fire's own level is the highest it has reached, and the one the list
+    # is filtered on; its latest update's level is where it stands now. While
+    # GDACS marks a fire as burning, its own level is used, so one that eased
+    # to Green while it burns is still reported to people in its burned area.
+    # Once it has stopped, its latest update decides. Raised in the review of
+    # part 3.
+    highest, latest = properties["alertlevel"], properties["episodealertlevel"]
+    for level in (highest, latest):
+        if level not in SEVERITY:
+            raise ValueError(f"unknown alert level {level!r}")
     return {
         "event_id": _whole(properties["eventid"]),
         "episode_id": _whole(properties["episodeid"]),
-        "alert_level": alert_level,
+        "alert_level": highest if running == "true" else latest,
         "name": str(properties["name"]),
         "latitude": _real(latitude, -90, 90),
         "longitude": _real(longitude, -180, 180),
@@ -252,7 +286,7 @@ def _burned_area(fire):
         "eventid": fire["event_id"],
         "episodeid": fire["episode_id"],
         "polygontype": "area",
-    })
+    }, f"the burned area of {_name(fire)}")
     wanted = (EVENT_TYPE, fire["event_id"], fire["episode_id"])
     polygons = []
     for feature in _features(payload) if payload is not None else []:
@@ -293,17 +327,43 @@ def _burned_area(fire):
 def _require_outline_first(rings):
     """GeoJSON lists a polygon's outline first, then its holes.
 
-    Only the first ring is kept, so a hole listed first would become the
-    whole zone and leave the burned ground around it outside. Every other
-    ring must lie within the first one's bounds, which a hole listed first
-    never does.
+    Only the first ring is kept, so every later ring must lie inside it.
+    Otherwise burned ground would be dropped from the zone: a hole listed
+    first would become the whole zone, and a second burned patch written as
+    an extra ring of the same polygon would vanish. Every position of every
+    later ring is checked, so either fails the check. The second case was
+    raised in the review of part 3.
     """
-    longitudes = [longitude for longitude, _ in rings[0]]
-    latitudes = [latitude for _, latitude in rings[0]]
-    west, east, south, north = min(longitudes), max(longitudes), min(latitudes), max(latitudes)
-    for ring in rings[1:]:
-        if not all(west <= longitude <= east and south <= latitude <= north for longitude, latitude in ring):
-            raise ValueError("a burned polygon's first ring is not its outline")
+    later = [position for ring in rings[1:] for position in ring]
+    if not all(_inside(rings[0], later)):
+        raise ValueError("a later ring of a burned polygon lies outside its first ring")
+
+
+def _inside(ring, points):
+    """Whether each point lies inside a ring, by the even-odd rule.
+
+    In longitude and latitude, because GeoJSON draws a polygon's edges as
+    straight lines in them. Each edge is tested only against the points
+    level with it, found by bisecting the points sorted by latitude: a
+    burned area of 7,900 positions, which took 20 s with
+    geometry.distance_to_area_km, takes milliseconds.
+    """
+    order = sorted(range(len(points)), key=lambda i: points[i][1])
+    latitudes = [points[i][1] for i in order]
+    inside = [False] * len(points)
+    for (x1, y1), (x2, y2) in zip(ring, ring[1:] + ring[:1]):
+        if y1 == y2:
+            continue
+        # The points with low <= latitude < high: the edge crosses the line
+        # east from each of them at most once, and a vertex shared by two
+        # edges is counted for one of them only.
+        low, high = min(y1, y2), max(y1, y2)
+        for k in range(bisect.bisect_left(latitudes, low), bisect.bisect_left(latitudes, high)):
+            i = order[k]
+            x, y = points[i]
+            if x < x1 + (y - y1) * (x2 - x1) / (y2 - y1):
+                inside[i] = not inside[i]
+    return inside
 
 
 def _position(position):
