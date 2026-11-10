@@ -29,13 +29,13 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_classification_resilience.py`](../../tests/test_classification_resilience.py) | Unit | - | `services/classification_service.py` | 10 |
 | [`tests/test_client_factory.py`](../../tests/test_client_factory.py) | Unit | #193 | `utils/client.py create_chat_model` | 9 |
 | [`tests/test_client_imports.py`](../../tests/test_client_imports.py) | Integration | #154 | `utils/client.py` | 2 |
-| [`tests/test_disaster_check.py`](../../tests/test_disaster_check.py) | Unit | #191 | `services/disaster_check.py` | 66 |
-| [`tests/test_disaster_check_contract.py`](../../tests/test_disaster_check_contract.py) | Contract | #191 | `disaster_check_handler` | 60 |
+| [`tests/test_disaster_check.py`](../../tests/test_disaster_check.py) | Unit | #191 | `services/disaster_check.py` | 71 |
+| [`tests/test_disaster_check_contract.py`](../../tests/test_disaster_check_contract.py) | Contract | #191 | `disaster_check_handler` | 62 |
 | [`tests/test_emergency_dataset.py`](../../tests/test_emergency_dataset.py) | Dataset | #146 | `services/emergency_numbers.json` | 17 |
 | [`tests/test_emergency_locale.py`](../../tests/test_emergency_locale.py) | Unit | #146 | `services/emergency.py` | 67 |
 | [`tests/test_emergency_s3_reader.py`](../../tests/test_emergency_s3_reader.py) | Unit | #334 | `services/emergency.py S3 reader` | 23 |
 | [`tests/test_feed_cache.py`](../../tests/test_feed_cache.py) | Unit | #191 | `services/feed_cache.py` | 21 |
-| [`tests/test_gdacs_floods.py`](../../tests/test_gdacs_floods.py) | Unit | #191 | `services/gdacs_floods.py` | 82 |
+| [`tests/test_gdacs_floods.py`](../../tests/test_gdacs_floods.py) | Unit | #191 | `services/gdacs_floods.py` | 89 |
 | [`tests/test_gdacs_wildfires.py`](../../tests/test_gdacs_wildfires.py) | Unit | #191 | `services/gdacs_wildfires.py` | 101 |
 | [`tests/test_generate_answer.py`](../../tests/test_generate_answer.py) | Contract | #169 | `generate_answer_handler` | 50 |
 | [`tests/test_geometry.py`](../../tests/test_geometry.py) | Unit | #191 | `services/geometry.py` | 11 |
@@ -47,8 +47,8 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_router.py`](../../tests/test_router.py) | Integration | #171 | `lambda_function.lambda_handler` | 36 |
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
 | [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 57 |
-| [`tests/test_usgs_earthquakes.py`](../../tests/test_usgs_earthquakes.py) | Unit | #191 | `services/usgs_earthquakes.py` | 66 |
-| | | | **Total** | **828** |
+| [`tests/test_usgs_earthquakes.py`](../../tests/test_usgs_earthquakes.py) | Unit | #191 | `services/usgs_earthquakes.py` | 71 |
+| | | | **Total** | **847** |
 
 ## Every test
 
@@ -132,7 +132,7 @@ Guard against the utils/client.py import regression that broke dev.
 
 ### `test_disaster_check.py`
 
-*Unit · issue #191 · 66 tests*
+*Unit · issue #191 · 71 tests*
 
 Which events reach a location, and the zone drawn around each - issue #191.
 
@@ -154,10 +154,14 @@ Which events reach a location, and the zone drawn around each - issue #191.
 | `test_every_real_feed_has_what_the_check_relies_on` | The four names, an answer shared across every window a caller may ask for, and event types no other feed also answers for. |
 | `test_each_feed_reports_when_it_actually_answered` | A cached answer is older than the request, and says so. |
 | `test_an_event_carries_the_time_its_own_feed_answered` | An event carries the time its own feed answered. |
-| `test_a_stale_answer_is_named_and_still_counts_as_an_answer` | A feed that could not be reached, standing in with an older answer inside its limit, is marked stale - and a `false` can rest on it. |
+| `test_a_stale_answer_never_backs_a_negative_answer` | Raised in the review of part 6. A feed that could not be reached, standing in with an older answer, may be missing an event it has published since - and a client that reads only `disaster_detected` would never see the `stale` beside it. So nothing found is a 502, not `false`. |
+| `test_a_stale_answer_still_reports_what_it_lists` | What the older answer does list is still there, so it is reported, named as stale, with the time the feed gave it. |
+| `test_another_feeds_detection_still_stands_beside_a_stale_one` | Another feeds detection still stands beside a stale one. |
 | `test_a_stale_answer_does_not_cover_for_a_feed_that_is_down` | A stale answer does not cover for a feed that is down. |
 | `test_an_unknown_severity_takes_down_only_its_own_feed` | CAP's fifth value, "Unknown", is not on the scale events are ranked by. |
 | `test_an_unknown_severity_far_away_still_counts_against_its_feed` | Checked on every event the feed returns, not only the ones that reach the caller, so a feed with an unmapped scale is caught on its first answer. |
+| `test_the_logged_error_names_the_event_that_could_not_be_used` | Raised in the review of part 6: one event anywhere can take a feed down for every caller, so the log has to lead to it. |
+| `test_an_event_that_is_not_a_record_is_still_reported_as_unusable` | An event that is not a record is still reported as unusable. |
 | `test_an_event_with_a_published_area_is_judged_by_the_area` | An event with a published area is judged by the area. |
 | `test_a_published_area_is_rendered_as_it_was_published` | A published area is rendered as it was published. |
 | `test_an_area_the_check_cannot_read_takes_down_only_its_own_feed` | An area the check cannot read takes down only its own feed. |
@@ -173,11 +177,11 @@ Which events reach a location, and the zone drawn around each - issue #191.
 | `test_numeric_strings_and_zero_coordinates_are_accepted` | 0, 0 is a real place; a falsy check would reject it as missing. |
 | `test_an_unusable_query_is_refused_with_a_reason` | An unusable query is refused with a reason. |
 
-> 34 test functions expand to 66 cases through parametrisation.
+> 38 test functions expand to 71 cases through parametrisation.
 
 ### `test_disaster_check_contract.py`
 
-*Contract · issue #191 · 60 tests*
+*Contract · issue #191 · 62 tests*
 
 The disaster_check contract: the Lambda event in, the envelope out - issue #191.
 
@@ -211,6 +215,8 @@ The disaster_check contract: the Lambda event in, the envelope out - issue #191.
 | `test_a_repeated_request_asks_no_feed_at_all` | A repeated request asks no feed at all. |
 | `test_a_cached_answer_reports_when_the_feed_actually_answered` | Raised in the review of part 1: a cached answer must not look current. |
 | `test_while_gdacs_is_down_its_last_answer_stands_in_marked_stale` | GDACS publishes its list about once a day; for up to 6 hours an earlier answer stands in, with the time GDACS gave it. |
+| `test_a_quiet_location_while_gdacs_is_down_is_an_error_not_an_all_clear` | Raised in the review of part 6. A list standing in may be missing a flood or fire GDACS has raised to Orange since, and a client reading only `disaster_detected` would never see that it was stale. With nothing found, the answer is a 502 rather than a `false` resting on it. |
+| `test_a_request_made_as_midnight_passed_asks_each_feed_once` | Found while reviewing part 3. The request reads the clock at 23:59:58, and the feeds are asked a few seconds later, on the next day. Each shared answer still covers the request's whole seven-day window, so none is fetched twice. |
 | `test_an_earthquake_answer_never_stands_in_once_usgs_is_down` | An earthquake answer never stands in once usgs is down. |
 | `test_a_quiet_location_is_a_first_class_negative_answer` | A quiet location is a first class negative answer. |
 | `test_each_gdacs_list_is_asked_for_its_own_event_type` | Each gdacs list is asked for its own event type. |
@@ -230,7 +236,7 @@ The disaster_check contract: the Lambda event in, the envelope out - issue #191.
 | `test_the_router_reaches_the_real_handler` | `"service": "disaster_check"` in the body, as the issue specifies. |
 | `test_a_direct_invoke_where_the_event_is_the_payload` | Another Lambda invoking this one sends no `body` wrapper. |
 
-> 46 test functions expand to 60 cases through parametrisation.
+> 48 test functions expand to 62 cases through parametrisation.
 
 ### `test_emergency_dataset.py`
 
@@ -361,7 +367,7 @@ The feed cache - issue #191, part 6.
 
 ### `test_gdacs_floods.py`
 
-*Unit · issue #191 · 82 tests*
+*Unit · issue #191 · 89 tests*
 
 The GDACS flood adapter, replayed from recorded responses - issue #191, part 2.
 
@@ -387,6 +393,10 @@ The GDACS flood adapter, replayed from recorded responses - issue #191, part 2.
 | `test_a_flood_that_cannot_be_trusted_fails_the_whole_answer` | A flood is not skipped for being unreadable: it might be the one covering the caller. |
 | `test_an_area_that_cannot_be_trusted_fails_the_whole_answer` | GDACS answers a request for an unknown ID with another event's geometry, and a flood with no area cannot be placed - so neither is passed over quietly. |
 | `test_an_area_answered_with_nothing_usable_fails` | An area answered with nothing usable fails. |
+| `test_the_error_names_the_flood_that_could_not_be_read` | The error names the flood that could not be read. |
+| `test_a_flood_without_an_id_is_still_named_in_the_error` | A flood without an id is still named in the error. |
+| `test_the_error_names_the_flood_whose_area_could_not_be_read` | The error names the flood whose area could not be read. |
+| `test_the_error_names_the_request_that_failed` | The error names the request that failed. |
 | `test_the_flood_list_and_areas_are_reused_for_15_minutes` | The flood list and areas are reused for 15 minutes. |
 | `test_after_15_minutes_the_list_is_fetched_again_but_the_area_is_not` | An affected area belongs to one update of one flood and never changes. |
 | `test_no_floods_is_reused_too` | No floods is reused too. |
@@ -396,13 +406,14 @@ The GDACS flood adapter, replayed from recorded responses - issue #191, part 2.
 | `test_a_stale_list_cannot_place_a_flood_whose_area_was_never_fetched` | The list stands in, but the area of a flood nobody nearby has asked about yet cannot be fetched - so there is no answer, not a `false`. |
 | `test_an_unreadable_list_is_not_cached` | An unreadable list is not cached. |
 | `test_one_list_serves_every_window` | One list serves every window. |
+| `test_a_request_that_read_the_clock_before_midnight_is_still_covered` | Found while reviewing part 3: a request reads the clock, and the list is fetched seconds later, after USGS has answered. Read at 23:59:58 and fetched at 00:00:03 the next day, a seven-day window must still fit inside the shared list, or the list is fetched a second time. |
 | `test_the_last_list_stands_in_across_midnight` | The list fetched at 23:30 still stands in at 00:05 the next day. |
 | `test_an_answer_that_came_back_unreadable_never_lets_the_old_list_stand_in` | GDACS answered, so it may be listing a flood the old list does not have. Reported as unavailable, not as the old list's "nothing". |
 | `test_an_affected_area_stands_in_for_up_to_7_days` | An area belongs to one update of one flood and never changes. |
 | `test_a_window_reaching_back_past_the_shared_list_is_asked_for_on_its_own` | A window reaching back past the shared list is asked for on its own. |
 | `test_only_a_gdacs_that_could_not_be_reached_counts_as_unreachable` | Only a gdacs that could not be reached counts as unreachable. |
 
-> 34 test functions expand to 82 cases through parametrisation.
+> 39 test functions expand to 89 cases through parametrisation.
 
 ### `test_gdacs_wildfires.py`
 
@@ -782,14 +793,15 @@ The shared token counter (issue #159).
 
 ### `test_usgs_earthquakes.py`
 
-*Unit · issue #191 · 66 tests*
+*Unit · issue #191 · 71 tests*
 
 The USGS earthquake adapter, replayed from recorded responses - issue #191.
 
 | Test | Behaviour it protects |
 | --- | --- |
-| `test_the_query_asks_usgs_for_every_earthquake_worldwide_in_the_longest_window` | No location is sent, and the answer reaches back seven days, the longest window allowed: one answer serves every caller. |
+| `test_the_query_asks_usgs_for_every_earthquake_worldwide_in_the_longest_window` | No location is sent, and the answer reaches back seven days and an hour, the longest window allowed and a margin: one answer serves every caller. |
 | `test_the_start_is_rounded_down_to_the_hour_in_utc` | USGS reads UTC, whatever zone the clock here is in. |
+| `test_a_request_that_read_the_clock_before_the_hour_turned_is_still_covered` | Found while reviewing part 3: a request reads the clock, and the shared answer is fetched a moment later. Read at 11:59:59 and fetched at 12:00:01, a seven-day window must still fit inside that answer, or the request fetches a second one of its own. |
 | `test_a_window_reaching_back_past_the_shared_answer_is_asked_for_on_its_own` | Not reachable through the service, whose longest window is the one the shared answer covers - but never answered from too short an answer. |
 | `test_a_recorded_earthquake_becomes_a_feed_neutral_event` | A recorded earthquake becomes a feed neutral event. |
 | `test_no_events_is_an_empty_answer_not_a_failure` | No events is an empty answer not a failure. |
@@ -809,6 +821,8 @@ The USGS earthquake adapter, replayed from recorded responses - issue #191.
 | `test_an_unreachable_feed_raises_rather_than_reporting_nothing` | An unreachable feed raises rather than reporting nothing. |
 | `test_an_unreadable_answer_raises_rather_than_reporting_nothing` | An unreadable answer raises rather than reporting nothing. |
 | `test_an_event_that_cannot_be_trusted_fails_the_whole_answer` | A feature that cannot be read is not skipped. |
+| `test_the_error_names_the_earthquake_that_could_not_be_read` | Raised in the review of part 6: the answer is worldwide, so one unreadable event fails the feed for every caller, and the logged error has to lead to it. |
+| `test_an_event_without_an_id_is_still_named_in_the_error` | An event without an id is still named in the error. |
 | `test_an_answer_that_failed_is_not_cached` | An answer that failed is not cached. |
 
-> 22 test functions expand to 66 cases through parametrisation.
+> 25 test functions expand to 71 cases through parametrisation.

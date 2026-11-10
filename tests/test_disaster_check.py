@@ -193,7 +193,7 @@ def test_two_feeds_from_one_source_are_told_apart_by_event_type(capsys):
     the log and the error say which."""
     floods = _Feed(source="GDACS", event_types=("flood",))
     fires = _Feed(raises=RuntimeError("feed down"), source="GDACS", event_types=("wildfire",))
-    with pytest.raises(dc.DisasterCheckUnavailable, match=r"^no answer from: GDACS \(wildfire\)$"):
+    with pytest.raises(dc.DisasterCheckUnavailable, match=r"^no current answer from: GDACS \(wildfire\)$"):
         _check(floods, fires)
     assert "disaster_check feed GDACS (wildfire) failed" in capsys.readouterr().out
 
@@ -237,18 +237,42 @@ def test_an_event_carries_the_time_its_own_feed_answered():
     assert event["verified_by"][0]["retrieved_at"] == "2026-10-01T11:48:00Z"
 
 
-def test_a_stale_answer_is_named_and_still_counts_as_an_answer():
-    """A feed that could not be reached, standing in with an older answer
-    inside its limit, is marked stale - and a `false` can rest on it."""
+def test_a_stale_answer_never_backs_a_negative_answer():
+    """Raised in the review of part 6. A feed that could not be reached,
+    standing in with an older answer, may be missing an event it has
+    published since - and a client that reads only `disaster_detected` would
+    never see the `stale` beside it. So nothing found is a 502, not `false`."""
+    earlier = NOW - timedelta(hours=2)
+    with pytest.raises(dc.DisasterCheckUnavailable, match=r"^no current answer from: GDACS \(flood\)$"):
+        _check(
+            _Feed(source="USGS"),
+            _Feed(source="GDACS", event_types=("flood",), retrieved_at=earlier, stale=True),
+        )
+
+
+def test_a_stale_answer_still_reports_what_it_lists():
+    """What the older answer does list is still there, so it is reported,
+    named as stale, with the time the feed gave it."""
     earlier = NOW - timedelta(hours=2)
     result = _check(
         _Feed(source="USGS"),
-        _Feed(source="GDACS", event_types=("flood",), retrieved_at=earlier, stale=True),
+        _Feed([_event("flood-1")], source="GDACS", event_types=("flood",), retrieved_at=earlier, stale=True),
     )
-    assert result["disaster_detected"] is False
+    assert result["disaster_detected"] is True
+    assert [e["event_id"] for e in result["events"]] == ["flood-1"]
+    assert result["events"][0]["verified_by"][0]["retrieved_at"] == "2026-10-01T10:00:00Z"
     assert [(s["source"], s["status"], s["retrieved_at"]) for s in result["sources_checked"]] == [
         ("USGS", "ok", "2026-10-01T12:00:00Z"), ("GDACS", "stale", "2026-10-01T10:00:00Z"),
     ]
+
+
+def test_another_feeds_detection_still_stands_beside_a_stale_one():
+    result = _check(
+        _Feed([_event("quake-1")], source="USGS"),
+        _Feed(source="GDACS", event_types=("flood",), stale=True),
+    )
+    assert result["disaster_detected"] is True
+    assert [(s["source"], s["status"]) for s in result["sources_checked"]] == [("USGS", "ok"), ("GDACS", "stale")]
 
 
 def test_a_stale_answer_does_not_cover_for_a_feed_that_is_down():
@@ -285,6 +309,25 @@ def test_an_unknown_severity_far_away_still_counts_against_its_feed():
     careless = _Feed([_event("weather-1", latitude=60.0, severity="unknown")], source="ALERTS")
     with pytest.raises(dc.DisasterCheckUnavailable):
         _check(careless)
+
+
+@pytest.mark.parametrize("unusable", [
+    _event("weather-7", latitude=60.0, severity="unknown"),
+    {**_event("quake-9"), "radius_km": None},
+])
+def test_the_logged_error_names_the_event_that_could_not_be_used(capsys, unusable):
+    """Raised in the review of part 6: one event anywhere can take a feed
+    down for every caller, so the log has to lead to it."""
+    careless = _Feed([_event("quake-1", latitude=60.0), unusable], source="ALERTS")
+    with pytest.raises(dc.DisasterCheckUnavailable):
+        _check(careless)
+    assert f"disaster_check feed ALERTS (earthquake) failed: UnusableEvent: event {unusable['event_id']!r}: " in capsys.readouterr().out
+
+
+def test_an_event_that_is_not_a_record_is_still_reported_as_unusable(capsys):
+    with pytest.raises(dc.DisasterCheckUnavailable):
+        _check(_Feed(["not an event"], source="ALERTS"))
+    assert "disaster_check feed ALERTS (earthquake) failed: UnusableEvent: event None: " in capsys.readouterr().out
 
 
 # -------------------------------------------------------------------------

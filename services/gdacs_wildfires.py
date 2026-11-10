@@ -75,9 +75,11 @@ AREA_FRESH_SECONDS = 24 * 60 * 60
 AREA_STALE_SECONDS = 7 * 24 * 60 * 60
 
 # The shared list reaches back far enough for the longest window
-# disaster_check accepts. A window reaching further back is asked for on its
-# own.
-COVER_HOURS = 168
+# disaster_check accepts, and an hour more, for the seconds between a request
+# reading the clock and this list being fetched, after USGS and the flood
+# list: without it, a request made as midnight passed would fetch the list a
+# second time. A window reaching further back is asked for on its own.
+COVER_HOURS = 169
 
 _LISTS = feed_cache.FeedCache(fresh_seconds=LIST_FRESH_SECONDS, stale_seconds=LIST_STALE_SECONDS, max_entries=1)
 # Burned areas are small: 5 to 90 KB as JSON for the fires measured.

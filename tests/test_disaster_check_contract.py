@@ -121,6 +121,17 @@ class _Clock:
         return self.now
 
 
+class _ClockThatMoves:
+    """The first reading, which is the request's own, then a later one."""
+
+    def __init__(self, first, then):
+        self.readings = [first]
+        self.then = then
+
+    def __call__(self):
+        return self.readings.pop() if self.readings else self.then
+
+
 def _at(moment):
     """Run requests, and the caches behind them, at a moment."""
     return mock.patch.object(feed_cache, "utcnow", _Clock(moment))
@@ -548,6 +559,38 @@ def test_while_gdacs_is_down_its_last_answer_stands_in_marked_stale(feeds):
         ("GDACS", ["flood"], "stale", "2026-10-06T12:00:00Z"),
         ("GDACS", ["wildfire"], "stale", "2026-10-06T12:00:00Z"),
     ]
+
+
+def test_a_quiet_location_while_gdacs_is_down_is_an_error_not_an_all_clear(feeds):
+    """Raised in the review of part 6. A list standing in may be missing a
+    flood or fire GDACS has raised to Orange since, and a client reading only
+    `disaster_detected` would never see that it was stale. With nothing found,
+    the answer is a 502 rather than a `false` resting on it."""
+    start = datetime(2026, 10, 6, 12, 0, 0, tzinfo=timezone.utc)
+    clock = _Clock(start)
+    with mock.patch.object(feed_cache, "utcnow", clock):
+        with _india_flood(feeds):
+            assert _call(KOCHI)["body"]["disaster_detected"] is False
+        clock.now = start + timedelta(minutes=20)
+        with feeds(floods=DOWN, wildfires=DOWN):
+            res = _call(KOCHI)
+
+    assert res["statusCode"] == 502
+    assert res["body"]["code"] == "DISASTER_CHECK_UNAVAILABLE"
+    assert "disaster_detected" not in res["body"]
+
+
+def test_a_request_made_as_midnight_passed_asks_each_feed_once(feeds):
+    """Found while reviewing part 3. The request reads the clock at 23:59:58,
+    and the feeds are asked a few seconds later, on the next day. Each shared
+    answer still covers the request's whole seven-day window, so none is
+    fetched twice."""
+    read_at = datetime(2026, 10, 6, 23, 59, 58, tzinfo=timezone.utc)
+    clock = _ClockThatMoves(read_at, read_at + timedelta(seconds=5))
+    with mock.patch.object(feed_cache, "utcnow", clock), feeds() as urlopen:
+        res = _call({"latitude": 20, "longitude": 10, "window_hours": 168})
+    assert res["statusCode"] == 200
+    assert urlopen.call_count == 3, "one call per feed"
 
 
 def test_an_earthquake_answer_never_stands_in_once_usgs_is_down(feeds):
