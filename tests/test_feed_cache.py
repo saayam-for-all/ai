@@ -11,7 +11,7 @@ from unittest import mock
 
 import pytest
 
-from services import feed_cache, gdacs_floods, usgs_earthquakes
+from services import feed_cache, gdacs_floods, gdacs_wildfires, usgs_earthquakes
 
 pytestmark = pytest.mark.unit
 
@@ -254,6 +254,16 @@ def test_floods_are_cached_for_15_minutes_and_served_stale_up_to_6_hours():
     assert gdacs_floods._LISTS.fresh == timedelta(minutes=15)
     assert gdacs_floods._LISTS.stale == timedelta(hours=6)
     assert gdacs_floods._AREAS.fresh == timedelta(hours=24)
+
+
+def test_wildfires_are_cached_like_floods():
+    """One shared list, and burned areas kept by fire and update."""
+    assert gdacs_wildfires._LISTS.fresh == timedelta(minutes=15)
+    assert gdacs_wildfires._LISTS.stale == timedelta(hours=6)
+    assert gdacs_wildfires._LISTS.max_entries == 1
+    assert gdacs_wildfires._AREAS.fresh == timedelta(hours=24)
+    assert gdacs_wildfires._AREAS.stale == timedelta(days=7)
+    assert gdacs_wildfires._AREAS.max_entries == 8
 
 
 # -------------------------------------------------------------------------
