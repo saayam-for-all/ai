@@ -128,7 +128,7 @@ reasoning, not content. Combined saving is roughly **1,900 tokens per full
 request, ~23% of total spend**, from one keyword argument.
 
 Applied in `fix/token-usage-and-reasoning-effort` (#194): `utils/client.py` explicitly
-pins `reasoning_effort="low"` on `ModelTarget` for `groq_llm`.
+pins `reasoning_effort="low"` on `ModelTarget` for `get_groq_llm()`.
 
 ### 3.2 Classification re-sends the taxonomy at every level
 
@@ -222,8 +222,8 @@ python tools/measure_token_baseline.py --service classify subject
 
 Reads `GROQ_API_KEY` / `GEMINI_API_KEY` from `.env`. `utils/client.py` loads
 keys from SSM only, which is correct for Lambda and unusable on a laptop, so
-the harness builds and injects its own clients rather than changing how the
-deployed function loads credentials.
+the harness serves the `.env` keys in place of the SSM read rather than
+changing how the deployed function loads credentials.
 
 Costs roughly 45 live calls per full run. Re-run when a prompt or a model
 changes, and commit the regenerated `token_baseline.json`.

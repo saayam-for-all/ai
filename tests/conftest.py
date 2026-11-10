@@ -20,6 +20,40 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 import lambda_function as LF  # noqa: E402
+import utils.client as _client_module  # noqa: E402
+
+
+# ---------------------------------------------------------------------------
+# Provider keys: hermetic, and fresh per test
+# ---------------------------------------------------------------------------
+
+class _KeylessSSM:
+    """Answers every SSM read with "no such parameter"."""
+
+    def get_parameters(self, **_kwargs):
+        return {"Parameters": []}
+
+
+def _clear_client_caches():
+    _client_module._fetch_keys.cache_clear()
+    _client_module._create_chat_model_cached.cache_clear()
+    _client_module._build_groq_client.cache_clear()
+    _client_module._build_gemini_client.cache_clear()
+    _client_module._last_failure_at = None
+
+
+@pytest.fixture(autouse=True)
+def _provider_keys(monkeypatch):
+    """Reset client caches and stub utils.client's boto3 with a keyless SSM.
+    Tests that need keys patch ``_load_keys`` or install their own fake."""
+    _clear_client_caches()
+    monkeypatch.setattr(
+        _client_module,
+        "boto3",
+        type("KeylessBoto3", (), {"client": staticmethod(lambda *a, **k: _KeylessSSM())}),
+    )
+    yield
+    _clear_client_caches()
 
 
 # ---------------------------------------------------------------------------

@@ -2,9 +2,8 @@
 Unit tests for the Generate Subject service.
 
 These tests mock the LLM entirely. They make NO network calls and do NOT touch
-AWS SSM or any external model. Importing utils.subject_generator triggers the
-SSM bootstrap in utils.client, which fails gracefully (no creds) and leaves the
-LLM handles as None; the tests then inject a fake LLM in the module namespace.
+AWS SSM or any external model: the service asks utils.client for its models at
+the point of use, and the tests replace those accessors in the module namespace.
 """
 
 import pytest
@@ -12,6 +11,11 @@ import pytest
 # Subject generation from a request description.
 pytestmark = pytest.mark.unit
 import utils.subject_generator as sg
+
+
+def _returning(value):
+    """An accessor stand-in that always hands back the same object."""
+    return lambda: value
 
 
 class _FakeMessage:
@@ -29,10 +33,8 @@ class _FakeLLM:
 
 
 def _use_fake(monkeypatch, content):
-    monkeypatch.setattr(sg, "groq_llm", _FakeLLM(content))
-    monkeypatch.setattr(sg, "_use_groq", True)
-    monkeypatch.setattr(sg, "gemini_llm", None)
-    monkeypatch.setattr(sg, "_use_gemini", False)
+    monkeypatch.setattr(sg, "get_groq_llm", _returning(_FakeLLM(content)))
+    monkeypatch.setattr(sg, "get_gemini_llm", _returning(None))
 
 
 # ---------- _clean_subject ----------
@@ -83,10 +85,8 @@ def test_generate_empty_description_returns_fallback():
 
 
 def test_generate_falls_back_to_description_when_no_llm(monkeypatch):
-    monkeypatch.setattr(sg, "_use_groq", False)
-    monkeypatch.setattr(sg, "groq_llm", None)
-    monkeypatch.setattr(sg, "_use_gemini", False)
-    monkeypatch.setattr(sg, "gemini_llm", None)
+    monkeypatch.setattr(sg, "get_groq_llm", _returning(None))
+    monkeypatch.setattr(sg, "get_gemini_llm", _returning(None))
     desc = "I need help finding a food bank near me this week."
     result = sg.generate_subject_from_description(desc)
     assert result  # non-empty
@@ -111,10 +111,8 @@ class _RecordingLLM:
 
 def _capture_prompt(monkeypatch, description="I need help with math"):
     recorder = _RecordingLLM()
-    monkeypatch.setattr(sg, "groq_llm", recorder)
-    monkeypatch.setattr(sg, "_use_groq", True)
-    monkeypatch.setattr(sg, "gemini_llm", None)
-    monkeypatch.setattr(sg, "_use_gemini", False)
+    monkeypatch.setattr(sg, "get_groq_llm", _returning(recorder))
+    monkeypatch.setattr(sg, "get_gemini_llm", _returning(None))
     sg.generate_subject_from_description(description)
     assert recorder.prompt, "service did not build a prompt"
     return recorder.prompt

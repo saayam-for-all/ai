@@ -18,8 +18,8 @@ prompts or the models change.
 
 Credentials come from .env (GROQ_API_KEY / GEMINI_API_KEY). utils/client.py
 reads keys from SSM only, which is right for Lambda and useless on a laptop,
-so this script builds its own clients and injects them. It deliberately does
-not change how the deployed function loads credentials.
+so this script replaces its key loader with the .env keys. It deliberately
+does not change how the deployed function loads credentials.
 """
 
 from __future__ import annotations
@@ -136,63 +136,23 @@ def load_env(path=REPO_ROOT / ".env") -> dict:
 
 
 def install_clients(groq_key: str, gemini_key: str) -> list[str]:
-    """Build real clients and push them into every module that holds one.
+    """Serve the .env keys in place of the SSM read.
 
-    `utils/__init__.py` and `utils/subject_generator.py` do
-    `from utils.client import groq_llm`, which binds the value at import time.
-    Setting it back on `utils.client` alone would leave both of them holding
-    the None they imported, and the harness would silently measure nothing.
+    Every consumer asks `utils.client` for its client at the point of use
+    (issue #237), so replacing the key loader is enough: there are no copies
+    of a client bound at import time left to re-point.
     """
-    from groq import Groq
-    from google import genai
-    from langchain_google_genai import ChatGoogleGenerativeAI
-
     import utils.client as C
-    from utils.model_fallback import ModelTarget
+
+    keys = (groq_key or None, gemini_key or None)
+    C._fetch_keys.cache_clear()
+    C._load_keys = lambda: keys
 
     installed = []
-
-    if groq_key:
-        C.GROQ_API_KEY = groq_key
-        C.client = Groq(api_key=groq_key)
-        C.groq_llm = C.create_chat_model(
-            ModelTarget(
-                provider="groq",
-                model=C.GROQ_MODEL,
-                reasoning_effort=C.GROQ_REASONING_EFFORT,
-            ),
-            temperature=C.GROQ_TEMPERATURE,
-        )
-        C._use_groq = True
+    if C.get_groq_client() is not None and C.get_groq_llm() is not None:
         installed.append("groq")
-
-    if gemini_key:
-        C.GEMINI_API_KEY = gemini_key
-        C._gemini_client = genai.Client(api_key=gemini_key)
-        C.gemini_llm = ChatGoogleGenerativeAI(
-            model=C.GEMINI_MODEL,
-            temperature=C.GEMINI_TEMPERATURE,
-            google_api_key=gemini_key,
-        )
-        C._use_gemini = True
+    if C.get_gemini_client() is not None and C.get_gemini_llm() is not None:
         installed.append("gemini")
-
-    # Re-point the modules that copied these names at import time.
-    import utils
-    import utils.subject_generator as SG
-    import services.classification_service as CS
-
-    for module in (utils, SG):
-        module.groq_llm = C.groq_llm
-        module.gemini_llm = C.gemini_llm
-    for module in (SG,):
-        module._use_groq = C._use_groq
-        module._use_gemini = C._use_gemini
-
-    CS.client = C.client
-    CS._use_groq = C._use_groq
-    CS._gemini_client = C._gemini_client
-
     return installed
 
 

@@ -10,6 +10,19 @@ team works and reviews in.
 
 ## Unreleased
 
+### Provider keys loaded on first use — [#237](https://github.com/saayam-for-all/ai/issues/237) (Part A)
+
+**Changed**
+
+- Provider keys are read from SSM on first model use, not at import, so cold starts (including Emergency Contacts) skip SSM.
+- Import-time singletons replaced by accessors: `get_groq_client()`, `get_gemini_client()`, `get_groq_llm()`, `get_gemini_llm()`, `has_groq()`.
+- The `INIT LOG: ... Key Found` lines now appear on first model use, not at cold start.
+
+**Fixed**
+
+- A failed SSM read is no longer cached for the container's lifetime; it is retried after 30s.
+- The SSM client uses 2s connect/read timeouts and at most 2 attempts, staying under API Gateway's 29s limit.
+
 ### Configured model fallback — [#193](https://github.com/saayam-for-all/ai/issues/193)
 
 **Changed**

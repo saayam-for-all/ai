@@ -1,6 +1,6 @@
 import json
 from utils.categories_with_description import TAXONOMY
-from utils.client import client, _use_groq, _gemini_client
+from utils.client import get_gemini_client, get_groq_client
 from utils.model_fallback import ModelTarget, run_model_chain
 from utils.predict_category_list import (
     help_categories,
@@ -144,7 +144,8 @@ class GroqClassificationService:
     ) -> dict:
         """Call one configured model and decode its classification JSON."""
         if target.provider == "groq":
-            if not (_use_groq and client):
+            client = get_groq_client()
+            if client is None:
                 raise ValueError("Groq client not initialized")
 
             response = client.chat.completions.create(
@@ -164,10 +165,11 @@ class GroqClassificationService:
             )
             content = response.choices[0].message.content
         elif target.provider == "gemini":
-            if not _gemini_client:
+            gemini_client = get_gemini_client()
+            if gemini_client is None:
                 raise ValueError("Gemini client not initialized")
 
-            response = _gemini_client.models.generate_content(
+            response = gemini_client.models.generate_content(
                 model=target.model,
                 contents=prompt,
                 config={"response_mime_type": "application/json"},
