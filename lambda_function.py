@@ -1,15 +1,17 @@
 import json
-from utils.subject_generator import generate_subject_from_description
+
 from services.classification_service import predict_categories
+from services.emergency import get_emergency_services
 from utils.categories import help_categories
 from utils.generate_answer_service import generate_ai_answer
 from utils.model_fallback import ModelChainExhausted
-from services.emergency import get_emergency_services
 from utils.search_orgs import OrganizationSearchError, find_organizations
+from utils.subject_generator import generate_subject_from_description
 
 # -------------------------------------------------------------
 # Common Utility Helpers
 # -------------------------------------------------------------
+
 
 def _parse_event_body(event: dict) -> dict:
     """Parse event body from different input formats"""
@@ -185,13 +187,16 @@ def _proxy_response(status_code, body):
             "Content-Type": "application/json",
             "Access-Control-Allow-Origin": "*",
         },
-        "body": json.dumps(body, ensure_ascii=False) if isinstance(body, (dict, list)) else body,
+        "body": json.dumps(body, ensure_ascii=False)
+        if isinstance(body, (dict, list))
+        else body,
     }
 
 
 # -------------------------------------------------------------
 # Dedicated AWS Lambda Entry Point Handlers
 # -------------------------------------------------------------
+
 
 # 1. Predict Category
 def predict_category_handler(event, context):
@@ -222,7 +227,9 @@ def predict_category_handler(event, context):
         # The client maps over body.categories reading category_name,
         # category_number, hierarchy and confidence, and derives its own display
         # label from category_name. Return the ranked objects unchanged.
-        return _response(200, {"categories": ranked_categories, "token_usage": token_usage})
+        return _response(
+            200, {"categories": ranked_categories, "token_usage": token_usage}
+        )
 
     except ModelChainExhausted as e:
         print(f"ERROR: category prediction model chain exhausted: {e}")
@@ -234,7 +241,8 @@ def predict_category_handler(event, context):
             },
         )
     except Exception as e:
-        return _response(500, {"error": str(e)})
+        print(f"ERROR: category prediction failed: {type(e).__name__}")
+        return _response(500, {"error": "Category prediction failed"})
 
 
 # 2. More Organizations (Search Orgs)
@@ -287,12 +295,17 @@ def search_orgs_handler(event, context):
         print(f"ERROR: organization search failed on every provider: {e}")
         return _response(
             502,
-            {"error": "Organization search failed", "code": "ORG_SEARCH_UNAVAILABLE",
-             "organizations": []},
+            {
+                "error": "Organization search failed",
+                "code": "ORG_SEARCH_UNAVAILABLE",
+                "organizations": [],
+            },
         )
     except Exception as e:
         print(f"ERROR: search_orgs failed: {type(e).__name__}: {e}")
-        return _response(500, {"error": "Organization search failed", "organizations": []})
+        return _response(
+            500, {"error": "Organization search failed", "organizations": []}
+        )
 
 
 # 3. Emergency Contacts
@@ -480,14 +493,20 @@ def generate_answer_handler(event, context):
             print(f"ERROR: generate_answer generation failed: {type(e).__name__}: {e}")
             return _response(
                 502,
-                {"error": "Answer generation failed", "code": "ANSWER_GENERATION_FAILED"},
+                {
+                    "error": "Answer generation failed",
+                    "code": "ANSWER_GENERATION_FAILED",
+                },
             )
 
         if not answer or not str(answer).strip():
             print("ERROR: generate_answer generation returned an empty answer")
             return _response(
                 502,
-                {"error": "Answer generation returned no content", "code": "ANSWER_EMPTY"},
+                {
+                    "error": "Answer generation returned no content",
+                    "code": "ANSWER_EMPTY",
+                },
             )
 
         # source tells the caller whether the text came from the request row or
@@ -535,15 +554,17 @@ def generate_subject_handler(event, context):
             return _response(400, {"error": "Description is required"})
 
         subject = generate_subject_from_description(
-            description=description,
-            max_length=max_length
+            description=description, max_length=max_length
         )
 
-        return _response(200, {
-            "subject": subject,
-            "max_length": max_length,
-            "description_length": len(description)
-        })
+        return _response(
+            200,
+            {
+                "subject": subject,
+                "max_length": max_length,
+                "description_length": len(description),
+            },
+        )
 
     except Exception as e:
         return _response(500, {"error": str(e)})
@@ -552,6 +573,7 @@ def generate_subject_handler(event, context):
 # -------------------------------------------------------------
 # Unified Entry Point (Fallback routing)
 # -------------------------------------------------------------
+
 
 def _without_routing_key(event, service):
     """The event minus the router's own `service` selector.
@@ -578,7 +600,10 @@ def _without_routing_key(event, service):
             body = json.loads(raw_body)
         except (json.JSONDecodeError, ValueError):
             body = None
-    if isinstance(body, dict) and str(body.get("service", "")).lower().strip() == service:
+    if (
+        isinstance(body, dict)
+        and str(body.get("service", "")).lower().strip() == service
+    ):
         body = {k: v for k, v in body.items() if k != "service"}
         event["body"] = json.dumps(body) if isinstance(raw_body, str) else body
 
@@ -609,7 +634,11 @@ def lambda_handler(event, context):
             body = None
 
         if not service:
-            service = body.get("service", "predict_category") if isinstance(body, dict) else "predict_category"
+            service = (
+                body.get("service", "predict_category")
+                if isinstance(body, dict)
+                else "predict_category"
+            )
 
         service = str(service).lower().strip()
 
@@ -621,11 +650,18 @@ def lambda_handler(event, context):
         elif service == "generate_answer":
             return generate_answer_handler(event, context)
         elif service == "emergency_contacts":
-            return emergency_contacts_handler(_without_routing_key(event, service), context)
+            return emergency_contacts_handler(
+                _without_routing_key(event, service), context
+            )
         elif service in ["search_orgs", "search_org", "find_nonprofits"]:
             return search_orgs_handler(event, context)
         else:
-            return _response(400, {"error": f"Unknown service: {service}. Supported: predict_category, generate_subject, generate_answer, emergency_contacts, search_orgs"})
+            return _response(
+                400,
+                {
+                    "error": f"Unknown service: {service}. Supported: predict_category, generate_subject, generate_answer, emergency_contacts, search_orgs"
+                },
+            )
 
     except Exception as e:
         # str(e) put the raw exception text in the response. Provider and driver
