@@ -17,8 +17,6 @@ from utils.client import (
     GROQ_MODEL,
     GROQ_TEMPERATURE,
     create_chat_model,
-    gemini_llm,
-    groq_llm,
 )
 from utils.prompts import get_conversational_prompt
 from utils.model_fallback import ModelTarget, run_model_chain

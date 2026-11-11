@@ -1,5 +1,7 @@
 import re
 
+import utils.client as client_module
+
 from utils import token_usage
 from utils.client import (
     GEMINI_MODEL,
@@ -10,9 +12,12 @@ from utils.client import (
     groq_llm,
 )
 
-# Strips a leading "Subject:" / "Title:" label that some models prepend despite
-# being told not to.
-_LABEL_RE = re.compile(r"^\s*(subject|title)\s*[:\-]\s*", re.IGNORECASE)
+# Strips a leading "Subject:" / "Title:" label that some models prepend
+# despite being told not to.
+_LABEL_RE = re.compile(
+    r"^\s*(subject|title)\s*[:\-]\s*",
+    re.IGNORECASE,
+)
 
 
 def _clean_subject(text) -> str:
@@ -26,69 +31,99 @@ def _clean_subject(text) -> str:
 def _truncate_with_word_boundary(text: str, max_length: int) -> str:
     """
     Truncate text to max_length.
+
     Try to cut at the last space if it keeps at least 70% of max_length.
     Otherwise, hard truncate.
     """
     truncated = text[:max_length]
     print("truncated", truncated)
-    # find last space index
+
     last_space = truncated.rfind(" ")
 
-    # only cut at the word boundary if that boundary is close to max limit
     if last_space > max_length * 0.7:
         print("last space >max len")
         return truncated[:last_space].strip()
 
     return truncated.strip()
 
+
 def _invoke_counted(llm, prompt, provider, model, accumulator, branch):
     """Invoke a LangChain model and record what the call cost.
 
-    Returns the message content, or "" when the model returned nothing. The
-    caller keeps its own try/except: a provider failure is a fallback signal,
-    not this function's business.
+    Returns the message content, or "" when the model returned nothing.
+    The caller keeps its own try/except: a provider failure is a fallback
+    signal, not this function's business.
     """
     message = llm.invoke(prompt)
+
     token_usage.record(
-        accumulator, message, provider=provider, model=model, branch=branch
+        accumulator,
+        message,
+        provider=provider,
+        model=model,
+        branch=branch,
     )
+
     return getattr(message, "content", None) or ""
 
 
-def generate_subject_from_description(description: str, max_length: int = 70) -> str:
+def _get_groq_model():
+    """Return an injected legacy model or lazily initialize the shared model."""
+    if _use_groq and groq_llm:
+        return groq_llm
+
+    return client_module.get_groq_llm()
+
+
+def _get_gemini_model():
+    """Return an injected legacy model or lazily initialize the shared model."""
+    if _use_gemini and gemini_llm:
+        return gemini_llm
+
+    return client_module.get_gemini_llm()
+
+
+def generate_subject_from_description(
+    description: str,
+    max_length: int = 70,
+) -> str:
     """Generate a subject line, reporting what the call cost.
 
     The accumulator lives here rather than inside the branching body below,
-    which has eight exit points; a finally is the only way to log a total
+    which has eight exit points. A finally is the only way to log a total
     that is right on every one of them.
     """
     usage = token_usage.new_accumulator()
+
     try:
         return _generate_subject(description, max_length, usage)
+
     finally:
         token_usage.log_usage(
-            "generate_subject", usage, description_chars=len(description or "")
+            "generate_subject",
+            usage,
+            description_chars=len(description or ""),
         )
 
 
 def _generate_subject(description: str, max_length: int, usage: dict) -> str:
     """
-    Generate a concise subject summary from a description using LLM.
+    Generate a concise subject summary from a description using an LLM.
+
     Automatically generates a subject without asking the user for input.
-    
+
     Args:
-        description: The user's description/question
-        max_length: Maximum character length for the generated subject (default: 70)
-        
+        description: The user's description/question.
+        max_length: Maximum character length for the generated subject.
+
     Returns:
-        str: A concise subject summary (max max_length characters, strictly enforced)
+        A concise subject summary, strictly limited to max_length characters.
     """
     if not description or not description.strip():
         return "General Inquiry"[:max_length]
-    
+
     description = description.strip()
 
-    # declaring prompt
     prompt = f"""You are writing the subject line for a help request. Produce ONE concise, specific subject (max {max_length} characters) for the description below. Write it as the person's own request or concern, never as a diagnosis or clinical assessment.
 
 Rules:
@@ -110,78 +145,146 @@ Description: {description}"""
 
     # ---------- CASE 1: Short description ----------
 
-    # If description is already short enough, use it directly (with some processing)
     if len(description) <= max_length:
-        # generate a better summary if possible, but fallback to truncated description
+        # If description is already short enough, use it as the final fallback.
         truncated = description[:max_length]
 
-        # Try Groq (LangChain) first
-        if _use_groq and groq_llm:
-            try:
+        # Try Groq first.
+        try:
+            groq_model = _get_groq_model()
+
+            if groq_model:
                 content = _invoke_counted(
-                    groq_llm, prompt, "groq", GROQ_MODEL, usage, "short"
+                    groq_model,
+                    prompt,
+                    "groq",
+                    GROQ_MODEL,
+                    usage,
+                    "short",
                 )
+
                 generated_subject = _clean_subject(content)
 
-                # Strictly enforce max_length - truncate if necessary
                 if len(generated_subject) <= max_length:
                     return generated_subject
-                return _truncate_with_word_boundary(generated_subject, max_length)
-            except Exception as e:
-                print(f"Error generating subject with Groq (LangChain), trying Gemini: {str(e)}")
 
-        # Fallback to Gemini (LangChain)
-        if _use_gemini and gemini_llm:
-            try:
-                content = _invoke_counted(
-                    gemini_llm, prompt, "gemini", GEMINI_MODEL, usage, "short"
+                return _truncate_with_word_boundary(
+                    generated_subject,
+                    max_length,
                 )
+
+        except Exception as e:
+            print(
+                "Error generating subject with Groq (LangChain), "
+                f"trying Gemini: {str(e)}"
+            )
+
+        # Fallback to Gemini.
+        try:
+            gemini_model = _get_gemini_model()
+
+            if gemini_model:
+                content = _invoke_counted(
+                    gemini_model,
+                    prompt,
+                    "gemini",
+                    GEMINI_MODEL,
+                    usage,
+                    "short",
+                )
+
                 generated_subject = _clean_subject(content)
 
-                # Strictly enforce max_length - truncate if necessary
                 if len(generated_subject) <= max_length:
                     return generated_subject
-                return _truncate_with_word_boundary(generated_subject, max_length)
-            except Exception as e:
-                print(f"Error generating subject with Gemini (LangChain): {str(e)}")
 
-        # Final fallback: return original description
+                return _truncate_with_word_boundary(
+                    generated_subject,
+                    max_length,
+                )
+
+        except Exception as e:
+            print(
+                "Error generating subject with Gemini (LangChain): "
+                f"{str(e)}"
+            )
+
+        # Final fallback: return original description.
         print("Error generating subject, using truncated description")
         return truncated
 
     # ---------- CASE 2: Long description ----------
 
-    # Try Groq (LangChain) first
-    if _use_groq and groq_llm:
-        try:
-            content = _invoke_counted(
-                groq_llm, prompt, "groq", GROQ_MODEL, usage, "long"
-            )
-            generated_subject = str(content).strip().strip('"').strip("'") or "General Inquiry"
+    # Try Groq first.
+    try:
+        groq_model = _get_groq_model()
 
-            # Strictly enforce max_length (70 characters)
+        if groq_model:
+            content = _invoke_counted(
+                groq_model,
+                prompt,
+                "groq",
+                GROQ_MODEL,
+                usage,
+                "long",
+            )
+
+            generated_subject = (
+                str(content).strip().strip('"').strip("'")
+                or "General Inquiry"
+            )
+
             if len(generated_subject) <= max_length:
                 return generated_subject
-            return _truncate_with_word_boundary(generated_subject, max_length)
-        except Exception as e:
-            print(f"Error generating subject with Groq (LangChain), trying Gemini: {str(e)}")
 
-    # Fallback to Gemini (LangChain)
-    if _use_gemini and gemini_llm:
-        try:
-            content = _invoke_counted(
-                gemini_llm, prompt, "gemini", GEMINI_MODEL, usage, "long"
+            return _truncate_with_word_boundary(
+                generated_subject,
+                max_length,
             )
-            generated_subject = str(content).strip().strip('"').strip("'") or "General Inquiry"
 
-            # Strictly enforce max_length
+    except Exception as e:
+        print(
+            "Error generating subject with Groq (LangChain), "
+            f"trying Gemini: {str(e)}"
+        )
+
+    # Fallback to Gemini.
+    try:
+        gemini_model = _get_gemini_model()
+
+        if gemini_model:
+            content = _invoke_counted(
+                gemini_model,
+                prompt,
+                "gemini",
+                GEMINI_MODEL,
+                usage,
+                "long",
+            )
+
+            generated_subject = (
+                str(content).strip().strip('"').strip("'")
+                or "General Inquiry"
+            )
+
             if len(generated_subject) <= max_length:
                 return generated_subject
-            return _truncate_with_word_boundary(generated_subject, max_length)
 
-        except Exception as e:
-            print(f"Error generating subject with Gemini (LangChain): {str(e)}")
+            return _truncate_with_word_boundary(
+                generated_subject,
+                max_length,
+            )
 
-    # Final fallback: return truncated description (strictly enforce max_length)
-    print("Error generating subject from description, using truncated description")
+    except Exception as e:
+        print(
+            "Error generating subject with Gemini (LangChain): "
+            f"{str(e)}"
+        )
+
+    # Final fallback: return truncated description.
+    print(
+        "Error generating subject from description, "
+        "using truncated description"
+    )
+
     return _truncate_with_word_boundary(description, max_length)

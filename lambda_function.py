@@ -1,11 +1,4 @@
 import json
-from utils.subject_generator import generate_subject_from_description
-from services.classification_service import predict_categories
-from utils.categories import help_categories
-from utils.generate_answer_service import generate_ai_answer
-from utils.model_fallback import ModelChainExhausted
-from services.emergency import get_emergency_services
-from utils.search_orgs import OrganizationSearchError, find_organizations
 
 # -------------------------------------------------------------
 # Common Utility Helpers
@@ -188,6 +181,38 @@ def _proxy_response(status_code, body):
         "body": json.dumps(body, ensure_ascii=False) if isinstance(body, (dict, list)) else body,
     }
 
+# -------------------------------------------------------------
+# Lazy service wrappers
+# -------------------------------------------------------------
+# Keep these module-level functions for compatibility with existing
+# callers and tests that patch lambda_function service functions.
+# Actual service modules are imported only when the function is called.
+
+def predict_categories(*args, **kwargs):
+    from services.classification_service import predict_categories as _predict
+    return _predict(*args, **kwargs)
+
+
+def find_organizations(*args, **kwargs):
+    from utils.search_orgs import find_organizations as _find
+    return _find(*args, **kwargs)
+
+
+def get_emergency_services(*args, **kwargs):
+    from services.emergency import get_emergency_services as _get
+    return _get(*args, **kwargs)
+
+
+def generate_ai_answer(*args, **kwargs):
+    from utils.generate_answer_service import generate_ai_answer as _generate
+    return _generate(*args, **kwargs)
+
+
+def generate_subject_from_description(*args, **kwargs):
+    from utils.subject_generator import (
+        generate_subject_from_description as _generate,
+    )
+    return _generate(*args, **kwargs)
 
 # -------------------------------------------------------------
 # Dedicated AWS Lambda Entry Point Handlers
@@ -196,6 +221,7 @@ def _proxy_response(status_code, body):
 # 1. Predict Category
 def predict_category_handler(event, context):
     """AWS Lambda entry point for predict_category service"""
+    from utils.model_fallback import ModelChainExhausted
     try:
         raw_body = event.get("body")
         if raw_body is None:
@@ -247,6 +273,7 @@ def search_orgs_handler(event, context):
     is why the body stays an object and the field names are a contract. See
     issue #170.
     """
+    from utils.search_orgs import OrganizationSearchError
     try:
         raw_body = event.get("body")
         if isinstance(raw_body, str):
@@ -324,6 +351,7 @@ def generate_answer_handler(event, context):
     does - is answered without touching Postgres. The req_id lookup fills in
     only what the caller did not send.
     """
+    from utils.categories import help_categories
     # The description carries health, housing and financial detail and the
     # headers carry the caller's token, so log the shape of the payload and
     # never its content.
@@ -633,7 +661,7 @@ def lambda_handler(event, context):
         # this path could hand a caller a credential. The detail belongs in
         # CloudWatch; the caller gets a status and nothing it could not have
         # worked out for itself.
-        print(f"ERROR: routing failed for service {service!r}: {type(e).__name__}: {e}")
+        print(f"ERROR: routing failed for service {service!r}: {type(e).__name__}:{e}")
         # emergency_contacts is the one service behind PROXY integration, and a
         # proxy method rejects an object body with a 502, which is the failure
         # reported in issue #146. Match the shape the routed service would have
