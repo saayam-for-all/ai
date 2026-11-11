@@ -1,7 +1,13 @@
   name: Python CI-CD Pipeline
 
+  # A merged pull request produces two runs at the same instant: the push to the
+  # base branch, and the pull_request `closed` event. Both reported the same
+  # `github.ref`, so they landed in one group and raced, and `cancel-in-progress`
+  # killed whichever registered first. Keying on the pull request number when
+  # there is one separates them, while still cancelling superseded runs of the
+  # same pull request and superseded pushes to the same branch.
   concurrency:
-    group: ci-${{ github.ref }}
+    group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
     cancel-in-progress: true
 
   on:
@@ -17,11 +23,14 @@
       branches:
         - dev
         - main
+      # `closed` was here only so the deploy job could fire on a merge. The
+      # deploy now runs on the push instead, so a `closed` run would re-run the
+      # whole test suite against a pull request that is already merged, and it
+      # was half of the race described in the concurrency note above.
       types:
         - opened
         - synchronize
         - reopened
-        - closed
 
   jobs:
     build-and-test:
@@ -235,9 +244,15 @@
     
     deploy:
       needs: build-and-test
+      # Deploy on the push only. Merging a pull request into test, dev or main
+      # always produces a push to that branch, so the pull_request `closed` arm
+      # that used to be here was redundant, and it could not work: GitHub does
+      # not pass repository secrets to pull_request runs from a fork, so
+      # configure-aws-credentials failed with "Could not load credentials from
+      # any providers" on every merge from a contributor's fork.
       if: >
-        (github.event_name == 'push' && (github.ref_name == 'dev' || github.ref_name == 'test' || github.ref_name == 'main')) ||
-        (github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true && (github.base_ref == 'dev' || github.base_ref == 'test' || github.base_ref == 'main'))
+        github.event_name == 'push' &&
+        (github.ref_name == 'dev' || github.ref_name == 'test' || github.ref_name == 'main')
 
       runs-on: ubuntu-latest
       
