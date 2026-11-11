@@ -49,6 +49,11 @@ FILE_META = {
     "test_token_usage.py": ("#159", "utils/token_usage.py"),
     "test_model_fallback.py": ("#193", "utils/model_fallback.py"),
     "test_client_factory.py": ("#193", "utils/client.py create_chat_model"),
+    "test_golden_set.py": ("#197", "evaluation/golden/classification.jsonl"),
+    "test_classification_eval.py": ("#197", "evaluation/ scoring, gate, fingerprint"),
+    "test_classification_eval_gate.py": ("#197", "classification quality gate"),
+    "test_classification_telemetry.py": ("#197", "utils/classification_telemetry.py, tools/setup_observability.py"),
+    "test_guardrails.py": ("#197", "utils/guardrails.py"),
 }
 
 HEADER = """# Test catalogue

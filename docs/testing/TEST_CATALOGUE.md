@@ -26,13 +26,18 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | File | Kind | Issue | Covers | Tests |
 | --- | --- | --- | --- | ---: |
 | [`tests/test_answer_conversation.py`](../../tests/test_answer_conversation.py) | Unit | #183 | `utils/__init__.py prompt assembly` | 24 |
+| [`tests/test_classification_eval.py`](../../tests/test_classification_eval.py) | Unit | #197 | `evaluation/ scoring, gate, fingerprint` | 38 |
+| [`tests/test_classification_eval_gate.py`](../../tests/test_classification_eval_gate.py) | Integration | #197 | `classification quality gate` | 4 |
 | [`tests/test_classification_resilience.py`](../../tests/test_classification_resilience.py) | Unit | - | `services/classification_service.py` | 10 |
+| [`tests/test_classification_telemetry.py`](../../tests/test_classification_telemetry.py) | Unit | #197 | `utils/classification_telemetry.py, tools/setup_observability.py` | 36 |
 | [`tests/test_client_factory.py`](../../tests/test_client_factory.py) | Unit | #193 | `utils/client.py create_chat_model` | 9 |
 | [`tests/test_client_imports.py`](../../tests/test_client_imports.py) | Integration | #154 | `utils/client.py` | 2 |
 | [`tests/test_emergency_dataset.py`](../../tests/test_emergency_dataset.py) | Dataset | #146 | `services/emergency_numbers.json` | 17 |
 | [`tests/test_emergency_locale.py`](../../tests/test_emergency_locale.py) | Unit | #146 | `services/emergency.py` | 67 |
 | [`tests/test_emergency_s3_reader.py`](../../tests/test_emergency_s3_reader.py) | Unit | #334 | `services/emergency.py S3 reader` | 23 |
 | [`tests/test_generate_answer.py`](../../tests/test_generate_answer.py) | Contract | #169 | `generate_answer_handler` | 50 |
+| [`tests/test_golden_set.py`](../../tests/test_golden_set.py) | Dataset | #197 | `evaluation/golden/classification.jsonl` | 90 |
+| [`tests/test_guardrails.py`](../../tests/test_guardrails.py) | Unit | #197 | `utils/guardrails.py` | 69 |
 | [`tests/test_import_blast_radius.py`](../../tests/test_import_blast_radius.py) | Integration | #169, #171 | `module-scope imports` | 4 |
 | [`tests/test_model_fallback.py`](../../tests/test_model_fallback.py) | Unit | #193 | `utils/model_fallback.py` | 24 |
 | [`tests/test_org_search_contract.py`](../../tests/test_org_search_contract.py) | Contract | #170 | `utils/search_orgs.py` | 24 |
@@ -41,7 +46,7 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_router.py`](../../tests/test_router.py) | Integration | #171 | `lambda_function.lambda_handler` | 34 |
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
 | [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 57 |
-| | | | **Total** | **422** |
+| | | | **Total** | **659** |
 
 ## Every test
 
@@ -76,6 +81,59 @@ What the model is actually asked, turn by turn - issue #183.
 
 > 20 test functions expand to 24 cases through parametrisation.
 
+### `test_classification_eval.py`
+
+*Unit · issue #197 · 38 tests*
+
+Scoring, gating, fingerprinting and reporting in evaluation/ (issue #197, stack 5).
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_loader_rejects_a_malformed_case_and_names_the_line` | Each kind of bad line is refused with a message saying what and where. |
+| `test_loader_rejects_duplicate_ids` | Two cases with one id would make a report row ambiguous. |
+| `test_loader_rejects_a_file_with_only_known_gaps` | A set with nothing to score would pass any gate with 0/0. |
+| `test_loader_skips_blank_lines` | Blank lines are allowed so the file can be grouped by hand. |
+| `test_top_level_of_reads_the_branch` | The branch is the first id segment; the dotted general id is branch 0. |
+| `test_exact_answer_scores_on_both_measures` | The expected leaf ranked first is right on branch and on path. |
+| `test_right_branch_wrong_leaf_is_a_detail_miss` | HANDYMAN for a plumbing case is the right branch but the wrong category. |
+| `test_expected_category_lower_in_the_top_three_still_counts_for_path` | Path accuracy looks at the top three, the branch only at the first answer. |
+| `test_a_parent_label_accepts_any_of_its_children` | MEDICAL_CONSULTATION passes for CARDIAC_OR_BLOOD_PRESSURE (5.1.5). |
+| `test_a_sibling_with_a_shared_prefix_is_not_a_child` | 3.3.10 is not inside 3.3.1: prefix matching must respect the dot. |
+| `test_empty_answer_is_wrong_not_an_error` | No categories back is a wrong answer; the run itself did not fail. |
+| `test_classifier_exception_is_recorded_not_raised` | One failing case must not abort a paid run; the error is kept on the result. |
+| `test_models_and_tokens_are_taken_from_the_usage_record` | The report says which model answered and what the case cost. |
+| `test_elderly_routing_is_recorded_per_case` | The router decision is recorded, so a miss can be attributed to it. |
+| `test_gate_passes_at_the_mark_and_fails_below_it` | 9/10 passes a 90% mark; 8/10 does not. |
+| `test_any_error_fails_the_gate_even_above_the_mark` | An unanswered case is not a correct case, whatever the rest scored. |
+| `test_known_gaps_are_run_but_never_scored` | A gap case changes neither the score nor the gate. |
+| `test_by_branch_counts_correct_and_total_per_expected_branch` | The per-branch table counts by the label's branch, not the answer's. |
+| `test_by_branch_names_the_general_branch` | General's id is 0.0.0.0.0, so its branch must not be reported as "?". |
+| `test_report_serialises_to_json_with_its_summary` | A report's JSON form carries the summary that check_results reads. |
+| `test_markdown_lists_misses_and_gaps` | The human report names each miss, why it missed, and where gaps landed. |
+| `test_fingerprint_is_stable_between_calls` | Same code, same fingerprint; otherwise every run would look stale. |
+| `test_any_prompt_edit_changes_the_fingerprint` | A one-character change to the prompt the walk sends changes the fingerprint. |
+| `test_answer_shaping_code_is_part_of_the_fingerprint` | Changing how a model reply becomes the ranked answer needs a fresh run. |
+| `test_router_word_lists_are_part_of_the_fingerprint` | Changing where the walk starts changes answers, so it needs a fresh run. |
+| `test_relabelling_the_golden_set_changes_the_fingerprint` | A score measured against old labels does not describe the new ones. |
+| `test_check_results_reports_a_missing_result` | No committed result is itself a failure, with the command to fix it. |
+| `test_check_results_reports_a_stale_and_a_failed_result` | A result measured elsewhere, that also failed, yields both problems. |
+
+> 28 test functions expand to 38 cases through parametrisation.
+
+### `test_classification_eval_gate.py`
+
+*Integration · issue #197 · 4 tests*
+
+The classification quality gate, end to end (issue #197, stack 5).
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_a_perfect_model_misses_only_the_router_false_positives` | Through our real prompts and taxonomy walk, perfect answers score 38/41. |
+| `test_the_router_hides_the_right_branch_from_the_model` | "a senior in high school" is never offered College Application Help. |
+| `test_live_result_was_measured_on_the_current_classifier` | The committed score describes the prompts, models, router and labels in this tree. |
+| `test_live_result_passes_the_pass_mark` | The last live run scored at or above the pass mark with no errors. |
+| `test_live_model_classifies_routing_hint_cases` | The real models answer the routing-hint cases with no errors. |
+
 ### `test_classification_resilience.py`
 
 *Unit · issue - · 10 tests*
@@ -95,6 +153,37 @@ Guards the two failure modes behind "every request lands in General".
 | `test_total_chain_failure_is_a_clear_502` | Total chain failure is a clear 502. |
 
 > 9 test functions expand to 10 cases through parametrisation.
+
+### `test_classification_telemetry.py`
+
+*Unit · issue #197 · 36 tests*
+
+The CLASSIFICATION_OUTCOME line and the alarms built on it (issue #197, stack 5).
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_each_outcome_is_told_apart_and_sets_only_its_own_flag` | General, empty and error each get a distinct outcome and exactly one flag. |
+| `test_error_type_names_the_exception` | An error line says what failed, so an alarm can be triaged from the log. |
+| `test_depth_is_how_far_down_the_taxonomy_the_answer_is` | Depth counts levels of the chosen category; General is depth 0, not 5. |
+| `test_fallback_is_any_answer_from_a_model_other_than_the_primary` | A fallback means the answer was not from the model the golden set measured. |
+| `test_cost_and_routing_fields_come_from_the_request` | Calls, tokens, latency and the router decision are carried through. |
+| `test_a_malformed_usage_record_still_yields_a_record` | A usage value that is not an accumulator degrades to zero cost, not an exception. |
+| `test_the_line_is_valid_embedded_metric_format` | Every declared metric is a number at the top level, and the dimension is present. |
+| `test_a_prediction_prints_exactly_one_outcome_line` | One request, one line; the existing TOKEN_USAGE line is still printed too. |
+| `test_an_exhausted_model_chain_still_prints_its_line_and_still_raises` | The failing request is the one most worth counting, and the handler still sees the error. |
+| `test_a_retired_primary_model_is_counted_as_a_fallback` | The answer still arrives, and the line says it came from a fallback model. |
+| `test_the_description_is_never_logged` | Only the length of the person's text is recorded, never the text. |
+| `test_the_router_decision_is_recorded` | A request the elderly router diverts is flagged, so its share can be watched. |
+| `test_telemetry_that_fails_never_breaks_the_request` | If building the line raises, the prediction is still returned and the failure is logged. |
+| `test_definitions_use_the_namespace_and_dimension_the_line_emits` | An alarm on a namespace or dimension nobody writes to would never fire. |
+| `test_every_alarm_is_a_rate_over_metrics_the_line_emits` | Each alarm divides emitted metrics by Requests, guarded by a minimum volume. |
+| `test_an_sns_topic_is_notified_on_alarm_and_on_recovery` | With a topic, both the alarm and its all-clear are sent; without one, neither. |
+| `test_every_query_reads_only_outcome_lines` | Each saved query filters on the event name, so it never mixes in other log lines. |
+| `test_dry_run_prints_the_plan_and_sends_nothing` | The default must be safe to run by anyone, with no AWS credentials. |
+| `test_apply_refuses_the_placeholder_log_group` | --apply without a real log group would save queries against nothing. |
+| `test_apply_upserts_alarms_and_updates_existing_queries_in_place` | Running twice must not duplicate saved queries: an existing name is updated by id. |
+
+> 20 test functions expand to 36 cases through parametrisation.
 
 ### `test_client_factory.py`
 
@@ -277,6 +366,46 @@ Tests for the generate_answer endpoint - issue #169.
 | `test_absent_gender_and_age_stay_absent` | Absent gender and age stay absent. |
 
 > 44 test functions expand to 50 cases through parametrisation.
+
+### `test_golden_set.py`
+
+*Dataset · issue #197 · 90 tests*
+
+The shipped classification golden set is well formed and labelled honestly.
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_golden_set_loads_with_enough_scored_cases` | The file parses and has enough scored cases for a 90% mark to mean something. |
+| `test_every_top_level_branch_has_scored_cases` | No branch of the taxonomy is left out of the evaluation. |
+| `test_scored_label_is_a_category_the_classifier_can_return` | Each label resolves to an id in utils/predict_category_list.py. |
+| `test_elderly_router_tags_match_what_the_router_does` | Cases tagged elderly-router* are exactly the ones the router diverts. |
+| `test_router_false_positives_are_labelled_outside_elderly` | Cases tagged as router false positives really belong to another branch. |
+| `test_known_gaps_carry_no_label_and_say_why` | Known-gap cases have no expected category and a note explaining the gap. |
+
+> 6 test functions expand to 90 cases through parametrisation.
+
+### `test_guardrails.py`
+
+*Unit · issue #197 · 69 tests*
+
+Inbound and outbound guardrails around the classifier (issue #197, stack 5).
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_injection_patterns_are_recognised` | Each rule catches the attempt it is named for. |
+| `test_ordinary_requests_that_use_the_same_words_are_not_flagged` | Words like ignore, rules, system, act as and description alone do not match. |
+| `test_no_golden_case_is_flagged` | Real-looking requests for help trigger no injection rule. |
+| `test_a_suspected_injection_is_recorded_without_the_text` | The record names the rules and the length; never what the person wrote. |
+| `test_a_clean_description_records_nothing` | No match, no line: the metric counts suspicious requests, not all requests. |
+| `test_a_broken_scan_never_refuses_the_request` | If the scan itself raises, the request goes ahead and the failure is logged. |
+| `test_repeated_categories_are_removed_keeping_the_first` | [General, General, General] becomes one suggestion; order is kept. |
+| `test_a_list_without_repeats_is_returned_unchanged_and_unrecorded` | The guardrail only records when it changed something. |
+| `test_the_ranked_parser_removes_repeats_and_drops_unoffered_ids` | Through the real parser: a repeat is removed, an invented id is dropped, a name still maps. |
+| `test_a_suspected_injection_is_still_classified` | Recording is all the inbound guardrail does: the request is answered as normal. |
+| `test_the_guardrail_line_is_valid_embedded_metric_format` | Triggered is a number, and both dimensions are present as strings. |
+| `test_a_record_that_cannot_be_printed_never_raises` | A telemetry failure is logged and swallowed; the request keeps its answer. |
+
+> 12 test functions expand to 69 cases through parametrisation.
 
 ### `test_import_blast_radius.py`
 

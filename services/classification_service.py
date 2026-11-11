@@ -1,4 +1,5 @@
 import json
+import time
 from utils.categories_with_description import TAXONOMY
 from utils.client import client, _use_groq, _gemini_client
 from utils.model_fallback import ModelTarget, run_model_chain
@@ -10,7 +11,7 @@ from utils.predict_category_list import (
     get_category_hierarchy,
 )
 from utils.routing_for_categories import is_elderly_context
-from utils import token_usage
+from utils import classification_telemetry, guardrails, token_usage
 
 
 class GroqClassificationService:
@@ -236,6 +237,7 @@ class GroqClassificationService:
             return []
 
         ranked_results = []
+        not_offered = 0
         for item in categories:
             if isinstance(item, dict):
                 category_id = item.get("category")
@@ -251,8 +253,16 @@ class GroqClassificationService:
                 ranked_results.append(
                     {"category": normalized_id, "confidence": confidence}
                 )
+            else:
+                not_offered += 1
 
-        return ranked_results
+        # Outbound guardrails (utils/guardrails.py): an id that was not offered
+        # is dropped above and recorded here; a repeated id is removed.
+        if not_offered:
+            guardrails.record(
+                "predict_category", "unoffered_category", "dropped", dropped=not_offered
+            )
+        return guardrails.dedupe_ranked(ranked_results, service="predict_category")
 
     def _predict_one_level(
         self, description: str, candidates: list[str], accumulator: dict, depth: int
@@ -301,14 +311,34 @@ class GroqClassificationService:
         which has four exit points. Classification is the one service whose
         usage is also returned to the caller - `body.token_usage` predates this
         module - so it both logs and returns.
+
+        Every prediction, including one that raises, also prints one
+        CLASSIFICATION_OUTCOME line recording what was decided; see
+        utils/classification_telemetry.py.
         """
         usage_accumulator = token_usage.new_accumulator()
+        started = time.perf_counter()
+        results, error = None, None
+        # Inbound guardrail: records a suspected prompt injection, changes nothing.
+        guardrails.check_description(description or "", service="predict_category")
         try:
-            return self._walk_taxonomy(description, usage_accumulator)
+            results, _ = self._walk_taxonomy(description, usage_accumulator)
+            return results, usage_accumulator
+        except Exception as exc:
+            error = exc
+            raise
         finally:
             token_usage.log_usage(
                 "predict_category",
                 usage_accumulator,
+                description_chars=len(description or ""),
+            )
+            classification_telemetry.log_outcome(
+                results,
+                usage_accumulator,
+                error=error,
+                elapsed_ms=(time.perf_counter() - started) * 1000,
+                elderly_routed=is_elderly_context(description or ""),
                 description_chars=len(description or ""),
             )
 

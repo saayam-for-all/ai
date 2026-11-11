@@ -1,0 +1,55 @@
+{
+  "namespace": "Saayam/GenAI",
+  "dimensions": {"Service": "predict_category"},
+  "alarms": [
+    {
+      "name": "genai-predict-category-general-or-empty-rate",
+      "description": "More than half of category predictions in the last hour were General or empty. This is the failure that once went unnoticed: an outage and a General answer look the same to the caller.",
+      "numerator": ["General", "Empty"],
+      "period_seconds": 3600,
+      "evaluation_periods": 1,
+      "threshold": 0.5,
+      "min_requests": 10
+    },
+    {
+      "name": "genai-predict-category-error-rate",
+      "description": "More than 20% of category predictions failed (the model chain was exhausted or the request raised) in each of three consecutive 5-minute periods.",
+      "numerator": ["Error"],
+      "period_seconds": 300,
+      "evaluation_periods": 3,
+      "threshold": 0.2,
+      "min_requests": 5
+    },
+    {
+      "name": "genai-predict-category-fallback-rate",
+      "description": "More than half of category predictions in the last hour needed a model other than the primary. Usually a retired or rate-limited primary model; answers still arrive, but slower and from a different model than the one evaluated.",
+      "numerator": ["Fallback"],
+      "period_seconds": 3600,
+      "evaluation_periods": 1,
+      "threshold": 0.5,
+      "min_requests": 10
+    }
+  ],
+  "queries": [
+    {
+      "name": "genai/predict-category/outcomes-by-hour",
+      "query": "filter event = \"CLASSIFICATION_OUTCOME\"\n| stats count(*) as requests, sum(General) as general, sum(Empty) as empty, sum(Error) as errors, sum(Fallback) as fallbacks by bin(1h)\n| sort @timestamp desc"
+    },
+    {
+      "name": "genai/predict-category/top-categories",
+      "query": "filter event = \"CLASSIFICATION_OUTCOME\" and outcome = \"categorised\"\n| stats count(*) as requests, avg(top_confidence) as avg_confidence by top_category\n| sort requests desc\n| limit 25"
+    },
+    {
+      "name": "genai/predict-category/failures-and-fallbacks",
+      "query": "filter event = \"CLASSIFICATION_OUTCOME\" and (Error = 1 or Fallback = 1 or Empty = 1)\n| fields @timestamp, outcome, error_type, models.0, models.1, ModelCalls, LatencyMs\n| sort @timestamp desc\n| limit 100"
+    },
+    {
+      "name": "genai/predict-category/latency-and-cost",
+      "query": "filter event = \"CLASSIFICATION_OUTCOME\"\n| stats pct(LatencyMs, 50) as p50_ms, pct(LatencyMs, 95) as p95_ms, avg(ModelCalls) as calls, avg(Tokens) as tokens by bin(1h)\n| sort @timestamp desc"
+    },
+    {
+      "name": "genai/predict-category/elderly-routing-share",
+      "query": "filter event = \"CLASSIFICATION_OUTCOME\"\n| stats avg(ElderlyRouted) as elderly_routed_share, count(*) as requests by bin(1d)\n| sort @timestamp desc"
+    }
+  ]
+}
