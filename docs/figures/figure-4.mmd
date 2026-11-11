@@ -1,0 +1,19 @@
+flowchart TD
+  body --> Q1{"subject and description sent?"}
+  Q1 -- yes --> SRC["source = request"]
+  Q1 -- no --> Q2{"user id and request id sent?"}
+  Q2 -- no --> E400["400"]
+  Q2 -- yes --> DB["Postgres lookup<br/>(psycopg2 imported lazily)"]
+  DB -- found --> SRCDB["source = database<br/>+ additional-info answers appended"]
+  DB -- "not found" --> E404["404"]
+  DB -- "schema mismatch / unavailable" --> Q3{"has a follow-up question?"}
+  Q3 -- yes --> SRCC["source = conversation<br/>degraded = error code"]
+  Q3 -- no --> E500["500 SCHEMA_MISMATCH or<br/>503 UNAVAILABLE (retryable)"]
+  SRC --> Q4
+  SRCDB --> Q4
+  SRCC --> Q4
+  Q4{"subject and description<br/>non-empty?"} -- no --> E400B["400"]
+  Q4 -- yes --> BUILD["Build messages once<br/>(single-shot or follow-up)"]
+  BUILD --> CHAIN["run_model_chain, each model once, same messages:<br/>gpt-oss-20b → gpt-oss-120b → safeguard-20b → gemini-2.5-flash<br/>(error or empty answer → next model)"]
+  CHAIN -- "first non-empty answer" --> OK["200 answer"]
+  CHAIN -- "all four failed (ModelChainExhausted)" --> E502["502 ANSWER_GENERATION_FAILED"]
