@@ -1,4 +1,7 @@
+
 import json
+
+import utils.client as client_module
 from utils.categories_with_description import TAXONOMY
 from utils.client import client, _use_groq, _gemini_client
 from utils.model_fallback import ModelTarget, run_model_chain
@@ -29,15 +32,18 @@ class GroqClassificationService:
         self, description: str, candidates: list[str]
     ) -> str:
         candidate_lines = []
+
         for category_id in candidates:
             category_name = help_categories.get(category_id, "")
             category_description = TAXONOMY.get(category_name, "")
+
             if category_description:
                 candidate_lines.append(
                     f"{category_id}: {category_name} - {category_description}"
                 )
             else:
                 candidate_lines.append(f"{category_id}: {category_name}")
+
         candidates_text = "\n".join(candidate_lines)
 
         prompt_lines = [
@@ -45,6 +51,7 @@ class GroqClassificationService:
             "Return JSON only with keys category and confidence (0.0 to 1.0).",
             "Confidence bands: 0.9-1.0 explicit match; 0.6-0.8 strong match; 0.3-0.5 weak/ambiguous; <0.3 unsure.",
         ]
+
         if set(candidates) == set(get_top_level_categories()):
             prompt_lines.append(
                 "Routing hint: choose HOUSING_ASSISTANCE for repairs/maintenance (plumber, leak, electrician, handyman); "
@@ -54,6 +61,7 @@ class GroqClassificationService:
                 "choose ELDERLY_COMMUNITY_ASSISTANCE for seniors or caregiving; "
                 "choose GENERAL_CATEGORY for unclear or uncategorized requests."
             )
+
         prompt_lines.extend(
             [
                 f"Categories:\n{candidates_text}",
@@ -68,15 +76,18 @@ class GroqClassificationService:
         self, description: str, candidates: list[str]
     ) -> str:
         candidate_lines = []
+
         for category_id in candidates:
             category_name = help_categories.get(category_id, "")
             category_description = TAXONOMY.get(category_name, "")
+
             if category_description:
                 candidate_lines.append(
                     f"{category_id}: {category_name} - {category_description}"
                 )
             else:
                 candidate_lines.append(f"{category_id}: {category_name}")
+
         candidates_text = "\n".join(candidate_lines)
 
         prompt_lines = [
@@ -86,6 +97,7 @@ class GroqClassificationService:
             "Return at least the top 3 most relevant categories.",
             "Choose only from the category IDs listed below; do not invent IDs or use names.",
         ]
+
         if set(candidates) == set(get_top_level_categories()):
             prompt_lines.append(
                 "Routing hint: choose HOUSING_ASSISTANCE for repairs/maintenance (plumber, leak, electrician, handyman); "
@@ -95,6 +107,7 @@ class GroqClassificationService:
                 "choose ELDERLY_COMMUNITY_ASSISTANCE for seniors or caregiving; "
                 "choose GENERAL_CATEGORY for unclear or uncategorized requests."
             )
+
         prompt_lines.extend(
             [
                 f"Categories:\n{candidates_text}",
@@ -117,10 +130,13 @@ class GroqClassificationService:
             confidence = float(value)
         except (TypeError, ValueError):
             return 0.0
+
         if confidence < 0.0:
             return 0.0
+
         if confidence > 1.0:
             return 1.0
+
         return confidence
 
     def _normalize_category_id(
@@ -128,11 +144,15 @@ class GroqClassificationService:
     ) -> str | None:
         if not category_id:
             return None
+
         if category_id in candidate_set:
             return category_id
+
         mapped = category_name_to_number.get(category_id)
+
         if mapped and mapped in candidate_set:
             return mapped
+
         return None
 
     def _request_json(
@@ -143,11 +163,19 @@ class GroqClassificationService:
         depth: int,
     ) -> dict:
         """Call one configured model and decode its classification JSON."""
+
         if target.provider == "groq":
-            if not (_use_groq and client):
+            # Preserve compatibility with tests or callers that inject a
+            # preconfigured client through this module's legacy globals.
+            if client is not None:
+                groq_client = client
+            else:
+                groq_client = client_module.get_groq_client()
+
+            if not groq_client:
                 raise ValueError("Groq client not initialized")
 
-            response = client.chat.completions.create(
+            response = groq_client.chat.completions.create(
                 model=target.model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=self.temperature,
@@ -155,6 +183,7 @@ class GroqClassificationService:
                 response_format={"type": "json_object"},
                 **self._groq_extra_kwargs(target),
             )
+
             token_usage.record(
                 accumulator,
                 response,
@@ -162,16 +191,27 @@ class GroqClassificationService:
                 model=target.model,
                 depth=depth,
             )
+
             content = response.choices[0].message.content
+
         elif target.provider == "gemini":
-            if not _gemini_client:
+            # Use an injected legacy client if one is present; otherwise
+            # initialize the shared Gemini client on demand.
+            gemini_client = (
+                _gemini_client
+                if _gemini_client is not None
+                else client_module.get_gemini_client()
+            )
+
+            if not gemini_client:
                 raise ValueError("Gemini client not initialized")
 
-            response = _gemini_client.models.generate_content(
+            response = gemini_client.models.generate_content(
                 model=target.model,
                 contents=prompt,
                 config={"response_mime_type": "application/json"},
             )
+
             token_usage.record(
                 accumulator,
                 response,
@@ -179,7 +219,9 @@ class GroqClassificationService:
                 model=target.model,
                 depth=depth,
             )
+
             content = response.text
+
         else:
             raise ValueError(f"Unsupported model provider: {target.provider}")
 
@@ -187,8 +229,10 @@ class GroqClassificationService:
             raise ValueError(f"{target.provider} response content is empty")
 
         decoded = json.loads(str(content).strip())
+
         if not isinstance(decoded, dict):
             raise ValueError(f"{target.provider} response must be a JSON object")
+
         return decoded
 
     def _predict_single_target(
@@ -200,10 +244,13 @@ class GroqClassificationService:
         depth: int,
     ) -> dict | None:
         data = self._request_json(target, prompt, accumulator, depth)
+
         category_id = data.get("category")
         normalized_id = self._normalize_category_id(category_id, candidates)
+
         if not normalized_id:
             return None
+
         return {
             "category": normalized_id,
             "confidence": self._normalize_confidence(data.get("confidence")),
@@ -218,12 +265,14 @@ class GroqClassificationService:
         depth: int,
     ) -> list[dict]:
         data = self._request_json(target, prompt, accumulator, depth)
+
         return self._parse_ranked_categories(data, candidates)
 
     def _parse_ranked_categories(
         self, response_data: dict, candidate_set: set[str]
     ) -> list[dict]:
         categories = response_data.get("categories")
+
         if not categories and "category" in response_data:
             categories = [
                 {
@@ -236,20 +285,29 @@ class GroqClassificationService:
             return []
 
         ranked_results = []
+
         for item in categories:
             if isinstance(item, dict):
                 category_id = item.get("category")
                 confidence = self._normalize_confidence(item.get("confidence"))
+
             elif isinstance(item, str):
                 category_id = item
                 confidence = 0.0
+
             else:
                 continue
 
-            normalized_id = self._normalize_category_id(category_id, candidate_set)
+            normalized_id = self._normalize_category_id(
+                category_id, candidate_set
+            )
+
             if normalized_id:
                 ranked_results.append(
-                    {"category": normalized_id, "confidence": confidence}
+                    {
+                        "category": normalized_id,
+                        "confidence": confidence,
+                    }
                 )
 
         return ranked_results
@@ -262,6 +320,7 @@ class GroqClassificationService:
 
         prompt = self._build_prompt_for_candidates(description, candidates)
         candidate_set = set(candidates)
+
         return run_model_chain(
             invoke=lambda target: self._predict_single_target(
                 target,
@@ -280,8 +339,11 @@ class GroqClassificationService:
         if not candidates:
             return []
 
-        prompt = self._build_ranked_prompt_for_candidates(description, candidates)
+        prompt = self._build_ranked_prompt_for_candidates(
+            description, candidates
+        )
         candidate_set = set(candidates)
+
         return run_model_chain(
             invoke=lambda target: self._predict_ranked_target(
                 target,
@@ -303,8 +365,10 @@ class GroqClassificationService:
         module - so it both logs and returns.
         """
         usage_accumulator = token_usage.new_accumulator()
+
         try:
             return self._walk_taxonomy(description, usage_accumulator)
+
         finally:
             token_usage.log_usage(
                 "predict_category",
@@ -321,22 +385,33 @@ class GroqClassificationService:
             candidates = get_direct_children(category_id)
 
         while candidates:
-            ranked_level = self._predict_ranked_level(description, candidates, accumulator=usage_accumulator, depth=depth)
+            ranked_level = self._predict_ranked_level(
+                description,
+                candidates,
+                accumulator=usage_accumulator,
+                depth=depth,
+            )
+
             if not ranked_level:
                 return [], usage_accumulator
 
             top_choice = ranked_level[0].get("category")
+
             if not top_choice:
                 return [], usage_accumulator
 
             next_candidates = get_direct_children(top_choice)
+
             if not next_candidates:
                 results = []
+
                 for item in ranked_level:
                     category_id = item.get("category")
                     category_name = help_categories.get(category_id)
+
                     if not category_name:
                         continue
+
                     results.append(
                         {
                             "category_number": category_id,
@@ -345,8 +420,10 @@ class GroqClassificationService:
                             "hierarchy": get_category_hierarchy(category_id),
                         }
                     )
+
                     if len(results) >= 3:
                         break
+
                 return results, usage_accumulator
 
             candidates = next_candidates

@@ -7,17 +7,23 @@ This module is called two ways, and both matter:
     `v1/ml/orgAggregatorList`, which does `lambda.invoke(...)` and then reads
     `payload["body"]["organizations"]`.
 
-That second caller is the reason `lambda_function._response` must keep `body`
-as an object rather than a JSON string, and the reason the field names below
-are a contract rather than an implementation detail. See issue #170.
+That second caller is the reason `lambda_function._response` must keep
+`body` as an object rather than a JSON string, and the reason the field
+names below are a contract rather than an implementation detail. See issue
+#170.
 """
 
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_groq import ChatGroq
 from pydantic import BaseModel, Field
 
 from utils import token_usage
+from utils.client import (
+    GEMINI_MODEL,
+    GROQ_MODEL,
+    create_chat_model,
+)
+from utils.model_fallback import ModelTarget
 
 
 # -----------------------------
@@ -25,20 +31,41 @@ from utils import token_usage
 # -----------------------------
 class Organization(BaseModel):
     organization_name: str = Field(description="Name of the organization")
-    org_type: str = Field(description="Type of organization: 'nonprofit' or 'for-profit'")
-    size: str = Field(description="Size of the organization: 'small', 'medium', or 'large'")
-    rating: float = Field(description="Rating normalized to a 0.0-5.0 scale with one decimal place (e.g., Charity Navigator 95/100 becomes 4.8). Use 0.0 if not available.")
+    org_type: str = Field(
+        description="Type of organization: 'nonprofit' or 'for-profit'"
+    )
+    size: str = Field(
+        description="Size of the organization: 'small', 'medium', or 'large'"
+    )
+    rating: float = Field(
+        description=(
+            "Rating normalized to a 0.0-5.0 scale with one decimal place "
+            "(e.g., Charity Navigator 95/100 becomes 4.8). "
+            "Use 0.0 if not available."
+        )
+    )
     location: str = Field(description="Address of the organization")
     contact: str = Field(description="Phone number of the organization")
     email: str = Field(description="Email address of the organization")
-    source: str = Field(description="URL of a reputable source verifying the organization's legitimacy")
+    source: str = Field(
+        description="URL of a reputable source verifying the organization's legitimacy"
+    )
     web_url: str = Field(description="URL of the organization's website")
-    mission: str = Field(description="A 3-line summary of the organization's mission")
-    description: str = Field(description="A 3-line summary of what the organization does")
-    relevance: str = Field(description="A 3-line summary of why the organization is relevant to the request")
+    mission: str = Field(
+        description="A 3-line summary of the organization's mission"
+    )
+    description: str = Field(
+        description="A 3-line summary of what the organization does"
+    )
+    relevance: str = Field(
+        description="A 3-line summary of why the organization is relevant to the request"
+    )
     causes: str = Field(
         default="",
-        description="Comma separated cause areas this organization works in, for example 'Housing, Food Security'",
+        description=(
+            "Comma separated cause areas this organization works in, "
+            "for example 'Housing, Food Security'"
+        ),
     )
 
 
@@ -80,28 +107,43 @@ class OrganizationSearchError(RuntimeError):
 # 2. Model Loaders
 # -----------------------------
 def load_llm():
-    """Groq chat model, or None when no Groq key is configured."""
-    from utils.client import GROQ_API_KEY, GROQ_MODEL
-
-    if not GROQ_API_KEY:
-        return None
-    kwargs = dict(model=GROQ_MODEL, temperature=0.1, groq_api_key=GROQ_API_KEY)
-    # gpt-oss reasoning models: keep effort low so the JSON output is fast and reliable.
-    if "gpt-oss" in GROQ_MODEL:
-        kwargs["reasoning_effort"] = "low"
-    return ChatGroq(**kwargs)
+    """Create the Groq chat model on demand, or return None if unconfigured."""
+    try:
+        return create_chat_model(
+            ModelTarget(
+                provider="groq",
+                model=GROQ_MODEL,
+                reasoning_effort=(
+                    "low" if "gpt-oss" in GROQ_MODEL else None
+                ),
+            ),
+            temperature=0.1,
+        )
+    except ValueError as error:
+        if "API key is not configured" in str(error):
+            return None
+        raise
 
 
 def load_fallback_llm():
-    """Gemini chat model, or None when no Gemini key is configured.
+    """Create the Gemini fallback model on demand, or return None if unconfigured.
 
     Answer generation has had a Gemini fallback since the Groq model migration
     in PR #150; organization search did not, so a Groq outage or another
     retired model id took the whole Organizations tab down. It has one now.
     """
-    from utils.client import gemini_llm
-
-    return gemini_llm
+    try:
+        return create_chat_model(
+            ModelTarget(
+                provider="gemini",
+                model=GEMINI_MODEL,
+            ),
+            temperature=0.1,
+        )
+    except ValueError as error:
+        if "API key is not configured" in str(error):
+            return None
+        raise
 
 
 def _providers():
@@ -165,28 +207,36 @@ def _normalize_rating(value):
         rating = float(value)
     except (TypeError, ValueError):
         return 0.0
+
     if rating < 0:
         return 0.0
+
     if rating > 5:
         # 0-100 scales (Charity Navigator, percentages) divide by 20.
         rating = rating / 20 if rating <= 100 else 5.0
+
     return round(min(rating, 5.0), 1)
 
 
 def _normalize_size(value):
     text = str(value or "").strip().lower()
+
     for size in _SIZES:
         if size in text:
             return size
+
     return ""
 
 
 def _normalize_org_type(value):
     text = str(value or "").strip().lower().replace("_", "-").replace(" ", "-")
+
     if "non" in text and "profit" in text:
         return "nonprofit"
+
     if "profit" in text:
         return "for-profit"
+
     return ""
 
 
@@ -199,18 +249,22 @@ def normalize_organization(org, location=None, category=None):
     always present.
     """
     org = dict(org or {})
-    normalized = {field: org.get(field, "") for field in ORGANIZATION_FIELDS}
+    normalized = {
+        field: org.get(field, "")
+        for field in ORGANIZATION_FIELDS
+    }
 
     normalized["rating"] = _normalize_rating(org.get("rating"))
     normalized["size"] = _normalize_size(org.get("size"))
     normalized["org_type"] = _normalize_org_type(org.get("org_type"))
 
     for field in ORGANIZATION_FIELDS:
-        if field not in ("rating",) and normalized[field] is None:
+        if field != "rating" and normalized[field] is None:
             normalized[field] = ""
 
     if not str(normalized["location"]).strip() and location:
         normalized["location"] = location
+
     if not str(normalized["causes"]).strip() and category:
         normalized["causes"] = category
 
@@ -228,7 +282,11 @@ def normalize_result(result, location=None, category=None):
 
     return {
         "organizations": [
-            normalize_organization(org, location=location, category=category)
+            normalize_organization(
+                org,
+                location=location,
+                category=category,
+            )
             for org in organizations
             if isinstance(org, dict)
         ]
@@ -238,7 +296,15 @@ def normalize_result(result, location=None, category=None):
 # -----------------------------
 # 5. Main Function
 # -----------------------------
-def _invoke_provider(llm, prompt, subject, description, location, usage=None, name=""):
+def _invoke_provider(
+    llm,
+    prompt,
+    subject,
+    description,
+    location,
+    usage=None,
+    name="",
+):
     """Run one provider's chain. Split out so the fallback loop is testable.
 
     The chain is deliberately not `prompt | llm | parser` any more. That form
@@ -254,9 +320,14 @@ def _invoke_provider(llm, prompt, subject, description, location, usage=None, na
         "location": location,
         "format_instructions": parser.get_format_instructions(),
     })
+
     token_usage.record(
-        usage, message, provider=name or "unknown", model=_model_name(llm)
+        usage,
+        message,
+        provider=name or "unknown",
+        model=_model_name(llm),
     )
+
     return parser.invoke(message)
 
 
@@ -264,13 +335,19 @@ def _model_name(llm) -> str:
     """Best-effort model id off a LangChain chat model, for the usage record."""
     for attribute in ("model_name", "model"):
         value = getattr(llm, attribute, None)
+
         if isinstance(value, str) and value:
             return value
+
     return type(llm).__name__
 
 
-
-def find_organizations(subject: str, description: str, location: str, category: str | None = None):
+def find_organizations(
+    subject: str,
+    description: str,
+    location: str,
+    category: str | None = None,
+):
     """Return {"organizations": [...]} for the request, trying each provider.
 
     Raises OrganizationSearchError when every provider fails, so the handler
@@ -283,8 +360,10 @@ def find_organizations(subject: str, description: str, location: str, category: 
     for name, loader in _providers():
         try:
             llm = loader()
-        except Exception as e:
-            failures.append(f"{name}: loader failed: {type(e).__name__}: {e}")
+        except Exception as error:
+            failures.append(
+                f"{name}: loader failed: {type(error).__name__}: {error}"
+            )
             continue
 
         if llm is None:
@@ -293,26 +372,56 @@ def find_organizations(subject: str, description: str, location: str, category: 
 
         try:
             raw = _invoke_provider(
-                llm, prompt, subject, description, location, usage, name
+                llm,
+                prompt,
+                subject,
+                description,
+                location,
+                usage,
+                name,
             )
-        except Exception as e:
-            print(f"WARN: organization search via {name} failed: {type(e).__name__}: {e}")
-            failures.append(f"{name}: {type(e).__name__}: {e}")
+        except Exception as error:
+            print(
+                f"WARN: organization search via {name} failed: "
+                f"{type(error).__name__}: {error}"
+            )
+            failures.append(
+                f"{name}: {type(error).__name__}: {error}"
+            )
             continue
 
-        result = normalize_result(raw, location=location, category=category)
+        result = normalize_result(
+            raw,
+            location=location,
+            category=category,
+        )
+
         if result["organizations"]:
-            print(f"LOG: organization search served by {name}, "
-                  f"{len(result['organizations'])} organizations")
+            print(
+                f"LOG: organization search served by {name}, "
+                f"{len(result['organizations'])} organizations"
+            )
+
             token_usage.log_usage(
-                "search_orgs", usage, served_by=name,
+                "search_orgs",
+                usage,
+                served_by=name,
                 organizations=len(result["organizations"]),
             )
+
             return result
 
         failures.append(f"{name}: returned no organizations")
 
     # Every provider failed, and the ones that failed after answering still
     # cost tokens. Report before raising or that spend goes unrecorded.
-    token_usage.log_usage("search_orgs", usage, served_by=None, failures=len(failures))
-    raise OrganizationSearchError("; ".join(failures) or "no provider configured")
+    token_usage.log_usage(
+        "search_orgs",
+        usage,
+        served_by=None,
+        failures=len(failures),
+    )
+
+    raise OrganizationSearchError(
+        "; ".join(failures) or "no provider configured"
+    )

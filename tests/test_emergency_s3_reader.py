@@ -1,31 +1,17 @@
 """Unit tests for issue #334 - S3 dataset loader with caching and zero-downtime fallback."""
+
 import hashlib
 import io
 import json
-import sys
 from unittest import mock
+
+import boto3
 import pytest
+from botocore.exceptions import ClientError
 
 pytestmark = pytest.mark.unit
 
-# Ensure boto3 and botocore are mockable in test environments where not pre-installed
-if "boto3" not in sys.modules:
-    mock_boto3 = mock.MagicMock()
-    mock_botocore = mock.MagicMock()
-    sys.modules["boto3"] = mock_boto3
-    sys.modules["botocore"] = mock_botocore
-    sys.modules["botocore.config"] = mock_botocore.config
-
-try:
-    from botocore.exceptions import ClientError
-except (ImportError, AttributeError):
-    class ClientError(Exception):
-        def __init__(self, error_response=None, operation_name=None):
-            super().__init__(str(error_response))
-            self.response = error_response or {}
-
 import services.emergency as em
-
 
 @pytest.fixture(autouse=True)
 def reset_cache():
