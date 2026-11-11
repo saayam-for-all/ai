@@ -31,6 +31,7 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_client_imports.py`](../../tests/test_client_imports.py) | Integration | #154 | `utils/client.py` | 2 |
 | [`tests/test_disaster_check.py`](../../tests/test_disaster_check.py) | Unit | #191 | `services/disaster_check.py` | 71 |
 | [`tests/test_disaster_check_contract.py`](../../tests/test_disaster_check_contract.py) | Contract | #191 | `disaster_check_handler` | 62 |
+| [`tests/test_disaster_cross_check.py`](../../tests/test_disaster_cross_check.py) | Unit | #191 | `services/disaster_cross_check.py` | 56 |
 | [`tests/test_emergency_dataset.py`](../../tests/test_emergency_dataset.py) | Dataset | #146 | `services/emergency_numbers.json` | 17 |
 | [`tests/test_emergency_locale.py`](../../tests/test_emergency_locale.py) | Unit | #146 | `services/emergency.py` | 67 |
 | [`tests/test_emergency_s3_reader.py`](../../tests/test_emergency_s3_reader.py) | Unit | #334 | `services/emergency.py S3 reader` | 23 |
@@ -48,7 +49,7 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
 | [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 57 |
 | [`tests/test_usgs_earthquakes.py`](../../tests/test_usgs_earthquakes.py) | Unit | #191 | `services/usgs_earthquakes.py` | 71 |
-| | | | **Total** | **883** |
+| | | | **Total** | **939** |
 
 ## Every test
 
@@ -237,6 +238,52 @@ The disaster_check contract: the Lambda event in, the envelope out - issue #191.
 | `test_a_direct_invoke_where_the_event_is_the_payload` | Another Lambda invoking this one sends no `body` wrapper. |
 
 > 48 test functions expand to 62 cases through parametrisation.
+
+### `test_disaster_cross_check.py`
+
+*Unit · issue #191 · 56 tests*
+
+Disaster check part 5: the LLM cross-check - issue #191.
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_a_hoax_with_no_feed_record_is_returned_unchanged_and_stays_unverified` | A hoax with no feed record is returned unchanged and stays unverified. |
+| `test_an_unresolved_report_costs_no_model_call` | The issue: a non-detection must be cheap. Nothing for a model to compare against. |
+| `test_a_matched_answer_with_no_events_is_not_cross_checked` | A matched answer with no events is not cross checked. |
+| `test_an_unexpected_result_never_raises_and_costs_no_call` | Without status "matched", nothing was matched, whatever else is there. |
+| `test_agreement_keeps_the_feed_grade` | Agreement keeps the feed grade. |
+| `test_disagreement_drops_the_grade_one_step` | Disagreement drops the grade one step. |
+| `test_disagreement_is_reported_not_resolved_silently` | The event stays - a feed listed it - and the conflict is visible. |
+| `test_unsure_is_not_disagreement` | Unsure is not disagreement. |
+| `test_a_later_event_disagreeing_does_not_move_the_top_grade_but_is_reported` | A later event disagreeing does not move the top grade but is reported. |
+| `test_the_model_cannot_raise_a_grade` | The model cannot raise a grade. |
+| `test_the_model_cannot_add_remove_or_edit_events` | The model cannot add remove or edit events. |
+| `test_a_snippet_that_tries_to_instruct_the_model_cannot_make_a_detection` | Prompt injection is bounded: with no feed record, no model is even asked. |
+| `test_an_injected_agreement_cannot_raise_a_grade` | Even when the model is fooled into "same", the feed's grade is the ceiling. |
+| `test_the_snippet_cannot_close_its_own_data_block` | The snippet cannot close its own data block. |
+| `test_a_long_snippet_is_bounded_in_the_prompt` | A long snippet is bounded in the prompt. |
+| `test_model_notes_are_bounded` | Model notes are bounded. |
+| `test_gemini_failing_falls_back_to_groq` | Gemini failing falls back to groq. |
+| `test_an_unusable_reply_is_a_failed_attempt_and_the_next_model_is_asked` | An unusable reply is a failed attempt and the next model is asked. |
+| `test_every_model_down_keeps_the_detection_and_the_feed_grade` | Every model down keeps the detection and the feed grade. |
+| `test_a_provider_error_message_is_not_put_in_the_response` | Provider errors can quote keys and hosts; they belong in the log only. |
+| `test_a_fenced_json_reply_is_accepted` | A fenced json reply is accepted. |
+| `test_a_langchain_message_object_is_accepted` | A langchain message object is accepted. |
+| `test_cross_check_never_raises_even_with_no_targets_configured` | Cross check never raises even with no targets configured. |
+| `test_only_the_first_events_are_cross_checked` | Only the first events are cross checked. |
+| `test_the_prompt_carries_the_record_and_the_claim` | The prompt carries the record and the claim. |
+| `test_the_prompt_uses_part_4_field_names` | Part 4 calls the place reported_location and keeps the magnitude. |
+| `test_the_model_sees_what_part_4_extracted` | The model sees what part 4 extracted. |
+| `test_a_claim_missing_fields_still_builds_a_prompt` | A claim missing fields still builds a prompt. |
+| `test_grade` | Grade. |
+| `test_cross_check_over_a_recorded_usgs_answer` | Gaziantep on 6 February 2023, through check_location, then part 5. |
+| `test_the_default_chain_is_gemini_then_groq` | The default chain is gemini then groq. |
+| `test_the_default_model_call_uses_the_shared_factory_at_temperature_zero` | The default model call uses the shared factory at temperature zero. |
+| `test_without_keys_the_default_path_reports_unavailable_not_an_error` | Locally, and in CI, there are no provider keys: the factory refuses. |
+| `test_parse_verdict_rejects_anything_but_a_known_verdict_object` | Parse verdict rejects anything but a known verdict object. |
+| `test_parse_verdict_normalises_case_and_whitespace` | Parse verdict normalises case and whitespace. |
+
+> 35 test functions expand to 56 cases through parametrisation.
 
 ### `test_emergency_dataset.py`
 
