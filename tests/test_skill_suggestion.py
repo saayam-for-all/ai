@@ -1049,4 +1049,3 @@ def test_describe_add_more_then_repeat_the_first(monkeypatch):
     assert third["token_usage"]["total_tokens"] == 0
     assert [c["category_number"] for c in third["categories"]] == ["3.3.3", "4.3.1"]
     assert third["session"] == second["session"]
-
