@@ -34,8 +34,10 @@ quote checked against the text), what it was matched to (`hierarchy`) and why
 that quote really is in the text.
 
 Privacy: the description and the model's `evidence` quotes are the volunteer's
-own words. Neither may reach a log line or an exception message, because
-`run_model_chain` logs `str(error)` on every failover. The session carries the
+own words. Neither may reach a log line or an exception message. The model
+chain quotes only a `ModelResponseError`'s message in its failover log, and
+reduces every other exception to its type, status and error code
+(`describe_model_error` in utils/model_fallback.py). The session carries the
 volunteer's text back to the web app; it is never stored server-side.
 """
 
@@ -45,7 +47,12 @@ import json
 import os
 
 from utils.client import client, _use_groq, _gemini_client
-from utils.model_fallback import ModelTarget, run_model_chain
+from utils.model_fallback import (
+    ModelResponseError,
+    ModelTarget,
+    describe_model_error,
+    run_model_chain,
+)
 from utils.predict_category_list import (
     help_categories,
     category_name_to_number,
@@ -165,25 +172,17 @@ def _env_int(name: str, default: int) -> int:
     return value if value > 0 else default
 
 
-def _provider_error(provider: str, error: Exception) -> ValueError:
+def _provider_error(provider: str, error: Exception) -> ModelResponseError:
     """A failover reason that cannot quote the volunteer's text.
 
     The Groq SDK puts the whole HTTP response body in its exception message.
     For `json_validate_failed` that body includes `failed_generation`, the
-    model's partial output with its evidence quotes, and the model chain logs
-    str(error). Keep only what identifies the failure.
+    model's partial output with its evidence quotes. Keep only what identifies
+    the failure, and name the provider.
     """
-    parts = [f"{provider} request failed: {type(error).__name__}"]
-    status_code = getattr(error, "status_code", None)
-    if isinstance(status_code, int):
-        parts.append(f"status={status_code}")
-    body = getattr(error, "body", None)
-    if isinstance(body, dict):
-        detail = body.get("error", body)
-        code = detail.get("code") if isinstance(detail, dict) else None
-        if isinstance(code, str) and code.isidentifier():
-            parts.append(f"code={code}")
-    return ValueError(" ".join(parts))
+    return ModelResponseError(
+        f"{provider} request failed: {describe_model_error(error)}"
+    )
 
 
 def _category_lines() -> list[str]:
@@ -282,7 +281,7 @@ class SkillSuggestionService:
         """
         if target.provider == "groq":
             if not (_use_groq and client):
-                raise ValueError("Groq client not initialized")
+                raise ModelResponseError("Groq client not initialized")
 
             try:
                 response = client.chat.completions.create(
@@ -303,7 +302,7 @@ class SkillSuggestionService:
             content = response.choices[0].message.content
         elif target.provider == "gemini":
             if not _gemini_client:
-                raise ValueError("Gemini client not initialized")
+                raise ModelResponseError("Gemini client not initialized")
 
             try:
                 response = _gemini_client.models.generate_content(
@@ -322,18 +321,18 @@ class SkillSuggestionService:
             )
             content = response.text
         else:
-            raise ValueError(f"Unsupported model provider: {target.provider}")
+            raise ModelResponseError(f"Unsupported model provider: {target.provider}")
 
         if not content or not str(content).strip():
-            raise ValueError(f"{target.provider} response content is empty")
+            raise ModelResponseError(f"{target.provider} response content is empty")
 
         try:
             decoded = json.loads(str(content).strip())
         except json.JSONDecodeError:
             # JSONDecodeError's message quotes the document it failed on.
-            raise ValueError(f"{target.provider} response is not valid JSON") from None
+            raise ModelResponseError(f"{target.provider} response is not valid JSON") from None
         if not isinstance(decoded, dict) or not isinstance(decoded.get("skills"), list):
-            raise ValueError(f"{target.provider} response has no skills list")
+            raise ModelResponseError(f"{target.provider} response has no skills list")
         return decoded
 
     @staticmethod

@@ -11,6 +11,7 @@ from dataclasses import dataclass
 import json
 import logging
 from pathlib import Path
+import re
 from typing import Any, TypeVar
 
 
@@ -124,10 +125,88 @@ def _load_model_chain(
     return tuple(targets)
 
 
+class ModelResponseError(ValueError):
+    """A model call failed for a reason our own code describes.
+
+    Raise this, not a bare ``ValueError``, when a service rejects a provider
+    response ("groq response content is empty"). Its message is written by us
+    and never contains the request text or the model's output, so the failover
+    log may quote it. Every other exception is reduced to safe fields by
+    ``describe_model_error``.
+    """
+
+
+# Provider error codes worth keeping when an SDK reports them only inside its
+# message text. The rest of that text is not logged: the Groq SDK puts the whole
+# HTTP response body in the message, and for ``json_validate_failed`` the body
+# carries ``failed_generation``, the model's output, which can quote the user.
+_KNOWN_ERROR_CODES = (
+    "context_length_exceeded",
+    "invalid_api_key",
+    "json_validate_failed",
+    "model_decommissioned",
+    "model_not_found",
+    "rate_limit_exceeded",
+    "request_too_large",
+    "service_unavailable",
+)
+_KNOWN_ERROR_CODE = re.compile(r"\b(" + "|".join(_KNOWN_ERROR_CODES) + r")\b")
+
+
+def _error_status(error: Exception) -> int | None:
+    """The HTTP status a provider SDK attached to its exception, if any."""
+    # Groq and OpenAI-style SDKs use ``status_code``; google-genai uses ``code``.
+    for attribute in ("status_code", "code"):
+        value = getattr(error, attribute, None)
+        if isinstance(value, int) and not isinstance(value, bool):
+            return value
+    return None
+
+
+def _error_code(error: Exception) -> str | None:
+    """A provider error code such as ``rate_limit_exceeded``, if one is known.
+
+    Only single identifiers are returned, never free text.
+    """
+    body = getattr(error, "body", None)
+    if isinstance(body, dict):
+        detail = body.get("error", body)
+        code = detail.get("code") if isinstance(detail, dict) else None
+        if isinstance(code, str) and code.isidentifier():
+            return code
+    for attribute in ("code", "status"):  # google-genai: status="RESOURCE_EXHAUSTED"
+        value = getattr(error, attribute, None)
+        if isinstance(value, str) and value.isidentifier():
+            return value
+    match = _KNOWN_ERROR_CODE.search(str(error))
+    return match.group(1) if match else None
+
+
+def describe_model_error(error: Exception) -> str:
+    """A one-line reason for a failed model call that is safe to log.
+
+    Keeps what diagnoses an outage (the exception type, the HTTP status and the
+    provider's error code), so a 429 or a timeout still shows in CloudWatch.
+    Drops the free text of the message, which can quote the prompt or the
+    model's output, and so the user's own words.
+    """
+    name = type(error).__name__
+    if isinstance(error, ModelResponseError):
+        detail = " ".join(str(error).split())
+        return f"{name}: {detail}" if detail else name
+    parts = [name]
+    status = _error_status(error)
+    if status is not None:
+        parts.append(f"status={status}")
+    code = _error_code(error)
+    if code is not None:
+        parts.append(f"code={code}")
+    return " ".join(parts)
+
+
 def _failure_reason(error: Exception) -> str:
     """Return a compact single-line reason suitable for a warning log."""
-    detail = " ".join(str(error).split())
-    return f"{type(error).__name__}: {detail}" if detail else type(error).__name__
+    return describe_model_error(error)
 
 
 def run_model_chain(

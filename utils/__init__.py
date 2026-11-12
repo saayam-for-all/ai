@@ -21,7 +21,7 @@ from utils.client import (
     groq_llm,
 )
 from utils.prompts import get_conversational_prompt
-from utils.model_fallback import ModelTarget, run_model_chain
+from utils.model_fallback import ModelResponseError, ModelTarget, run_model_chain
 
 
 class ChatMessage(TypedDict):
@@ -162,7 +162,7 @@ class GroqAnswerGenerationService(AnswerGenerationServiceInterface):
         content = response.content if hasattr(response, "content") else str(response)
         answer = (content or "").strip()
         if not answer:
-            raise ValueError(f"{target.provider} response content is empty")
+            raise ModelResponseError(f"{target.provider} response content is empty")
         return answer
     def generate_answer(
         self,

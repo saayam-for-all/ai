@@ -254,7 +254,10 @@ def predict_category_handler(event, context):
             },
         )
     except Exception as e:
-        return _response(500, {"error": str(e)})
+        # str(e) can quote the description, so neither the log nor the caller
+        # gets it. The exception type is enough to find the failure.
+        print(f"ERROR: category prediction failed: {type(e).__name__}")
+        return _response(500, {"error": "Category prediction failed"})
 
 
 # 1b. Suggest Volunteer Skills (predict_category with mode "volunteer_skills")

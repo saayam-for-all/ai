@@ -1,7 +1,7 @@
 import json
 from utils.categories_with_description import TAXONOMY
 from utils.client import client, _use_groq, _gemini_client
-from utils.model_fallback import ModelTarget, run_model_chain
+from utils.model_fallback import ModelResponseError, ModelTarget, run_model_chain
 from utils.predict_category_list import (
     help_categories,
     category_name_to_number,
@@ -145,7 +145,7 @@ class GroqClassificationService:
         """Call one configured model and decode its classification JSON."""
         if target.provider == "groq":
             if not (_use_groq and client):
-                raise ValueError("Groq client not initialized")
+                raise ModelResponseError("Groq client not initialized")
 
             response = client.chat.completions.create(
                 model=target.model,
@@ -165,7 +165,7 @@ class GroqClassificationService:
             content = response.choices[0].message.content
         elif target.provider == "gemini":
             if not _gemini_client:
-                raise ValueError("Gemini client not initialized")
+                raise ModelResponseError("Gemini client not initialized")
 
             response = _gemini_client.models.generate_content(
                 model=target.model,
@@ -181,14 +181,14 @@ class GroqClassificationService:
             )
             content = response.text
         else:
-            raise ValueError(f"Unsupported model provider: {target.provider}")
+            raise ModelResponseError(f"Unsupported model provider: {target.provider}")
 
         if not content or not str(content).strip():
-            raise ValueError(f"{target.provider} response content is empty")
+            raise ModelResponseError(f"{target.provider} response content is empty")
 
         decoded = json.loads(str(content).strip())
         if not isinstance(decoded, dict):
-            raise ValueError(f"{target.provider} response must be a JSON object")
+            raise ModelResponseError(f"{target.provider} response must be a JSON object")
         return decoded
 
     def _predict_single_target(

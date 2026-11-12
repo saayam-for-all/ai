@@ -26,6 +26,7 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | File | Kind | Issue | Covers | Tests |
 | --- | --- | --- | --- | ---: |
 | [`tests/test_answer_conversation.py`](../../tests/test_answer_conversation.py) | Unit | #183 | `utils/__init__.py prompt assembly` | 24 |
+| [`tests/test_classification_privacy.py`](../../tests/test_classification_privacy.py) | Unit | #216 | `utils/model_fallback.py failover reasons, predict_category 500` | 11 |
 | [`tests/test_classification_resilience.py`](../../tests/test_classification_resilience.py) | Unit | - | `services/classification_service.py` | 10 |
 | [`tests/test_client_factory.py`](../../tests/test_client_factory.py) | Unit | #193 | `utils/client.py create_chat_model` | 9 |
 | [`tests/test_client_imports.py`](../../tests/test_client_imports.py) | Integration | #154 | `utils/client.py` | 2 |
@@ -46,7 +47,7 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_skill_suggestion.py`](../../tests/test_skill_suggestion.py) | Unit | #216 | `services/skill_suggestion_service.py` | 76 |
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
 | [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 57 |
-| | | | **Total** | **699** |
+| | | | **Total** | **710** |
 
 ## Every test
 
@@ -80,6 +81,24 @@ What the model is actually asked, turn by turn - issue #183.
 | `test_location_gender_and_age_still_reach_the_system_prompt` | Location gender and age still reach the system prompt. |
 
 > 20 test functions expand to 24 cases through parametrisation.
+
+### `test_classification_privacy.py`
+
+*Unit · issue #216 · 11 tests*
+
+Help-request and volunteer text stays out of logs and error bodies (issue #216).
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_model_failure_does_not_log_private_text` | Model failure does not log private text. |
+| `test_prediction_error_does_not_expose_private_text` | Prediction error does not expose private text. |
+| `test_model_not_found_error_logs_safe_reason` | Model not found error logs safe reason. |
+| `test_a_provider_error_keeps_status_and_code_but_not_text` | A 429 or a timeout must still show in CloudWatch; the text must not. |
+| `test_our_own_response_errors_are_logged_verbatim` | A ModelResponseError is written by our code, so its message is kept. |
+| `test_a_free_text_error_with_no_code_logs_only_its_type` | A free text error with no code logs only its type. |
+| `test_classification_failover_never_logs_the_description` | Classification failover never logs the description. |
+
+> 7 test functions expand to 11 cases through parametrisation.
 
 ### `test_classification_resilience.py`
 
