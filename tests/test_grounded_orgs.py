@@ -235,14 +235,23 @@ def test_ca_does_not_match_chicago(taxonomy, records):
                  location="Chicago, IL")["organizations"] == []
 
 
-def test_an_unspecified_location_does_not_filter(taxonomy, records):
-    """The handler sends "United States" when the caller gave none."""
-    assert set(_ids(_find(taxonomy, records, category="1", location="United States"))) \
-        == {"fx-001", "fx-005"}
+def test_an_unspecified_location_returns_only_national_records(taxonomy, records):
+    """The handler sends "United States" when the caller gave none. A city's
+    records cannot help someone we cannot place, so only national ones answer."""
+    assert _find(taxonomy, records, category="1",
+                 location="United States")["organizations"] == []
+    assert _ids(_find(taxonomy, records, category="TUTORING",
+                      location="United States")) == ["fx-003"]
+    assert _ids(_find(taxonomy, records, category="TUTORING", location="")) == ["fx-003"]
 
 
 def test_the_limit_is_respected(taxonomy, records):
-    assert len(_find(taxonomy, records, category="1", location="", limit=1)["organizations"]) == 1
+    """Two records fit this request, so a limit of one must cut the list to one."""
+    both = _find(taxonomy, records, category="HOUSING_ASSISTANCE", location="San Jose, CA")
+    assert len(both["organizations"]) == 2
+    one = _find(taxonomy, records, category="HOUSING_ASSISTANCE", location="San Jose, CA",
+                limit=1)
+    assert len(one["organizations"]) == 1
 
 
 def test_the_same_request_always_gives_the_same_answer(taxonomy, records):
@@ -324,7 +333,8 @@ MODEL_STYLE_ORG = {
 def test_a_model_written_organization_with_no_record_is_unsupported(records):
     report = GO.audit([MODEL_STYLE_ORG], records=records)
     assert report["organizations"][0]["status"] == "unsupported"
-    assert report["summary"] == {"total": 1, "supported": 0, "contradicted": 0, "unsupported": 1}
+    assert report["summary"] == {"total": 1, "supported": 0, "contradicted": 0,
+                                     "unsupported": 1, "with_unsourced_fields": 0}
 
 
 def test_an_organization_matching_its_record_is_supported(records):
@@ -342,6 +352,42 @@ def test_formatting_differences_are_not_contradictions(records):
     same = dict(records[0], web_url="HTTP://WWW.example.invalid/fx-001/",
                 contact="+1 (000) 000-0000")
     assert GO.audit([same], records=records)["organizations"][0]["status"] == "supported"
+
+
+def test_a_blank_record_field_is_not_contradicted_but_is_reported_as_unsourced(records):
+    """The record makes no rating or size claim, so a model that states both has
+    contradicted nothing; the audit lists them as unverified instead."""
+    blank = copy.deepcopy(records[0])
+    blank["rating"], blank["size"] = 0.0, ""
+    del blank["sources"]["rating"], blank["sources"]["size"]
+    model_style = dict(blank, rating=4.7, size="large")
+    report = GO.audit([model_style], records=[blank])
+    entry = report["organizations"][0]
+    assert entry["status"] == "supported"
+    assert entry["mismatched_fields"] == []
+    assert set(entry["unsourced_fields"]) == {"rating", "size"}
+    assert report["summary"]["with_unsourced_fields"] == 1
+
+
+def test_a_field_the_record_does_state_is_still_contradicted_when_it_differs(records):
+    """Skipping blanks must not weaken the check on fields that have a value."""
+    wrong = dict(records[0], rating=2.0)
+    entry = GO.audit([wrong], records=records)["organizations"][0]
+    assert entry["status"] == "contradicted"
+    assert entry["mismatched_fields"] == ["rating"]
+
+
+def test_a_models_short_location_agrees_when_the_service_area_covers_it(records):
+    """The model says "San Jose, CA"; the record holds a full address. That is
+    agreement. A different city is a contradiction."""
+    near = dict(records[0], location="San Jose, CA")
+    far = dict(records[0], location="Boston, MA")
+    vague = dict(records[0], location="United States")
+    assert GO.audit([near], records=records)["organizations"][0]["status"] == "supported"
+    assert GO.audit([vague], records=records)["organizations"][0]["status"] == "supported"
+    entry = GO.audit([far], records=records)["organizations"][0]
+    assert entry["status"] == "contradicted"
+    assert entry["mismatched_fields"] == ["location"]
 
 
 # -------------------------------------------------------------------

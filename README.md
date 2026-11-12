@@ -618,41 +618,41 @@ environment active. No API keys, AWS credentials or network are needed.
    Expected output:
 
    ```
-Dataset: 10 records, each served only if verified and sourced
+   Dataset: 10 records, each served only if verified and sourced
 
-REQUEST  category=HOUSING_ASSISTANCE  location="Chicago, IL"  text="I need a place to stay"
-  -> Sample Chicago Shelter Network (proxy data)
-     matched via: exact  (score 1.0, location fit 3)
-     name sourced from: https://example.org/proxy/proxy-003
+   REQUEST  category=HOUSING_ASSISTANCE  location="Chicago, IL"  text="I need a place to stay"
+     -> Sample Chicago Shelter Network (proxy data)
+        matched via: exact  (score 1.0, location fit 3)
+        name sourced from: https://example.org/proxy/proxy-003
 
-  -> Sample National Housing Helpline (proxy data)
-     matched via: exact  (score 1.0, location fit 1)
-     name sourced from: https://example.org/proxy/proxy-010
+     -> Sample National Housing Helpline (proxy data)
+        matched via: exact  (score 1.0, location fit 1)
+        name sourced from: https://example.org/proxy/proxy-010
 
-REQUEST  category=LOOKING_FOR_RENTAL  location="Houston, TX"  text="looking for a rental"
-  -> Sample Houston Shelter Network (proxy data)
-     matched via: broader  (score 0.6, location fit 3)
-     name sourced from: https://example.org/proxy/proxy-006
+   REQUEST  category=LOOKING_FOR_RENTAL  location="Houston, TX"  text="looking for a rental"
+     -> Sample Houston Shelter Network (proxy data)
+        matched via: broader  (score 0.6, location fit 3)
+        name sourced from: https://example.org/proxy/proxy-006
 
-  -> Sample National Housing Helpline (proxy data)
-     matched via: broader  (score 0.6, location fit 1)
-     name sourced from: https://example.org/proxy/proxy-010
+     -> Sample National Housing Helpline (proxy data)
+        matched via: broader  (score 0.6, location fit 1)
+        name sourced from: https://example.org/proxy/proxy-010
 
-REQUEST  category=DONATE_CLOTHES  location="Seattle, WA"  text="I want to donate clothes"
-  -> Sample Seattle Clothing Closet (proxy data)
-     matched via: exact  (score 1.0, location fit 3)
-     name sourced from: https://example.org/proxy/proxy-008
+   REQUEST  category=DONATE_CLOTHES  location="Seattle, WA"  text="I want to donate clothes"
+     -> Sample Seattle Clothing Closet (proxy data)
+        matched via: exact  (score 1.0, location fit 3)
+        name sourced from: https://example.org/proxy/proxy-008
 
-REQUEST  category=HOUSING_ASSISTANCE  location="Denver, CO"  text="I need a place to stay"
-  -> Sample National Housing Helpline (proxy data)
-     matched via: exact  (score 1.0, location fit 1)
-     name sourced from: https://example.org/proxy/proxy-010
+   REQUEST  category=HOUSING_ASSISTANCE  location="Denver, CO"  text="I need a place to stay"
+     -> Sample National Housing Helpline (proxy data)
+        matched via: exact  (score 1.0, location fit 1)
+        name sourced from: https://example.org/proxy/proxy-010
 
-REQUEST  category=FOOD_ASSISTANCE  location="Denver, CO"  text="I need food"
-  -> nothing returned (no verified record matches)
+   REQUEST  category=FOOD_ASSISTANCE  location="Denver, CO"  text="I need food"
+     -> nothing returned (no verified record matches)
 
-REQUEST  category=TUTORING  location="Chicago, IL"  text="math tutoring"
-  -> nothing returned (no verified record matches)
+   REQUEST  category=TUTORING  location="Chicago, IL"  text="math tutoring"
+     -> nothing returned (no verified record matches)
    ```
 
    Importing the project's existing `utils/search_orgs.py` may first print a few
@@ -680,7 +680,10 @@ REQUEST  category=TUTORING  location="Chicago, IL"  text="math tutoring"
   `broader` (the record is filed under a parent category), `narrower` (under a
   child) or `keyword` (only its keywords matched).
 - **location fit** is 3 for a city match, 2 for a state, 1 for a national
-  organization. A record that does not serve the place is never returned.
+  organization. A record that does not serve the place is never returned. When
+  no location is given (the handler sends "United States"), only national
+  organizations are returned: a city shelter is unlikely to help someone we
+  cannot place.
 - **name sourced from** is the URL the organization's name is backed by. Every
   claim in a served record has one; a record without them is dropped when the
   dataset is loaded.
@@ -699,6 +702,14 @@ REQUEST  category=TUTORING  location="Chicago, IL"  text="math tutoring"
 for this experiment; real use needs people to verify real records.
 Matching is deliberately simple (category graph plus keywords). `size` and `rating`
 are blank unless a source supports them. It is not wired into `find_organizations`.
+
+`audit()` limits: it matches organizations to records by name only, so with real
+data the same name in several cities (chains, national charities with local
+chapters) would need a smarter key; a field the record leaves blank is reported as
+`unsourced_fields`, not as a contradiction; and `location` is compared with the
+record's service area, not the whole address string. `causes`, `categories`,
+`service_area` and `keywords` are labels we assign, not sourced claims (see
+`docs/organizations_provenance.md`).
 
 ---
 

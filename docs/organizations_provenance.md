@@ -44,6 +44,16 @@ dataset served by `utils/grounded_orgs.py` (issue #197, stack 3).
 | `sources` | Object mapping each claimed field to its `https://` source URL. |
 | `verified_by`, `verified_on` | Who verified the record, and when (`YYYY-MM-DD`). |
 
+### Labels we assign are not claims
+
+`causes`, `categories`, `service_area` and `keywords` are labels *we* assign so
+the matcher can find a record. They are not statements the organization makes,
+so they need no source URL of their own (see `CLAIM_FIELDS` in
+`utils/grounded_orgs.py`). `causes` is shown on the Organizations tab, though, so
+whoever verifies a record should check it against the same page that supports
+the mission, and `service_area` against where the organization says it works.
+This is a rule for the verifier, not something the code can enforce.
+
 ## Adding a record
 
 1. Find the organization from an official source (rule 1).

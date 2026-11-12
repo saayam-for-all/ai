@@ -229,18 +229,24 @@ def location_fit(record, location):
     """How well a record's service area covers ``location``.
 
     3 = a city-level area inside the location, 2 = a state or region, 1 = a
-    national area, 0 = the caller gave no usable location (no filtering), and
-    None = the record does not serve this location. Whole-word matching stops
-    "CA" matching "Chicago".
+    national area, and None = the record does not serve this location.
+    Whole-word matching stops "CA" matching "Chicago".
+
+    When the caller gave no usable location (the handler sends "United States"
+    in that case), only national records fit. A city shelter is unlikely to help
+    someone we cannot place, and this module prefers returning less to returning
+    something its source cannot vouch for. Treating the location as "don't
+    filter" would hand that person the Chicago, Houston and Seattle shelters.
     """
     place = str(location or "").casefold().strip()
-    if place in _UNSPECIFIED_LOCATIONS:
-        return 0
+    unspecified = place in _UNSPECIFIED_LOCATIONS
     best = None
     for area in record.get("service_area") or []:
         area = str(area).casefold().strip()
         if area in _NATIONAL_AREAS:
             fit = 1
+        elif unspecified:
+            continue
         else:
             parts = [p.strip() for p in area.split(",") if p.strip()]
             if not parts or not all(re.search(rf"\b{re.escape(p)}\b", place) for p in parts):
@@ -348,6 +354,18 @@ def _norm(field, value):
     return text
 
 
+def _location_consistent(record, theirs, ours):
+    """True unless another source's location contradicts the record.
+
+    A model typically says "Chicago, IL" where the record holds a full address,
+    so a location agrees when the strings match or when the record's service
+    area covers it. A vague "United States" makes no claim either way.
+    """
+    if theirs == ours or theirs in _UNSPECIFIED_LOCATIONS:
+        return True
+    return location_fit(record, theirs) is not None
+
+
 def audit(organizations, records=None):
     """Check organizations against verified records.
 
@@ -355,6 +373,16 @@ def audit(organizations, records=None):
     differing field), ``contradicted`` (same name, a field differs) or
     ``unsupported`` (no record with that name, so nothing can be checked).
     This is how model-written organizations are measured against ground truth.
+
+    A field the record leaves blank (for example a rating nobody could source)
+    makes no claim, so it cannot be contradicted. If the other organization still
+    states a value there, the field is listed in ``unsourced_fields``: not wrong,
+    but nobody has verified it. ``location`` is compared against the record's
+    service area, not the whole string.
+
+    Known limitation: records are matched by name only. With real data the same
+    name can appear in several cities (chains, national charities with local
+    chapters), and the last such record wins.
     """
     records = [r for r in (load_records() if records is None else records)
                if not problems(r)]
@@ -363,15 +391,24 @@ def audit(organizations, records=None):
     report = []
     for org in organizations:
         record = by_name.get(_norm("organization_name", org.get("organization_name")))
-        mismatched = [] if record is None else [
-            f for f in checked
-            if _norm(f, org.get(f)) and _norm(f, org.get(f)) != _norm(f, record.get(f))]
+        mismatched, unsourced = [], []
+        for field in ([] if record is None else checked):
+            theirs, ours = _norm(field, org.get(field)), _norm(field, record.get(field))
+            if not theirs:
+                continue
+            if not ours:
+                unsourced.append(field)
+            elif theirs != ours and not (
+                    field == "location" and _location_consistent(record, theirs, ours)):
+                mismatched.append(field)
         status = ("unsupported" if record is None
                   else "contradicted" if mismatched else "supported")
         report.append({"organization_name": org.get("organization_name", ""),
-                       "status": status, "mismatched_fields": mismatched})
+                       "status": status, "mismatched_fields": mismatched,
+                       "unsourced_fields": unsourced})
     counts = {s: sum(r["status"] == s for r in report)
               for s in ("supported", "contradicted", "unsupported")}
+    counts["with_unsourced_fields"] = sum(bool(r["unsourced_fields"]) for r in report)
     return {"organizations": report, "summary": {"total": len(report), **counts}}
 
 
