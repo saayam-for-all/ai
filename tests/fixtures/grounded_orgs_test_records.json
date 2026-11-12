@@ -1,0 +1,204 @@
+{
+  "_readme": "TEST-ONLY fixture records. Fake names and example.invalid URLs. Never copy into services/organizations.json.",
+  "organizations": [
+    {
+      "source_id": "fx-001",
+      "organization_name": "Fixture Food Bank (test only)",
+      "org_type": "nonprofit",
+      "size": "small",
+      "rating": 4.0,
+      "location": "1 Test Way, Testville",
+      "contact": "+1-000-000-0000",
+      "email": "contact@example.invalid",
+      "web_url": "https://example.invalid/fx-001",
+      "mission": "Test mission.",
+      "description": "Test description.",
+      "causes": [
+        "Food Security"
+      ],
+      "categories": [
+        "1.1"
+      ],
+      "service_area": [
+        "San Jose, CA"
+      ],
+      "keywords": [
+        "food",
+        "pantry"
+      ],
+      "sources": {
+        "organization_name": "https://example.invalid/fx-001",
+        "org_type": "https://example.invalid/fx-001",
+        "size": "https://example.invalid/fx-001",
+        "rating": "https://example.invalid/fx-001",
+        "location": "https://example.invalid/fx-001",
+        "contact": "https://example.invalid/fx-001",
+        "email": "https://example.invalid/fx-001",
+        "web_url": "https://example.invalid/fx-001",
+        "mission": "https://example.invalid/fx-001",
+        "description": "https://example.invalid/fx-001"
+      },
+      "verified_by": "test-fixture",
+      "verified_on": "2026-01-01"
+    },
+    {
+      "source_id": "fx-002",
+      "organization_name": "Fixture Housing Alliance (test only)",
+      "org_type": "nonprofit",
+      "size": "small",
+      "rating": 4.0,
+      "location": "1 Test Way, Testville",
+      "contact": "+1-000-000-0000",
+      "email": "contact@example.invalid",
+      "web_url": "https://example.invalid/fx-002",
+      "mission": "Test mission.",
+      "description": "Test description.",
+      "causes": [
+        "Housing"
+      ],
+      "categories": [
+        "3"
+      ],
+      "service_area": [
+        "CA"
+      ],
+      "keywords": [
+        "rent",
+        "housing"
+      ],
+      "sources": {
+        "organization_name": "https://example.invalid/fx-002",
+        "org_type": "https://example.invalid/fx-002",
+        "size": "https://example.invalid/fx-002",
+        "rating": "https://example.invalid/fx-002",
+        "location": "https://example.invalid/fx-002",
+        "contact": "https://example.invalid/fx-002",
+        "email": "https://example.invalid/fx-002",
+        "web_url": "https://example.invalid/fx-002",
+        "mission": "https://example.invalid/fx-002",
+        "description": "https://example.invalid/fx-002"
+      },
+      "verified_by": "test-fixture",
+      "verified_on": "2026-01-01"
+    },
+    {
+      "source_id": "fx-003",
+      "organization_name": "Fixture Tutoring Network (test only)",
+      "org_type": "nonprofit",
+      "size": "small",
+      "rating": 4.0,
+      "location": "1 Test Way, Testville",
+      "contact": "+1-000-000-0000",
+      "email": "contact@example.invalid",
+      "web_url": "https://example.invalid/fx-003",
+      "mission": "Test mission.",
+      "description": "Test description.",
+      "causes": [
+        "Education"
+      ],
+      "categories": [
+        "4.3"
+      ],
+      "service_area": [
+        "US"
+      ],
+      "keywords": [
+        "tutoring"
+      ],
+      "sources": {
+        "organization_name": "https://example.invalid/fx-003",
+        "org_type": "https://example.invalid/fx-003",
+        "size": "https://example.invalid/fx-003",
+        "rating": "https://example.invalid/fx-003",
+        "location": "https://example.invalid/fx-003",
+        "contact": "https://example.invalid/fx-003",
+        "email": "https://example.invalid/fx-003",
+        "web_url": "https://example.invalid/fx-003",
+        "mission": "https://example.invalid/fx-003",
+        "description": "https://example.invalid/fx-003"
+      },
+      "verified_by": "test-fixture",
+      "verified_on": "2026-01-01"
+    },
+    {
+      "source_id": "fx-004",
+      "organization_name": "Fixture Plumbing Aid (test only)",
+      "org_type": "nonprofit",
+      "size": "small",
+      "rating": 4.0,
+      "location": "1 Test Way, Testville",
+      "contact": "+1-000-000-0000",
+      "email": "contact@example.invalid",
+      "web_url": "https://example.invalid/fx-004",
+      "mission": "Test mission.",
+      "description": "Test description.",
+      "causes": [
+        "Housing repair"
+      ],
+      "categories": [
+        "3.3.1"
+      ],
+      "service_area": [
+        "San Jose, CA"
+      ],
+      "keywords": [
+        "plumbing",
+        "leak"
+      ],
+      "sources": {
+        "organization_name": "https://example.invalid/fx-004",
+        "org_type": "https://example.invalid/fx-004",
+        "size": "https://example.invalid/fx-004",
+        "rating": "https://example.invalid/fx-004",
+        "location": "https://example.invalid/fx-004",
+        "contact": "https://example.invalid/fx-004",
+        "email": "https://example.invalid/fx-004",
+        "web_url": "https://example.invalid/fx-004",
+        "mission": "https://example.invalid/fx-004",
+        "description": "https://example.invalid/fx-004"
+      },
+      "verified_by": "test-fixture",
+      "verified_on": "2026-01-01"
+    },
+    {
+      "source_id": "fx-005",
+      "organization_name": "Fixture Grocery Delivery (test only)",
+      "org_type": "nonprofit",
+      "size": "small",
+      "rating": 4.0,
+      "location": "1 Test Way, Testville",
+      "contact": "+1-000-000-0000",
+      "email": "contact@example.invalid",
+      "web_url": "https://example.invalid/fx-005",
+      "mission": "Test mission.",
+      "description": "Test description.",
+      "causes": [
+        "Food Security"
+      ],
+      "categories": [
+        "1.2"
+      ],
+      "service_area": [
+        "Austin, TX"
+      ],
+      "keywords": [
+        "groceries",
+        "delivery"
+      ],
+      "sources": {
+        "organization_name": "https://example.invalid/fx-005",
+        "org_type": "https://example.invalid/fx-005",
+        "size": "https://example.invalid/fx-005",
+        "rating": "https://example.invalid/fx-005",
+        "location": "https://example.invalid/fx-005",
+        "contact": "https://example.invalid/fx-005",
+        "email": "https://example.invalid/fx-005",
+        "web_url": "https://example.invalid/fx-005",
+        "mission": "https://example.invalid/fx-005",
+        "description": "https://example.invalid/fx-005"
+      },
+      "verified_by": "test-fixture",
+      "verified_on": "2026-01-01"
+    }
+  ]
+}
