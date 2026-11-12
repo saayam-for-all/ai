@@ -49,6 +49,8 @@ FILE_META = {
     "test_skill_eval_dataset.py": ("#216", "docs/metrics/volunteer_skills_eval_set.json"),
     "test_subject_generator.py": ("-", "utils/subject_generator.py"),
     "test_emergency_s3_reader.py": ("#334", "services/emergency.py S3 reader"),
+    "test_emergency_logging.py": ("#146", "services/emergency.py logging"),
+    "test_emergency_location_fields.py": ("#146, webapp#1959", "location_source, display_location"),
     "test_token_usage.py": ("#159", "utils/token_usage.py"),
     "test_model_fallback.py": ("#193", "utils/model_fallback.py"),
     "test_client_factory.py": ("#193", "utils/client.py create_chat_model"),
