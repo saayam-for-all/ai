@@ -24,6 +24,7 @@ EVAL_SET_PATH = (
     Path(__file__).resolve().parent.parent
     / "docs" / "metrics" / "volunteer_skills_eval_set.json"
 )
+ISSUE_CASES_PATH = EVAL_SET_PATH.with_name("volunteer_skills_issue_cases.json")
 
 #: What issue #216 asks the set to cover, and the floor for each.
 REQUIRED_TRAITS = {
@@ -214,3 +215,27 @@ def test_descriptions_fit_within_the_services_own_cap(cases):
 def test_descriptions_are_unique(cases):
     texts = [" ".join(case["description"].lower().split()) for case in cases]
     assert len(texts) == len(set(texts))
+
+
+# ---------------------------------------------------------------------------
+# The issue's own ten cases, reported separately from the scored set
+# ---------------------------------------------------------------------------
+
+def test_the_issue_cases_file_is_the_ten_cases_the_issue_publishes():
+    """Same texts as ISSUE_216_CASES, and the 19 skills the issue's table counts."""
+    issue_cases = json.loads(ISSUE_CASES_PATH.read_text(encoding="utf-8"))["cases"]
+
+    texts = [" ".join(case["description"].lower().split()) for case in issue_cases]
+    assert texts == [text.lower() for text in ISSUE_216_CASES]
+    assert sum(len(case["expected"]) for case in issue_cases) == 19
+
+
+def test_the_issue_cases_label_only_selectable_leaves():
+    issue_cases = json.loads(ISSUE_CASES_PATH.read_text(encoding="utf-8"))["cases"]
+    leaves = set(ss.LEAF_CATEGORY_IDS)
+
+    offenders = {
+        case["id"]: [i for i in _accept_ids(case) if i not in leaves]
+        for case in issue_cases
+    }
+    assert {k: v for k, v in offenders.items() if v} == {}

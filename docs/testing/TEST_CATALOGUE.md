@@ -42,12 +42,12 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_request_db_schema.py`](../../tests/test_request_db_schema.py) | Unit | #169 | `utils/request_db.py` | 54 |
 | [`tests/test_response_contract.py`](../../tests/test_response_contract.py) | Contract | #146, #169, #170 | `response envelopes` | 10 |
 | [`tests/test_router.py`](../../tests/test_router.py) | Integration | #171 | `lambda_function.lambda_handler` | 34 |
-| [`tests/test_skill_eval_dataset.py`](../../tests/test_skill_eval_dataset.py) | Dataset | #216 | `docs/metrics/volunteer_skills_eval_set.json` | 26 |
-| [`tests/test_skill_eval_scoring.py`](../../tests/test_skill_eval_scoring.py) | Unit | #216 | `tools/skill_eval_scoring.py` | 22 |
+| [`tests/test_skill_eval_dataset.py`](../../tests/test_skill_eval_dataset.py) | Dataset | #216 | `docs/metrics/volunteer_skills_eval_set.json` | 28 |
+| [`tests/test_skill_eval_scoring.py`](../../tests/test_skill_eval_scoring.py) | Unit | #216 | `tools/skill_eval_scoring.py` | 36 |
 | [`tests/test_skill_suggestion.py`](../../tests/test_skill_suggestion.py) | Unit | #216 | `services/skill_suggestion_service.py` | 76 |
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
 | [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 57 |
-| | | | **Total** | **710** |
+| | | | **Total** | **726** |
 
 ## Every test
 
@@ -558,7 +558,7 @@ Router-level regression tests - issue #171.
 
 ### `test_skill_eval_dataset.py`
 
-*Dataset · issue #216 · 26 tests*
+*Dataset · issue #216 · 28 tests*
 
 The volunteer evaluation set itself (issue #216).
 
@@ -582,12 +582,14 @@ The volunteer evaluation set itself (issue #216).
 | `test_no_case_reuses_a_description_from_issue_216` | Paraphrasing the situations is fine; reusing the text is not. |
 | `test_descriptions_fit_within_the_services_own_cap` | Over 2,000 characters the service truncates, and a label at the end of a longer description would be unreachable rather than missed. |
 | `test_descriptions_are_unique` | Descriptions are unique. |
+| `test_the_issue_cases_file_is_the_ten_cases_the_issue_publishes` | Same texts as ISSUE_216_CASES, and the 19 skills the issue's table counts. |
+| `test_the_issue_cases_label_only_selectable_leaves` | The issue cases label only selectable leaves. |
 
-> 18 test functions expand to 26 cases through parametrisation.
+> 20 test functions expand to 28 cases through parametrisation.
 
 ### `test_skill_eval_scoring.py`
 
-*Unit · issue #216 · 22 tests*
+*Unit · issue #216 · 36 tests*
 
 How volunteer skill suggestions are scored (issue #216).
 
@@ -614,8 +616,16 @@ How volunteer skill suggestions are scored (issue #216).
 | `test_predictions_are_read_from_the_service_response_shape` | Predictions are read from the service response shape. |
 | `test_empty_inputs_read_as_empty_lists` | Empty inputs read as empty lists. |
 | `test_a_missing_confidence_does_not_break_reading_a_prediction` | A missing confidence does not break reading a prediction. |
+| `test_percentile_is_nearest_rank` | Percentile is nearest rank. |
+| `test_percentile_of_nothing_is_none_not_zero` | Percentile of nothing is none not zero. |
+| `test_percentile_rejects_a_fraction_outside_zero_to_one` | Percentile rejects a fraction outside zero to one. |
+| `test_run_statistics_reports_mean_tokens_split_and_total` | Run statistics reports mean tokens split and total. |
+| `test_run_statistics_counts_reliability_separately_from_accuracy` | Run statistics counts reliability separately from accuracy. |
+| `test_without_a_primary_model_no_case_is_called_a_fallback` | Without a primary model no case is called a fallback. |
+| `test_run_statistics_reports_explanation_shares_and_medical_drops` | Run statistics reports explanation shares and medical drops. |
+| `test_run_statistics_of_rows_from_the_older_harness_does_not_guess` | Rows from before the token split have only `tokens` and `seconds`. |
 
-> 21 test functions expand to 22 cases through parametrisation.
+> 29 test functions expand to 36 cases through parametrisation.
 
 ### `test_skill_suggestion.py`
 
