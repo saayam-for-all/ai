@@ -80,6 +80,12 @@ curl -X POST https://<api-gateway-url>/predict-category \
   }'
 ```
 
+| Status | Body | When |
+| :--- | :--- | :--- |
+| 400 | `{"error": "Description is required"}` | Missing or blank `description` |
+| 502 | `{"error": "Category prediction failed", "code": "CATEGORY_PREDICTION_UNAVAILABLE"}` | Every model in the fallback chain failed |
+| 500 | `{"error": "Category prediction failed"}` | Any other failure. The exception type is logged; its text is not, because it can quote the description |
+
 #### Volunteer skills mode (issue #216)
 The Become a Volunteer wizard sends a volunteer's own description of their
 skills to the same endpoint with `"mode": "volunteer_skills"`. A request without

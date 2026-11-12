@@ -34,17 +34,25 @@ team works and reviews in.
   Lambda later without code changes.
 - **A labelled evaluation set and an accuracy harness**, so the accuracy claim
   behind this feature is reproducible.
-  `docs/metrics/volunteer_skills_eval_set.json` holds 59 volunteer
+  `docs/metrics/volunteer_skills_eval_set.json` holds 67 volunteer
   descriptions covering the cases the issue named: bare professions, profiles
   spanning several areas, text that calls the volunteer retired or senior,
   five non-English languages, descriptions over 1,000 characters and
-  descriptions stating no skill the taxonomy covers. A labelled skill carries
+  descriptions stating no skill the taxonomy covers. Eight of them (#239) pair
+  a medical skill named outright with the same skill only described, so the
+  cost of the medical evidence rule is measured. A labelled skill carries
   a set of acceptable IDs, because 5.1.1 and 5.1.11, and 6.5 and 6.6, say the
   same thing twice and a model is not wrong for picking either.
   `python tools/measure_skill_suggestion_accuracy.py` runs it twice against
   live models and writes `docs/metrics/volunteer_skills_eval.json`; the
   counting rules live in `tools/skill_eval_scoring.py` and are unit tested.
   Findings are written up in `docs/metrics/VOLUNTEER_SKILLS_EVAL.md`.
+  `--classifier help_request` runs the same set through today's classifier
+  for comparison, and each pass reports prompt and completion tokens, p95
+  latency, failovers, the cases a fallback model answered, and the medical
+  suggestions the evidence rule dropped. `--session-demo` measures a
+  describe / add more / repeat session. The issue's own ten cases are in
+  `docs/metrics/volunteer_skills_issue_cases.json`, outside the scored set.
 - **Session memory.** The request may carry a `session`, and every response
   returns the updated one for the web app to send back next time, the same
   client-held pattern as `conversation_history` in Generate Answer. It holds
@@ -70,6 +78,23 @@ team works and reviews in.
   skill-side hint per leaf (`SKILL_HINTS`). A test holds the prompt under 5,000
   characters. The accuracy figures above were measured on the old prompt and
   must be re-run on this one.
+
+**Fixed**
+
+- **User text no longer reaches failover logs or the help-request `500`**
+  (from #220, with Surabhi Nair). The model chain logged `str(error)` on
+  every failover, and the Groq SDK's message is the whole HTTP response body:
+  for `json_validate_failed` that includes `failed_generation`, the model's
+  output, which can quote the description. A failover reason now keeps only
+  the exception type, HTTP status and provider error code
+  (`describe_model_error` in `utils/model_fallback.py`), for every service, so
+  a 429 or a timeout still shows. Messages our own code writes are raised as
+  `ModelResponseError` and kept verbatim. An unexpected error in
+  `predict_category` returns `{"error": "Category prediction failed"}` instead
+  of the exception text.
+  *Observable difference:* a rate-limited failover logs
+  `reason=RateLimitError status=429 code=rate_limit_exceeded` and nothing from
+  the response body.
 
 **Unchanged**
 
