@@ -11,6 +11,11 @@ import pytest
 from utils import token_usage
 
 
+def _returning(value):
+    """An accessor stand-in that always hands back the same object."""
+    return lambda: value
+
+
 # ---------------------------------------------------------------------------
 # Fakes shaped like what each provider actually returns
 # ---------------------------------------------------------------------------
@@ -389,10 +394,8 @@ class _FakeChatModel:
 def test_subject_generation_reports_its_usage(monkeypatch, capsys):
     import utils.subject_generator as sg
 
-    monkeypatch.setattr(sg, "groq_llm", _FakeChatModel(input_tokens=400, output_tokens=6))
-    monkeypatch.setattr(sg, "_use_groq", True)
-    monkeypatch.setattr(sg, "gemini_llm", None)
-    monkeypatch.setattr(sg, "_use_gemini", False)
+    monkeypatch.setattr(sg, "get_groq_llm", _returning(_FakeChatModel(input_tokens=400, output_tokens=6)))
+    monkeypatch.setattr(sg, "get_gemini_llm", _returning(None))
 
     sg.generate_subject_from_description("I need help with my rent this month")
 
@@ -430,7 +433,7 @@ def test_answer_generation_reports_its_usage(monkeypatch, capsys):
 
 
 @pytest.mark.integration
-def test_a_groq_failure_still_bills_the_gemini_retry(monkeypatch, capsys):
+def test_only_successful_model_responses_are_billed(monkeypatch, capsys):
     """Only successful model responses contribute recorded token usage."""
     import utils
 
@@ -462,6 +465,50 @@ def test_a_groq_failure_still_bills_the_gemini_retry(monkeypatch, capsys):
     (record,) = _usage_lines(capsys)
     assert record["total_tokens"] == 1100
     assert [c["provider"] for c in record["calls"]] == ["gemini"]
+
+
+@pytest.mark.integration
+def test_empty_model_responses_are_billed(monkeypatch, capsys):
+    """Empty model responses still contribute recorded token usage."""
+    import utils
+
+    class _Empty:
+        def invoke(self, _messages):
+            message = _LangChainMessage(usage_metadata={
+                "input_tokens": 100,
+                "output_tokens": 0,
+                "total_tokens": 100,
+            })
+            message.content = ""
+            return message
+
+    gemini = _FakeChatModel(
+        content="Fallback answer.",
+        input_tokens=200,
+        output_tokens=10,
+    )
+
+    def fake_create_chat_model(target, *, temperature):
+        if target.provider == "groq":
+            return _Empty()
+        if target.provider == "gemini":
+            return gemini
+        raise ValueError(f"Unexpected provider: {target.provider}")
+
+    monkeypatch.setattr(utils, "create_chat_model", fake_create_chat_model)
+
+    answer = utils.GroqAnswerGenerationService().generate_answer(
+        category="Housing",
+        subject="Rent",
+        description="I am behind on rent",
+    )
+
+    assert answer
+    (record,) = _usage_lines(capsys)
+    assert record["total_tokens"] == 510
+    assert [call["provider"] for call in record["calls"]] == [
+        "groq", "groq", "groq", "gemini"
+    ]
 
 
 @pytest.mark.integration
@@ -529,8 +576,7 @@ def test_classification_counts_every_call_in_its_walk(monkeypatch):
             })()
 
     fake = _FakeGroq()
-    monkeypatch.setattr(cs, "client", fake)
-    monkeypatch.setattr(cs, "_use_groq", True)
+    monkeypatch.setattr(cs, "get_groq_client", _returning(fake))
 
     _results, usage = cs.predict_categories("My kitchen sink has been leaking for a week")
 
@@ -549,9 +595,8 @@ def test_classification_usage_survives_having_no_provider(monkeypatch):
     import services.classification_service as cs
     from utils.model_fallback import ModelChainExhausted
 
-    monkeypatch.setattr(cs, "client", None)
-    monkeypatch.setattr(cs, "_use_groq", False)
-    monkeypatch.setattr(cs, "_gemini_client", None)
+    monkeypatch.setattr(cs, "get_groq_client", _returning(None))
+    monkeypatch.setattr(cs, "get_gemini_client", _returning(None))
 
     service = cs.GroqClassificationService()
     with pytest.raises(ModelChainExhausted):
@@ -588,8 +633,7 @@ def test_classification_logs_as_well_as_returns(monkeypatch, capsys):
                 "choices": [_Choice()], "usage": _GroqUsage(500, 25, 525),
             })()
 
-    monkeypatch.setattr(cs, "client", _FakeGroq())
-    monkeypatch.setattr(cs, "_use_groq", True)
+    monkeypatch.setattr(cs, "get_groq_client", _returning(_FakeGroq()))
 
     _results, returned = cs.predict_categories("My kitchen sink is leaking")
 
@@ -707,10 +751,8 @@ def test_every_subject_branch_records_usage(monkeypatch, capsys, provider, descr
     groq_up = provider == "groq"
 
     # When testing the Gemini branch, Groq must be absent so the fallback runs.
-    monkeypatch.setattr(sg, "groq_llm", fake if groq_up else None)
-    monkeypatch.setattr(sg, "_use_groq", groq_up)
-    monkeypatch.setattr(sg, "gemini_llm", None if groq_up else fake)
-    monkeypatch.setattr(sg, "_use_gemini", not groq_up)
+    monkeypatch.setattr(sg, "get_groq_llm", _returning(fake if groq_up else None))
+    monkeypatch.setattr(sg, "get_gemini_llm", _returning(None if groq_up else fake))
 
     sg.generate_subject_from_description(description)
 
@@ -738,10 +780,8 @@ def test_a_subject_falls_back_to_gemini_and_bills_both(monkeypatch, capsys):
                     raise RuntimeError("bad payload")
             return _M()
 
-    monkeypatch.setattr(sg, "groq_llm", _Broken())
-    monkeypatch.setattr(sg, "_use_groq", True)
-    monkeypatch.setattr(sg, "gemini_llm", _FakeChatModel("Fallback Subject", 500, 10))
-    monkeypatch.setattr(sg, "_use_gemini", True)
+    monkeypatch.setattr(sg, "get_groq_llm", _returning(_Broken()))
+    monkeypatch.setattr(sg, "get_gemini_llm", _returning(_FakeChatModel("Fallback Subject", 500, 10)))
 
     assert sg.generate_subject_from_description(SHORT) == "Fallback Subject"
 
@@ -755,10 +795,8 @@ def test_a_subject_falls_back_to_gemini_and_bills_both(monkeypatch, capsys):
 def test_subject_with_no_provider_logs_nothing_spent(monkeypatch, capsys):
     import utils.subject_generator as sg
 
-    monkeypatch.setattr(sg, "groq_llm", None)
-    monkeypatch.setattr(sg, "_use_groq", False)
-    monkeypatch.setattr(sg, "gemini_llm", None)
-    monkeypatch.setattr(sg, "_use_gemini", False)
+    monkeypatch.setattr(sg, "get_groq_llm", _returning(None))
+    monkeypatch.setattr(sg, "get_gemini_llm", _returning(None))
 
     sg.generate_subject_from_description(SHORT)
 
@@ -836,10 +874,8 @@ def test_both_providers_failing_on_a_long_description_still_reports(monkeypatch,
                     raise RuntimeError("bad payload")
             return _M()
 
-    monkeypatch.setattr(sg, "groq_llm", _AnswersThenBreaks())
-    monkeypatch.setattr(sg, "_use_groq", True)
-    monkeypatch.setattr(sg, "gemini_llm", _AnswersThenBreaks())
-    monkeypatch.setattr(sg, "_use_gemini", True)
+    monkeypatch.setattr(sg, "get_groq_llm", _returning(_AnswersThenBreaks()))
+    monkeypatch.setattr(sg, "get_gemini_llm", _returning(_AnswersThenBreaks()))
 
     subject = sg.generate_subject_from_description(LONG)
 

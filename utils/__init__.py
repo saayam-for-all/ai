@@ -17,8 +17,6 @@ from utils.client import (
     GROQ_MODEL,
     GROQ_TEMPERATURE,
     create_chat_model,
-    gemini_llm,
-    groq_llm,
 )
 from utils.prompts import get_conversational_prompt
 from utils.model_fallback import ModelTarget, run_model_chain
@@ -74,15 +72,8 @@ class AnswerGenerationServiceInterface(ABC):
 class GroqAnswerGenerationService(AnswerGenerationServiceInterface):
     """Groq implementation of answer generation service with Gemini fallback."""
 
-    def __init__(
-        self,
-        model: str = GROQ_MODEL,
-        temperature: float = GROQ_TEMPERATURE,
-        gemini_model: str = GEMINI_MODEL,
-    ):
-        self.model = model
+    def __init__(self, temperature: float = GROQ_TEMPERATURE):
         self.temperature = temperature
-        self.gemini_model = gemini_model
         self.gemini_temperature = GEMINI_TEMPERATURE
 
     @staticmethod

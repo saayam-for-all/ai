@@ -10,6 +10,9 @@ from utils.model_fallback import ModelTarget, run_model_chain
 
 pytestmark = pytest.mark.unit
 
+def _set_keys(monkeypatch, groq=None, gemini=None):
+    monkeypatch.setattr(client_module, "_load_keys", lambda: (groq, gemini))
+
 
 def _recording_constructor(calls, result):
     def construct(**kwargs):
@@ -22,7 +25,7 @@ def _recording_constructor(calls, result):
 def test_groq_factory_uses_the_target_model_temperature_and_credentials(monkeypatch):
     calls = []
     expected = object()
-    monkeypatch.setattr(client_module, "GROQ_API_KEY", "test-groq-key")
+    _set_keys(monkeypatch, groq="test-groq-key")
     monkeypatch.setattr(
         client_module,
         "ChatGroq",
@@ -49,7 +52,7 @@ def test_groq_factory_uses_the_target_model_temperature_and_credentials(monkeypa
 
 def test_groq_factory_omits_unconfigured_reasoning_effort(monkeypatch):
     calls = []
-    monkeypatch.setattr(client_module, "GROQ_API_KEY", "test-groq-key")
+    _set_keys(monkeypatch, groq="test-groq-key")
     monkeypatch.setattr(
         client_module,
         "ChatGroq",
@@ -67,7 +70,7 @@ def test_groq_factory_omits_unconfigured_reasoning_effort(monkeypatch):
 def test_gemini_factory_uses_the_target_model_temperature_and_credentials(monkeypatch):
     calls = []
     expected = object()
-    monkeypatch.setattr(client_module, "GEMINI_API_KEY", "test-gemini-key")
+    _set_keys(monkeypatch, gemini="test-gemini-key")
     monkeypatch.setattr(
         client_module,
         "ChatGoogleGenerativeAI",
@@ -86,34 +89,81 @@ def test_gemini_factory_uses_the_target_model_temperature_and_credentials(monkey
         }
     ]
 
+def test_factory_reuses_cached_model_for_same_configuration(monkeypatch):
+    calls = []
+    expected = object()
+    _set_keys(monkeypatch, groq="test-groq-key")
+    monkeypatch.setattr(
+        client_module,
+        "ChatGroq",
+        _recording_constructor(calls, expected),
+    )
+    target = ModelTarget(
+        provider="groq",
+        model="groq-primary",
+        reasoning_effort="low",
+    )
+
+    first = client_module.create_chat_model(target, temperature=0.3)
+    second = client_module.create_chat_model(target, temperature=0.3)
+
+    assert first is second is expected
+    assert len(calls) == 1
+
+
+def test_factory_does_not_reuse_model_for_different_configuration(monkeypatch):
+    calls = []
+
+    def construct(**kwargs):
+        model = object()
+        calls.append((kwargs, model))
+        return model
+
+    _set_keys(monkeypatch, groq="test-groq-key")
+    monkeypatch.setattr(client_module, "ChatGroq", construct)
+
+    target = ModelTarget(
+        provider="groq",
+        model="groq-primary",
+        reasoning_effort="low",
+    )
+
+    first = client_module.create_chat_model(target, temperature=0.3)
+    same_config = client_module.create_chat_model(target, temperature=0.3)
+    different_temperature = client_module.create_chat_model(
+        target, temperature=0.4
+    )
+
+    assert first is same_config
+    assert first is not different_temperature
+    assert len(calls) == 2
 
 @pytest.mark.parametrize(
-    ("target", "key_name", "expected_message"),
+    ("target", "keys", "expected_message"),
     [
         (
             ModelTarget(provider="groq", model="groq-primary"),
-            "GROQ_API_KEY",
+            (None, "test-gemini-key"),
             "Groq API key is not configured",
         ),
         (
             ModelTarget(provider="gemini", model="gemini-final"),
-            "GEMINI_API_KEY",
+            ("test-groq-key", None),
             "Gemini API key is not configured",
         ),
     ],
 )
 def test_factory_rejects_a_target_whose_provider_has_no_key(
-    monkeypatch, target, key_name, expected_message
+    monkeypatch, target, keys, expected_message
 ):
-    monkeypatch.setattr(client_module, key_name, None)
+    monkeypatch.setattr(client_module, "_load_keys", lambda: keys)
 
     with pytest.raises(ValueError, match=expected_message):
         client_module.create_chat_model(target, temperature=0.3)
 
 
 def test_factory_rejects_an_unsupported_provider(monkeypatch):
-    monkeypatch.setattr(client_module, "GROQ_API_KEY", "test-groq-key")
-    monkeypatch.setattr(client_module, "GEMINI_API_KEY", "test-gemini-key")
+    _set_keys(monkeypatch, groq="test-groq-key", gemini="test-gemini-key")
     target = ModelTarget(provider="meta", model="some-model")
 
     with pytest.raises(ValueError, match="Unsupported model provider: meta"):
@@ -123,8 +173,7 @@ def test_factory_rejects_an_unsupported_provider(monkeypatch):
 def test_constructor_failure_can_fall_through_to_another_provider(monkeypatch):
     attempts = []
     gemini_model = SimpleNamespace(provider="gemini")
-    monkeypatch.setattr(client_module, "GROQ_API_KEY", "test-groq-key")
-    monkeypatch.setattr(client_module, "GEMINI_API_KEY", "test-gemini-key")
+    _set_keys(monkeypatch, groq="test-groq-key", gemini="test-gemini-key")
 
     def failing_groq(**_kwargs):
         raise TimeoutError("Groq client construction timed out")
@@ -162,32 +211,30 @@ def test_legacy_groq_defaults_include_low_reasoning_effort():
     assert client_module.GROQ_REASONING_EFFORT == "low"
 
 
-class _FakeSSM:
-    def get_parameters(self, Names, WithDecryption):
-        return {"Parameters": [{"Name": n, "Value": "test-key"} for n in Names]}
-
-
 def test_shared_groq_model_is_built_with_low_reasoning_effort(monkeypatch):
-    """groq_llm serves subject and answer generation; it must request low effort."""
-    import importlib
-    import boto3
-    import langchain_google_genai
-    import langchain_groq
-
+    """get_groq_llm serves subject generation; it must request low effort."""
     built = []
+    _set_keys(monkeypatch, groq="test-groq-key")
+    monkeypatch.setattr(
+        client_module, "ChatGroq", _recording_constructor(built, object())
+    )
 
-    class _RecordingChatGroq:
-        def __init__(self, **kwargs):
-            built.append(kwargs)
-
-    monkeypatch.setattr(boto3, "client", lambda *a, **k: _FakeSSM())
-    monkeypatch.setattr(langchain_groq, "ChatGroq", _RecordingChatGroq)
-    monkeypatch.setattr(langchain_google_genai, "ChatGoogleGenerativeAI", lambda **k: object())
-    try:
-        importlib.reload(client_module)
-        assert built and built[0]["reasoning_effort"] == "low"
-    finally:
-        monkeypatch.undo()
-        importlib.reload(client_module)
+    assert client_module.get_groq_llm() is not None
+    assert built and built[0]["reasoning_effort"] == "low"
 
 
+def test_accessors_reuse_one_client_per_container(monkeypatch):
+    built = []
+    _set_keys(monkeypatch, groq="test-groq-key", gemini="test-gemini-key")
+    monkeypatch.setattr(
+        client_module, "Groq", lambda api_key: built.append(("groq", api_key)) or object()
+    )
+    monkeypatch.setattr(
+        client_module.genai,
+        "Client",
+        lambda api_key: built.append(("gemini", api_key)) or object(),
+    )
+
+    assert client_module.get_groq_client() is client_module.get_groq_client()
+    assert client_module.get_gemini_client() is client_module.get_gemini_client()
+    assert built == [("groq", "test-groq-key"), ("gemini", "test-gemini-key")]

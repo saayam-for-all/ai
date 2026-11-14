@@ -10,6 +10,81 @@ team works and reviews in.
 
 ## Unreleased
 
+### Provider keys loaded on first use — [#237](https://github.com/saayam-for-all/ai/issues/237) (Part A)
+
+**Changed**
+
+- Provider keys are read from SSM on first model use, not at import, so cold starts (including Emergency Contacts) skip SSM.
+- Import-time singletons replaced by accessors: `get_groq_client()`, `get_gemini_client()`, `get_groq_llm()`, `get_gemini_llm()`, `has_groq()`.
+- The `INIT LOG: ... Key Found` lines now appear on first model use, not at cold start.
+
+**Fixed**
+
+- A failed SSM read is no longer cached for the container's lifetime; it is retried after 30s.
+- The SSM client uses 2s connect/read timeouts and at most 2 attempts, staying under API Gateway's 29s limit.
+
+### Configured model fallback — [#193](https://github.com/saayam-for-all/ai/issues/193)
+
+**Changed**
+
+- Answer generation now reuses cached model clients for identical configurations, avoiding repeated client construction across fallback attempts.
+- Model-chain tests derive expected attempt counts from `config/model_routing.json`, keeping assertions aligned with the configured fallback chain.
+- Removed unused model-name arguments from `GroqAnswerGenerationService`.
+
+**Fixed**
+
+- Added coverage confirming that token usage from empty model responses is recorded when fallback continues to another model.
+
+### Emergency Contacts: request logging and location fields — [#146](https://github.com/saayam-for-all/ai/issues/146) · PR [#229](https://github.com/saayam-for-all/ai/pull/229)
+
+**Added**
+
+- **A log line for each step of a request.** The Frankfurt, Prague and Vienna
+  reports could only be diagnosed from Lambda durations: the location lookups
+  failed silently, and nothing recorded what the browser had sent. Each request
+  now logs what was sent, how the location was found, why a lookup failed, and
+  what was returned. Coordinates are rounded, a zip keeps only its first three
+  characters, the IP is masked, and tokens are never logged. Text from the
+  caller or a geocoder is quoted or escaped and capped, so it cannot break a
+  log line. A crash in the handler is logged with its traceback as one record.
+  The level comes from `EMERGENCY_LOG_LEVEL` (default INFO).
+  *Observable difference:* CloudWatch shows `emergency request:` and
+  `emergency response: status=...` lines, with the request ID, for every call.
+- **`location_source` in the response** (`gps`, `place`, `city_directory`,
+  `country_param` or `ip`), so the page can label a location estimated from
+  the caller's IP. In the Prague case the browser did send a position, but the
+  lookup failed and the IP decided, which the page could not see.
+  *Observable difference:* a request with neither `lat`/`lng` nor `country`
+  returns `"location_source": "ip"`.
+- **`display_location` in the response**: a ready-to-show place name built only
+  from the parts that exist, so a city-state no longer reads "Wien, null (AT)".
+  *Observable difference:* Vienna returns `"display_location": "Vienna (AT)"`.
+
+**Changed**
+
+- Place names are requested from OpenStreetMap in English. The directory's
+  state, city and zip keys (Karnataka, Bengaluru, Mysuru, 560001) come back
+  unchanged, so the numbers do not change.
+  *Observable difference:* `resolved_location.city` is "Vienna", not "Wien".
+
+**Fixed**
+
+- A position that resolves to no country (a point at sea) now falls back to the
+  caller's IP. Its empty fields used to keep the IP's answer out, so the caller
+  got a `404` although ipinfo had answered.
+  *Observable difference:* `lat=30&lng=-40` from a US IP returns US numbers with
+  `"location_source": "ip"` instead of a `404`.
+- A `500` from the lookup sent the internal exception text to the browser,
+  although the README documents a generic message. It now returns
+  `{"error": "Emergency services lookup failed"}`, the same as the handler's
+  own error path; the detail is in CloudWatch.
+  *Observable difference:* forcing an internal error returns that generic body.
+- A JSON body with a list, an object or `true`/`false` where text belongs (for
+  example `"city": ["a"]`) made the lookup a `500`. Such a value is now treated
+  as not sent, and a number is read as text.
+  *Observable difference:* `{"city": ["a"], "country": "IN"}` returns India's
+  numbers instead of a `500`.
+
 ### Token usage tracking & reasoning effort — [#194](https://github.com/saayam-for-all/ai/issues/194)
 
 **Fixed**

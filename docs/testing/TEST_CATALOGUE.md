@@ -27,21 +27,24 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | --- | --- | --- | --- | ---: |
 | [`tests/test_answer_conversation.py`](../../tests/test_answer_conversation.py) | Unit | #183 | `utils/__init__.py prompt assembly` | 24 |
 | [`tests/test_classification_resilience.py`](../../tests/test_classification_resilience.py) | Unit | - | `services/classification_service.py` | 10 |
-| [`tests/test_client_factory.py`](../../tests/test_client_factory.py) | Unit | #193 | `utils/client.py create_chat_model` | 9 |
-| [`tests/test_client_imports.py`](../../tests/test_client_imports.py) | Integration | #154 | `utils/client.py` | 2 |
+| [`tests/test_client_factory.py`](../../tests/test_client_factory.py) | Unit | #193 | `utils/client.py create_chat_model` | 12 |
+| [`tests/test_client_imports.py`](../../tests/test_client_imports.py) | Integration | #154 | `utils/client.py` | 3 |
 | [`tests/test_emergency_dataset.py`](../../tests/test_emergency_dataset.py) | Dataset | #146 | `services/emergency_numbers.json` | 17 |
 | [`tests/test_emergency_locale.py`](../../tests/test_emergency_locale.py) | Unit | #146 | `services/emergency.py` | 67 |
+| [`tests/test_emergency_location_fields.py`](../../tests/test_emergency_location_fields.py) | Contract | #146, webapp#1959 | `location_source, display_location` | 59 |
+| [`tests/test_emergency_logging.py`](../../tests/test_emergency_logging.py) | Unit | #146 | `services/emergency.py logging` | 94 |
 | [`tests/test_emergency_s3_reader.py`](../../tests/test_emergency_s3_reader.py) | Unit | #334 | `services/emergency.py S3 reader` | 23 |
 | [`tests/test_generate_answer.py`](../../tests/test_generate_answer.py) | Contract | #169 | `generate_answer_handler` | 50 |
 | [`tests/test_import_blast_radius.py`](../../tests/test_import_blast_radius.py) | Integration | #169, #171 | `module-scope imports` | 4 |
+| [`tests/test_lazy_provider_keys.py`](../../tests/test_lazy_provider_keys.py) | Unit | #237 | `utils/client.py key loading` | 16 |
 | [`tests/test_model_fallback.py`](../../tests/test_model_fallback.py) | Unit | #193 | `utils/model_fallback.py` | 24 |
-| [`tests/test_org_search_contract.py`](../../tests/test_org_search_contract.py) | Contract | #170 | `utils/search_orgs.py` | 24 |
+| [`tests/test_org_search_contract.py`](../../tests/test_org_search_contract.py) | Contract | #170 | `utils/search_orgs.py` | 25 |
 | [`tests/test_request_db_schema.py`](../../tests/test_request_db_schema.py) | Unit | #169 | `utils/request_db.py` | 54 |
 | [`tests/test_response_contract.py`](../../tests/test_response_contract.py) | Contract | #146, #169, #170 | `response envelopes` | 10 |
 | [`tests/test_router.py`](../../tests/test_router.py) | Integration | #171 | `lambda_function.lambda_handler` | 34 |
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
-| [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 57 |
-| | | | **Total** | **422** |
+| [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 58 |
+| | | | **Total** | **597** |
 
 ## Every test
 
@@ -98,7 +101,7 @@ Guards the two failure modes behind "every request lands in General".
 
 ### `test_client_factory.py`
 
-*Unit · issue #193 · 9 tests*
+*Unit · issue #193 · 12 tests*
 
 Unit tests for target-aware LangChain client construction.
 
@@ -107,23 +110,27 @@ Unit tests for target-aware LangChain client construction.
 | `test_groq_factory_uses_the_target_model_temperature_and_credentials` | Groq factory uses the target model temperature and credentials. |
 | `test_groq_factory_omits_unconfigured_reasoning_effort` | Groq factory omits unconfigured reasoning effort. |
 | `test_gemini_factory_uses_the_target_model_temperature_and_credentials` | Gemini factory uses the target model temperature and credentials. |
+| `test_factory_reuses_cached_model_for_same_configuration` | Factory reuses cached model for same configuration. |
+| `test_factory_does_not_reuse_model_for_different_configuration` | Factory does not reuse model for different configuration. |
 | `test_factory_rejects_a_target_whose_provider_has_no_key` | Factory rejects a target whose provider has no key. |
 | `test_factory_rejects_an_unsupported_provider` | Factory rejects an unsupported provider. |
 | `test_constructor_failure_can_fall_through_to_another_provider` | Constructor failure can fall through to another provider. |
 | `test_legacy_groq_defaults_include_low_reasoning_effort` | Legacy groq defaults include low reasoning effort. |
-| `test_shared_groq_model_is_built_with_low_reasoning_effort` | groq_llm serves subject and answer generation; it must request low effort. |
+| `test_shared_groq_model_is_built_with_low_reasoning_effort` | get_groq_llm serves subject generation; it must request low effort. |
+| `test_accessors_reuse_one_client_per_container` | Accessors reuse one client per container. |
 
-> 8 test functions expand to 9 cases through parametrisation.
+> 11 test functions expand to 12 cases through parametrisation.
 
 ### `test_client_imports.py`
 
-*Integration · issue #154 · 2 tests*
+*Integration · issue #154 · 3 tests*
 
 Guard against the utils/client.py import regression that broke dev.
 
 | Test | Behaviour it protects |
 | --- | --- |
 | `test_client_exports_all_required_names` | Client exports all required names. |
+| `test_client_no_longer_exports_import_time_names` | Client no longer exports import time names. |
 | `test_core_modules_import` | Core modules import. |
 
 ### `test_emergency_dataset.py`
@@ -195,6 +202,87 @@ Behaviour tests for issue #146 - Emergency Contacts must never show a user a num
 | `test_place_search_with_nothing_to_search_makes_no_request` | Place search with nothing to search makes no request. |
 
 > 39 test functions expand to 67 cases through parametrisation.
+
+### `test_emergency_location_fields.py`
+
+*Contract · issue #146, webapp#1959 · 59 tests*
+
+location_source and display_location in the Emergency Contacts response.
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_a_resolved_gps_position_is_reported_as_gps` | A resolved gps position is reported as gps. |
+| `test_gps_that_did_not_resolve_is_reported_as_an_ip_estimate` | The Prague report: the browser sent a position, the answer came from the IP. |
+| `test_a_position_with_no_country_falls_back_to_the_ip` | A point at sea: Nominatim answers, but with no country. |
+| `test_an_ip_answer_replaces_everything_the_gps_answer_left` | Nothing from a GPS answer without a country survives into the IP's result: not its region (a name mixing two sources), not its empty keys. |
+| `test_a_request_without_gps_is_reported_as_an_ip_estimate` | A request without gps is reported as an ip estimate. |
+| `test_a_country_parameter_alone_is_reported_as_country_param` | A country parameter alone is reported as country param. |
+| `test_a_country_parameter_that_confirms_the_gps_result_keeps_gps` | A country parameter that confirms the gps result keeps gps. |
+| `test_a_country_parameter_that_overrides_the_gps_result_is_reported_as_country_param` | A country parameter that overrides the gps result is reported as country param. |
+| `test_a_place_search_is_reported_as_place` | A place search is reported as place. |
+| `test_a_city_found_only_in_the_directory_is_reported_as_city_directory` | A city found only in the directory is reported as city directory. |
+| `test_a_404_body_is_unchanged` | A 404 body is unchanged. |
+| `test_a_position_that_found_no_country_is_logged_with_source_none` | A position that found no country is logged with source none. |
+| `test_a_city_state_reads_without_null` | Vienna has no separate state; the old page printed "Wien, null (AT)". |
+| `test_a_prefecture_given_as_province_is_used_for_the_name_only` | A prefecture given as province is used for the name only. |
+| `test_a_region_given_under_another_key_is_used_for_the_name` | A region given under another key is used for the name. |
+| `test_a_municipality_is_used_when_there_is_no_city_town_or_village` | A municipality is used when there is no city town or village. |
+| `test_a_real_state_and_city_win_over_the_other_keys` | The other keys only fill a gap: a district or municipality never replaces a state or city Nominatim did give. |
+| `test_a_resolver_used_twice_does_not_carry_names_over` | One resolver per request in production; this keeps resolve() self-contained anyway. |
+| `test_both_nominatim_lookups_ask_for_english_names` | Both nominatim lookups ask for english names. |
+| `test_display_location_uses_only_the_parts_that_exist` | Display location uses only the parts that exist. |
+| `test_a_json_value_that_is_not_text_is_treated_as_not_sent` | Only a JSON body can carry these types. A list or object used to raise (city.title(), or a list as a dict key) and turn the lookup into a 500. |
+| `test_a_number_where_text_belongs_is_read_as_text` | A number where text belongs is read as text. |
+| `test_the_response_only_adds_the_two_fields` | Every field the page already reads keeps its name and shape. |
+| `test_the_lambda_handler_returns_both_fields_through_api_gateway` | The lambda handler returns both fields through api gateway. |
+
+> 24 test functions expand to 59 cases through parametrisation.
+
+### `test_emergency_logging.py`
+
+*Unit · issue #146 · 94 tests*
+
+Logging for the Emergency Contacts Lambda (follow-up to issue #146).
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_gps_request_logs_what_was_sent_how_it_was_found_and_what_came_back` | Gps request logs what was sent how it was found and what came back. |
+| `test_exact_coordinates_and_full_ip_never_reach_the_log` | Exact coordinates and full ip never reach the log. |
+| `test_gps_that_does_not_resolve_says_the_ip_was_used_instead` | The Prague report: a position was sent, but the answer came from the IP. |
+| `test_a_rate_limited_lookup_is_named_as_one` | A rate limited lookup is named as one. |
+| `test_ip_only_request_is_logged_with_the_ip_as_its_source` | Ip only request is logged with the ip as its source. |
+| `test_country_parameter_is_logged_as_the_source_without_any_lookup` | Country parameter is logged as the source without any lookup. |
+| `test_place_search_without_a_match_is_logged` | Place search without a match is logged. |
+| `test_failed_place_search_is_logged_with_the_reason` | Failed place search is logged with the reason. |
+| `test_ipinfo_answer_without_a_country_is_a_warning` | Ipinfo answer without a country is a warning. |
+| `test_a_position_with_no_country_is_a_warning` | A point at sea: Nominatim answers, but with no country in it. |
+| `test_every_parameter_name_is_logged_but_not_its_value` | A client sending "latitude" instead of "lat" is visible as the reason GPS was ignored. |
+| `test_parameter_names_are_capped_in_length_and_number` | A JSON body can carry any number of keys, of any length. |
+| `test_a_postcode_is_logged_cut_to_its_region` | A full UK postcode or a US ZIP+4 can point to a handful of addresses. |
+| `test_caller_text_cannot_start_a_log_line_of_its_own` | A value made to look like one of our lines stays escaped inside its own field. |
+| `test_a_404_reason_escapes_the_service_it_names` | With a valid country the 404 reason quotes the service as sent. |
+| `test_names_from_the_geocoder_are_escaped_too` | Names from the geocoder are escaped too. |
+| `test_a_long_value_is_cut_short` | A long value is cut short. |
+| `test_the_response_line_names_the_services_filled_with_the_general_number` | The response line names the services filled with the general number. |
+| `test_the_response_line_leaves_the_fallback_part_out_when_nothing_fell_back` | The response line leaves the fallback part out when nothing fell back. |
+| `test_a_city_in_several_countries_is_logged_as_not_guessed` | A city in several countries is logged as not guessed. |
+| `test_a_handler_failure_logs_its_traceback_as_one_record` | Logged, not printed: Lambda splits printed output into one event per line, while a logged record, traceback included, stays one event with the request ID. |
+| `test_an_invalid_caller_ip_is_logged_without_the_value` | An invalid caller ip is logged without the value. |
+| `test_unusable_coordinates_are_logged` | Unusable coordinates are logged. |
+| `test_a_404_logs_why` | A 404 logs why. |
+| `test_an_unexpected_error_is_logged_with_its_traceback` | An unexpected error is logged with its traceback. |
+| `test_the_handler_never_logs_the_login_token` | The handler never logs the login token. |
+| `test_logging_does_not_change_the_fields_the_web_client_reads` | Logging adds nothing to the body; location_source and display_location are pinned in test_emergency_location_fields.py. |
+| `test_info_lines_are_emitted_even_though_the_root_logger_is_at_warning` | The Lambda runtime leaves root at WARNING; the module's own level must let INFO through. |
+| `test_log_level_comes_from_the_environment_and_a_typo_falls_back_to_info` | Log level comes from the environment and a typo falls back to info. |
+| `test_ip_addresses_are_masked` | Ip addresses are masked. |
+| `test_lookup_failures_are_described_in_a_few_words` | Lookup failures are described in a few words. |
+| `test_a_zip_keeps_only_its_first_three_characters` | A zip keeps only its first three characters. |
+| `test_clean_escapes_what_is_not_printable_and_caps_the_length` | Clean escapes what is not printable and caps the length. |
+| `test_a_refused_connection_is_a_network_error` | A refused connection is a network error. |
+| `test_location_description_skips_empty_parts` | Location description skips empty parts. |
+
+> 35 test functions expand to 94 cases through parametrisation.
 
 ### `test_emergency_s3_reader.py`
 
@@ -292,6 +380,32 @@ Cross-service blast radius at import time - issue #171.
 
 > 3 test functions expand to 4 cases through parametrisation.
 
+### `test_lazy_provider_keys.py`
+
+*Unit · issue #237 · 16 tests*
+
+Provider keys load from SSM on first use, not at import (#237). Successful reads are cached; failed reads back off, then retry.
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_cold_start_and_emergency_contacts_never_create_an_ssm_client` | Cold start and emergency contacts never create an ssm client. |
+| `test_emergency_contacts_does_not_load_provider_keys` | Emergency contacts does not load provider keys. |
+| `test_a_successful_read_is_cached` | A successful read is cached. |
+| `test_parameter_not_found_is_a_successful_read_and_is_cached` | Parameter not found is a successful read and is cached. |
+| `test_a_failed_read_is_not_cached_and_the_next_call_retries` | A failed read is not cached and the next call retries. |
+| `test_calls_inside_the_backoff_window_do_not_call_ssm` | Calls inside the backoff window do not call ssm. |
+| `test_a_retry_that_fails_again_starts_a_new_window` | A retry that fails again starts a new window. |
+| `test_ssm_client_is_created_with_short_timeouts` | Ssm client is created with short timeouts. |
+| `test_accessors_recover_once_keys_become_available` | Accessors recover once keys become available. |
+| `test_key_found_lines_are_printed_once_per_container` | Key found lines are printed once per container. |
+| `test_accessors_return_none_without_keys` | Accessors return none without keys. |
+| `test_accessor_swallows_a_constructor_failure` | Accessor swallows a constructor failure. |
+| `test_gemini_client_accessor_swallows_a_constructor_failure` | Gemini client accessor swallows a constructor failure. |
+| `test_groq_llm_accessor_swallows_a_constructor_failure` | Groq llm accessor swallows a constructor failure. |
+| `test_gemini_llm_accessor_swallows_a_constructor_failure` | Gemini llm accessor swallows a constructor failure. |
+
+> 15 test functions expand to 16 cases through parametrisation.
+
 ### `test_model_fallback.py`
 
 *Unit · issue #193 · 24 tests*
@@ -318,7 +432,7 @@ Unit contract for the shared model fallback chain (issue #193).
 
 ### `test_org_search_contract.py`
 
-*Contract · issue #170 · 24 tests*
+*Contract · issue #170 · 25 tests*
 
 Tests for More Organizations / the Organizations tab - issue #170.
 
@@ -342,6 +456,7 @@ Tests for More Organizations / the Organizations tab - issue #170.
 | `test_groq_is_used_alone_when_it_succeeds` | Groq is used alone when it succeeds. |
 | `test_a_provider_returning_no_organizations_falls_through_to_the_next` | A provider returning no organizations falls through to the next. |
 | `test_an_unconfigured_provider_is_skipped_not_fatal` | An unconfigured provider is skipped not fatal. |
+| `test_with_no_groq_key_the_real_loaders_serve_gemini` | With only a Gemini key, the real loaders skip Groq and serve Gemini. |
 | `test_every_provider_failing_raises_rather_than_returning_an_empty_success` | Every provider failing raises rather than returning an empty success. |
 | `test_total_provider_failure_is_a_502_with_a_code_and_a_list` | Total provider failure is a 502 with a code and a list. |
 | `test_description_is_required` | Description is required. |
@@ -475,7 +590,7 @@ Unit tests for the Generate Subject service.
 
 ### `test_token_usage.py`
 
-*- · issue #159 · 57 tests*
+*- · issue #159 · 58 tests*
 
 The shared token counter (issue #159).
 
@@ -505,7 +620,8 @@ The shared token counter (issue #159).
 | `test_log_usage_survives_an_unserialisable_label` | Log usage survives an unserialisable label. |
 | `test_subject_generation_reports_its_usage` | Subject generation reports its usage. |
 | `test_answer_generation_reports_its_usage` | Answer generation reports its usage. |
-| `test_a_groq_failure_still_bills_the_gemini_retry` | Only successful model responses contribute recorded token usage. |
+| `test_only_successful_model_responses_are_billed` | Only successful model responses contribute recorded token usage. |
+| `test_empty_model_responses_are_billed` | Empty model responses still contribute recorded token usage. |
 | `test_organization_search_reports_its_usage` | The service that could not report usage at all before #159. |
 | `test_classification_counts_every_call_in_its_walk` | Classification is a loop, and the loop is the cost. |
 | `test_classification_usage_survives_having_no_provider` | No key configured must still return the published (results, usage) pair. |
@@ -526,4 +642,4 @@ The shared token counter (issue #159).
 | `test_recording_into_a_broken_accumulator_is_logged` | Recording into a broken accumulator is logged. |
 | `test_an_unserialisable_record_degrades_to_totals_rather_than_vanishing` | Losing the labels is acceptable; losing the whole request is not. |
 
-> 44 test functions expand to 57 cases through parametrisation.
+> 45 test functions expand to 58 cases through parametrisation.

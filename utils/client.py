@@ -1,10 +1,17 @@
+"""Provider clients, built on first use (#237).
+
+Keys are read from SSM on first use, not at import; call the accessors where used."""
+from functools import lru_cache
+import logging
+import time
+
 from groq import Groq
 from google import genai
 from langchain_groq import ChatGroq
 from langchain_google_genai import ChatGoogleGenerativeAI
 import boto3
+from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
-import logging
 
 from utils.model_fallback import ModelTarget
 
@@ -13,97 +20,170 @@ logger = logging.getLogger(__name__)
 GROQ_PARAM = "/dev/saayam/GenAI/groq/key"
 GEMINI_PARAM = "/dev/saayam/GenAI/gemini/key"
 
-# Legacy defaults used by the prebuilt LangChain exports below.  New fallback
-# code gets model IDs and per-model options from config/model_routing.json.
-# Keep these until subject and answer generation finish migrating to the
-# target-aware factory.
+# Legacy defaults for get_groq_llm() / get_gemini_llm().
 GROQ_MODEL = "openai/gpt-oss-20b"
 GROQ_TEMPERATURE = 0.3
 GROQ_REASONING_EFFORT = "low"
 GEMINI_MODEL = "gemini-2.5-flash"
 GEMINI_TEMPERATURE = 0.3
 
-GROQ_API_KEY = None
-GEMINI_API_KEY = None
+# After a failed read, skip SSM for this long so one request can't stack slow retries.
+FAILURE_BACKOFF_SECONDS = 30
+
+_SSM_CONFIG = Config(
+    connect_timeout=2,
+    read_timeout=2,
+    # total_max_attempts counts the first try (legacy max_attempts doesn't).
+    retries={"mode": "standard", "total_max_attempts": 2},
+)
+
+_last_failure_at: float | None = None
 
 
-def create_chat_model(target: ModelTarget, *, temperature: float):
-    """Construct a LangChain chat model for one configured target.
-
-    Model selection and fallback order belong to ``model_routing.json`` and
-    ``run_model_chain``.  This factory only turns the selected target into the
-    matching provider client using the credentials loaded by this module.
-    """
-    if target.provider == "groq":
-        if not GROQ_API_KEY:
-            raise ValueError("Groq API key is not configured")
-
-        kwargs = {
-            "api_key": GROQ_API_KEY,
-            "model": target.model,
-            "temperature": temperature,
-        }
-        if target.reasoning_effort:
-            kwargs["reasoning_effort"] = target.reasoning_effort
-        return ChatGroq(**kwargs)
-
-    if target.provider == "gemini":
-        if not GEMINI_API_KEY:
-            raise ValueError("Gemini API key is not configured")
-
-        return ChatGoogleGenerativeAI(
-            google_api_key=GEMINI_API_KEY,
-            model=target.model,
-            temperature=temperature,
-        )
-
-    raise ValueError(f"Unsupported model provider: {target.provider}")
+def _print_key_status(groq_key, gemini_key):
+    print(f"INIT LOG: Groq Key Found: {bool(groq_key)}")
+    print(f"INIT LOG: Gemini Key Found: {bool(gemini_key)}")
 
 
-# Fetching keys from parameter store
-try:
-    ssm = boto3.client("ssm")
+# lru_cache doesn't cache a call that raised, so failed reads aren't cached.
+@lru_cache(maxsize=1)
+def _fetch_keys() -> tuple[str | None, str | None]:
+    """Read both keys from SSM; raises on failure."""
+    ssm = boto3.client("ssm", config=_SSM_CONFIG)
     response = ssm.get_parameters(
         Names=[GROQ_PARAM, GEMINI_PARAM],
-        WithDecryption=True
+        WithDecryption=True,
     )
-
     params = {p["Name"]: p["Value"] for p in response.get("Parameters", [])}
 
     missing = [n for n in [GROQ_PARAM, GEMINI_PARAM] if n not in params]
     if missing:
         logger.warning("INIT: Parameters not found in SSM: %s", missing)
 
-    GROQ_API_KEY = params.get(GROQ_PARAM)
-    GEMINI_API_KEY = params.get(GEMINI_PARAM)
+    keys = (params.get(GROQ_PARAM), params.get(GEMINI_PARAM))
+    _print_key_status(*keys)
+    return keys
 
-except (BotoCoreError, ClientError) as e:
-    logger.error("INIT: Failed to fetch from Parameter Store: %s", str(e))
 
-except Exception as e:
-    logger.exception("INIT: Unexpected error fetching from Parameter Store: %s", str(e))
+def _load_keys() -> tuple[str | None, str | None]:
+    """Return (groq_key, gemini_key), or (None, None) if SSM is failing."""
+    global _last_failure_at
+    if (
+        _last_failure_at is not None
+        and time.monotonic() - _last_failure_at < FAILURE_BACKOFF_SECONDS
+    ):
+        return None, None
 
-# --- BOOTSTRAP LOGGING ---
-print(f"INIT LOG: Groq Key Found: {bool(GROQ_API_KEY)}")
-print(f"INIT LOG: Gemini Key Found: {bool(GEMINI_API_KEY)}")
-
-# Raw SDK clients (used by services/classification_service.py):
-#   client.chat.completions.create(...)  and  _gemini_client.models.generate_content(...)
-client = None
-_gemini_client = None
-
-# Legacy prebuilt LangChain models used by answer and subject generation until
-# those services call create_chat_model(target, ...) from the shared chain.
-groq_llm = None
-gemini_llm = None
-
-_use_groq = False
-_use_gemini = False
-
-if GROQ_API_KEY:
     try:
-        client = Groq(api_key=GROQ_API_KEY)
-        groq_llm = create_chat_model(
+        keys = _fetch_keys()
+    except (BotoCoreError, ClientError) as e:
+        logger.error("INIT: Failed to fetch from Parameter Store: %s", str(e))
+    except Exception as e:
+        logger.exception("INIT: Unexpected error fetching from Parameter Store: %s", str(e))
+    else:
+        _last_failure_at = None
+        return keys
+
+    _last_failure_at = time.monotonic()
+    _print_key_status(None, None)
+    return None, None
+
+
+@lru_cache(maxsize=32)
+def _create_chat_model_cached(
+    provider: str,
+    model_name: str,
+    temperature: float,
+    reasoning_effort: str | None,
+    api_key: str,
+):
+    if provider == "groq":
+        kwargs = {
+            "api_key": api_key,
+            "model": model_name,
+            "temperature": temperature,
+        }
+        if reasoning_effort:
+            kwargs["reasoning_effort"] = reasoning_effort
+        return ChatGroq(**kwargs)
+
+    if provider == "gemini":
+        return ChatGoogleGenerativeAI(
+            google_api_key=api_key,
+            model=model_name,
+            temperature=temperature,
+        )
+
+    raise ValueError(f"Unsupported model provider: {provider}")
+
+
+def create_chat_model(target: ModelTarget, *, temperature: float):
+    """Return a cached LangChain model for the configured target."""
+    groq_key, gemini_key = _load_keys()
+    if target.provider == "groq":
+        api_key = groq_key
+    elif target.provider == "gemini":
+        api_key = gemini_key
+    else:
+        raise ValueError(f"Unsupported model provider: {target.provider}")
+
+    if not api_key:
+        provider_name = "Groq" if target.provider == "groq" else "Gemini"
+        raise ValueError(f"{provider_name} API key is not configured")
+
+    return _create_chat_model_cached(
+        target.provider,
+        target.model,
+        temperature,
+        target.reasoning_effort,
+        api_key,
+    )
+
+
+@lru_cache(maxsize=4)
+def _build_groq_client(api_key: str):
+    client = Groq(api_key=api_key)
+    print("INIT LOG: Groq raw client initialized.")
+    return client
+
+
+@lru_cache(maxsize=4)
+def _build_gemini_client(api_key: str):
+    client = genai.Client(api_key=api_key)
+    print("INIT LOG: Gemini raw client initialized.")
+    return client
+
+
+def get_groq_client():
+    """Raw Groq SDK client, or None if unavailable."""
+    groq_key, _ = _load_keys()
+    if not groq_key:
+        return None
+    try:
+        return _build_groq_client(groq_key)
+    except Exception as e:
+        print(f"INIT ERROR: Groq client initialization failed: {str(e)}")
+        return None
+
+
+def get_gemini_client():
+    """Raw google.genai client, or None if unavailable."""
+    _, gemini_key = _load_keys()
+    if not gemini_key:
+        return None
+    try:
+        return _build_gemini_client(gemini_key)
+    except Exception as e:
+        print(f"INIT ERROR: Gemini client initialization failed: {str(e)}")
+        return None
+
+
+def get_groq_llm():
+    """Legacy LangChain Groq model, or None if unavailable."""
+    if not has_groq():
+        return None
+    try:
+        return create_chat_model(
             ModelTarget(
                 provider="groq",
                 model=GROQ_MODEL,
@@ -111,33 +191,25 @@ if GROQ_API_KEY:
             ),
             temperature=GROQ_TEMPERATURE,
         )
-        _use_groq = True
-        print("INIT LOG: Groq clients (raw + LangChain) successfully initialized.")
     except Exception as e:
-        print(f"INIT ERROR: Groq initialization failed: {str(e)}")
-        client = None
-        groq_llm = None
-        _use_groq = False
-else:
-    print("INIT LOG: Groq API Key is missing. Groq will be disabled.")
+        print(f"INIT ERROR: Groq LangChain model initialization failed: {str(e)}")
+        return None
 
-if GEMINI_API_KEY:
+
+def get_gemini_llm():
+    """Legacy LangChain Gemini model, or None if unavailable."""
+    if not _load_keys()[1]:
+        return None
     try:
-        _gemini_client = genai.Client(api_key=GEMINI_API_KEY)
-        gemini_llm = create_chat_model(
+        return create_chat_model(
             ModelTarget(provider="gemini", model=GEMINI_MODEL),
             temperature=GEMINI_TEMPERATURE,
         )
-        _use_gemini = True
-        print("INIT LOG: Gemini clients (raw + LangChain) successfully initialized.")
     except Exception as e:
-        print(f"INIT ERROR: Gemini initialization failed: {str(e)}")
-        _gemini_client = None
-        gemini_llm = None
-        _use_gemini = False
-else:
-    print("INIT LOG: Gemini API Key is missing.")
+        print(f"INIT ERROR: Gemini LangChain model initialization failed: {str(e)}")
+        return None
 
 
-def has_any_llm() -> bool:
-    return bool(groq_llm or gemini_llm)
+def has_groq() -> bool:
+    """True when a Groq key is configured."""
+    return bool(_load_keys()[0])
