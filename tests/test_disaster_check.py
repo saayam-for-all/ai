@@ -361,6 +361,32 @@ def test_a_published_area_is_rendered_as_it_was_published():
     assert event["advisory"].endswith("The impact zone is the affected area published by GDACS.")
 
 
+# The strip with a margin of 0.005 degrees, about 560 m, all round: what a
+# smaller copy of it reaching up to 1 km beyond it could look like.
+STRIP_COPY = {"type": "MultiPolygon", "coordinates": [[[
+    [-0.005, -0.005], [2.005, -0.005], [2.005, 0.105], [-0.005, 0.105], [-0.005, -0.005],
+]]]}
+
+
+def test_a_published_area_is_sent_as_its_smaller_copy_when_there_is_one():
+    (event,) = _check(_Feed([_flood(zone=STRIP_COPY)], source="GDACS"), latitude=0.05, longitude=1.0)["events"]
+    assert event["impact_zone"] == STRIP_COPY
+    assert event["boundary_source"] == "authoritative"
+    assert event["advisory"].endswith(
+        "The impact zone covers the affected area published by GDACS, "
+        "drawn with fewer points, and reaches at most 1 km beyond it."
+    )
+
+
+def test_the_area_not_its_copy_decides_who_an_event_reaches():
+    """The copy can reach up to 1 km beyond the area. Someone in that margin,
+    here 500 m south of the strip, is not in the flood."""
+    beside = _check(_Feed([_flood(zone=STRIP_COPY)]), latitude=-0.0045, longitude=1.0, radius_km=0.1)
+    assert beside["disaster_detected"] is False
+    inside = _check(_Feed([_flood(zone=STRIP_COPY)]), latitude=0.001, longitude=1.0, radius_km=0.1)
+    assert inside["disaster_detected"] is True
+
+
 def test_an_area_the_check_cannot_read_takes_down_only_its_own_feed():
     broken = _Feed([_flood(area={"type": "Point", "coordinates": [1, 0]})], source="GDACS")
     quakes = _Feed([_event("quake-1")], source="USGS")
