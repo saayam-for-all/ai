@@ -1,7 +1,7 @@
 """The disaster_check contract: the Lambda event in, the envelope out - issue #191.
 
-These run the whole coordinate path - router, handler, selection, both feed
-adapters - against responses recorded from USGS and GDACS, with only the
+These run the whole coordinate path - router, handler, selection, every feed
+adapter - against responses recorded from USGS and GDACS, with only the
 network edge replaced. They pin the acceptance criteria covered so far:
 
     a location inside a known event    -> disaster_detected: true, with the
@@ -23,7 +23,7 @@ from unittest import mock
 import pytest
 
 import lambda_function as LF
-from services import feed_cache, gdacs_floods, usgs_earthquakes
+from services import feed_cache, gdacs_floods, gdacs_wildfires, usgs_earthquakes
 
 pytestmark = pytest.mark.contract
 
@@ -53,6 +53,21 @@ BENGALURU = {"latitude": 12.9716, "longitude": 77.5946}     # 26 km outside the 
 KOCHI = {"latitude": 9.9312, "longitude": 76.2673}          # 74 km outside, well inside 384 km
 DRY_GROUND = {"latitude": 11.8046, "longitude": 79.6823}    # in a hole, 0.47 km from the water
 
+# The Los Angeles fires of January 2025, recorded in tests/fixtures/gdacs
+# among every Orange and Red fire since 27 December 2024. GDACS graded both
+# Orange. Palisades burned 8,219 ha from 7 to 12 January, and the centre GDACS
+# gives it lies just outside its burned area. Eaton burned from 8 to 12
+# January, 36 km east of the Palisades point below.
+WILDFIRES = "orange_wildfires_2024-12-27.json"
+PALISADES_FIRE = (1023255, 13)
+EATON_FIRE = (1023277, 5)
+IN_THE_PALISADES_FIRE = {"latitude": 34.1082, "longitude": -118.5336}  # 2.6 km inside the burned area
+SANTA_MONICA = {"latitude": 34.0195, "longitude": -118.4912}           # 3.9 km outside, 9.9 km from the centre
+
+# Both GDACS feeds ask the same URLs; the event type tells them apart.
+FLOOD_AREAS = f"{gdacs_floods.GEOMETRY_URL}?eventtype=FL&"
+FIRE_AREAS = f"{gdacs_wildfires.GEOMETRY_URL}?eventtype=WF&"
+
 EVENT_FIELDS = {
     "event_id", "event_type", "severity", "headline", "started_at", "expires_at",
     "impact_zone", "impact_zone_fallback", "boundary_source", "verified_by",
@@ -72,18 +87,27 @@ def _reply(value, folder):
 def feeds(web):
     """Answer each feed from a recorded response.
 
-    ``usgs`` names a recorded USGS answer. ``floods`` names a recorded GDACS
-    flood list, or is None for GDACS's empty 204. ``areas`` lists the floods,
-    as (event, episode), whose recorded affected areas GDACS will serve. Pass
-    bytes or an exception in place of a name to make a feed misbehave.
+    ``usgs`` names a recorded USGS answer. ``floods`` and ``wildfires`` name a
+    recorded GDACS list, or are None for GDACS's empty 204. ``areas`` lists
+    the floods, and ``fires`` the wildfires, as (event, episode), whose
+    recorded areas GDACS will serve. Pass bytes or an exception in place of a
+    name to make a feed misbehave.
+
+    The two GDACS lists share a URL and are routed by the event type that
+    starts their query. A request with no route fails, which a feed reports
+    as unavailable - so tests that expect an answer check every feed gave one.
     """
-    def _answer(usgs=NO_EARTHQUAKES, floods=None, areas=()):
+    def _answer(usgs=NO_EARTHQUAKES, floods=None, areas=(), wildfires=None, fires=()):
         routes = {
-            f"{gdacs_floods.GEOMETRY_URL}?eventtype=FL&eventid={event_id}&":
-                (GDACS / f"affected_area_FL_{event_id}_{episode_id}.json").read_bytes()
+            f"{FLOOD_AREAS}eventid={event_id}&": (GDACS / f"affected_area_FL_{event_id}_{episode_id}.json").read_bytes()
             for event_id, episode_id in areas
         }
-        routes[gdacs_floods.LIST_URL] = _reply(floods, GDACS)
+        routes.update({
+            f"{FIRE_AREAS}eventid={event_id}&": (GDACS / f"burned_area_WF_{event_id}_{episode_id}.json").read_bytes()
+            for event_id, episode_id in fires
+        })
+        routes[f"{gdacs_floods.LIST_URL}?eventlist=FL&"] = _reply(floods, GDACS)
+        routes[f"{gdacs_wildfires.LIST_URL}?eventlist=WF&"] = _reply(wildfires, GDACS)
         routes[usgs_earthquakes.QUERY_URL] = _reply(usgs, USGS)
         return web(routes)
     return _answer
@@ -136,6 +160,13 @@ def during_the_india_flood():
         yield
 
 
+@pytest.fixture
+def during_the_los_angeles_fires():
+    """Noon UTC on 10 January 2025, while both recorded fires were burning."""
+    with _at(datetime(2025, 1, 10, 12, 0, 0, tzinfo=timezone.utc)):
+        yield
+
+
 def _india_listing(**changes):
     """The recorded flood list, with India's latest grade back at Orange."""
     listing = json.loads((GDACS / "orange_floods_2026-09-25.json").read_text(encoding="utf-8"))
@@ -149,8 +180,17 @@ def _india_flood(feeds, **changes):
     return feeds(floods=_india_listing(**changes), areas=[INDIA_FLOOD])
 
 
+def _los_angeles_fires(feeds, **answers):
+    return feeds(wildfires=WILDFIRES, fires=[PALISADES_FIRE, EATON_FIRE], **answers)
+
+
 def _call(payload):
     return LF.disaster_check_handler({"body": json.dumps(payload)}, None)
+
+
+def _every_feed_answered(body):
+    """A missing canned answer makes a feed unavailable, not the test fail."""
+    assert [s["status"] for s in body["sources_checked"]] == ["ok", "ok", "ok"]
 
 
 def _urls(urlopen):
@@ -246,6 +286,7 @@ def test_a_location_inside_a_known_flood_is_detected(feeds, during_the_india_flo
 
     assert res["statusCode"] == 200
     body = res["body"]
+    _every_feed_answered(body)
     assert body["disaster_detected"] is True
     # GDACS flood alerts are forecasts, so they are never graded high.
     assert body["confidence"] == "medium"
@@ -317,7 +358,7 @@ def test_a_flood_that_ended_before_the_window_is_not_fetched(feeds):
     with _on(12), _india_flood(feeds) as urlopen:
         body = _call(CHENNAI)["body"]
     assert body["disaster_detected"] is False
-    assert not [u for u in _urls(urlopen) if u.startswith(gdacs_floods.GEOMETRY_URL)]
+    assert not [u for u in _urls(urlopen) if u.startswith(FLOOD_AREAS)]
 
 
 def test_a_running_flood_is_reported_with_no_expiry(feeds):
@@ -328,7 +369,7 @@ def test_a_running_flood_is_reported_with_no_expiry(feeds):
     (flood,) = res["body"]["events"]
     assert flood["expires_at"] is None
     assert json.loads(json.dumps(res)) == res
-    assert len([u for u in _urls(urlopen) if u.startswith(gdacs_floods.GEOMETRY_URL)]) == 1
+    assert len([u for u in _urls(urlopen) if u.startswith(FLOOD_AREAS)]) == 1
 
 
 def test_a_flood_that_has_eased_to_green_is_not_reported(feeds, during_the_india_flood):
@@ -337,13 +378,119 @@ def test_a_flood_that_has_eased_to_green_is_not_reported(feeds, during_the_india
     with feeds(floods="orange_floods_2026-09-25.json", areas=[INDIA_FLOOD]) as urlopen:
         body = _call(CHENNAI)["body"]
     assert body["disaster_detected"] is False
-    assert not [u for u in _urls(urlopen) if u.startswith(gdacs_floods.GEOMETRY_URL)]
+    assert not [u for u in _urls(urlopen) if u.startswith(FLOOD_AREAS)]
 
 
 def test_a_flood_response_survives_json_serialisation(feeds, during_the_india_flood):
     with _india_flood(feeds):
         res = _call(CHENNAI)
-    assert json.loads(json.dumps(res)) == res
+    # The flood itself, not an error body that would serialise just as well.
+    assert [e["event_id"] for e in res["body"]["events"]] == ["gdacs-FL-1104121"]
+    assert json.loads(json.dumps(res, allow_nan=False)) == res
+
+
+# -------------------------------------------------------------------------
+# A location inside a known wildfire
+# -------------------------------------------------------------------------
+
+def test_a_location_inside_a_known_wildfire_is_detected(feeds, during_the_los_angeles_fires):
+    with _los_angeles_fires(feeds):
+        res = _call({**IN_THE_PALISADES_FIRE, "radius_km": 1})
+
+    assert res["statusCode"] == 200
+    body = res["body"]
+    _every_feed_answered(body)
+    assert body["disaster_detected"] is True
+    # The burned area is observed, and Orange is set with expert review.
+    assert body["confidence"] == "high"
+
+    (fire,) = body["events"]
+    assert set(fire) == EVENT_FIELDS
+    assert fire["event_id"] == "gdacs-WF-1023255"
+    assert fire["event_type"] == "wildfire"
+    assert fire["severity"] == "severe"
+    assert fire["headline"] == "Orange wildfire alert: Forest fires in United States"
+    assert fire["started_at"] == "2025-01-07T00:00:00Z"
+    # GDACS last dated the fire 12 January, and it burned through that day.
+    assert fire["expires_at"] == "2025-01-13T00:00:00Z"
+    assert fire["volunteer_band_km"] == 30
+    assert fire["llm_cross_check"] is None
+
+
+def test_at_the_default_radius_both_los_angeles_fires_are_found(feeds, during_the_los_angeles_fires):
+    """Eaton's burned area is 36 km from the Palisades point, inside 50 km."""
+    with _los_angeles_fires(feeds):
+        body = _call(IN_THE_PALISADES_FIRE)["body"]
+
+    _every_feed_answered(body)
+    assert [e["event_id"] for e in body["events"]] == ["gdacs-WF-1023255", "gdacs-WF-1023277"]
+
+
+def test_a_wildfire_zone_is_the_burned_area_gdacs_publishes(feeds, during_the_los_angeles_fires):
+    with _los_angeles_fires(feeds):
+        (fire,) = _call({**IN_THE_PALISADES_FIRE, "radius_km": 1})["body"]["events"]
+
+    assert fire["boundary_source"] == "authoritative"
+    assert fire["impact_zone"]["type"] == "MultiPolygon"
+    # One polygon, its outline only: its three holes are unburned ground
+    # surrounded by the fire.
+    ((outline,),) = fire["impact_zone"]["coordinates"]
+    assert len(outline) == 131
+    # Centred where GDACS puts the fire, and wide enough to cover all of it.
+    assert fire["impact_zone_fallback"] == {"center": [34.0804, -118.5698], "radius_km": 10.5}
+    assert "affected area published by GDACS" in fire["advisory"]
+
+
+def test_every_wildfire_detection_is_backed_by_its_gdacs_report(feeds, during_the_los_angeles_fires):
+    with _los_angeles_fires(feeds):
+        (fire,) = _call({**IN_THE_PALISADES_FIRE, "radius_km": 1})["body"]["events"]
+
+    (evidence,) = fire["verified_by"]
+    assert evidence == {
+        "source": "GDACS",
+        "url": "https://www.gdacs.org/report.aspx?eventid=1023255&episodeid=13&eventtype=WF",
+        "retrieved_at": "2025-01-10T12:00:00Z",
+    }
+
+
+@pytest.mark.parametrize("radius_km,detected", [(5, True), (3, False)])
+def test_a_wildfire_counts_when_it_comes_within_the_callers_radius(feeds, during_the_los_angeles_fires, radius_km, detected):
+    """Santa Monica is 3.9 km from the edge of the Palisades burned area."""
+    with _los_angeles_fires(feeds):
+        body = _call({**SANTA_MONICA, "radius_km": radius_km})["body"]
+
+    _every_feed_answered(body)
+    assert body["disaster_detected"] is detected
+
+
+def test_the_burned_area_decides_not_the_circle_around_it(feeds, during_the_los_angeles_fires):
+    """Santa Monica is 9.9 km from the centre GDACS gives the fire, inside the
+    10.5 km fallback circle, but 3.9 km from any burned ground."""
+    with _los_angeles_fires(feeds):
+        body = _call({**SANTA_MONICA, "radius_km": 1})["body"]
+
+    _every_feed_answered(body)
+    assert body["disaster_detected"] is False
+
+
+def test_a_wildfire_that_ended_before_the_window_is_not_fetched(feeds):
+    """On 20 January the default 72-hour window starts on the 17th. Both fires
+    were last dated 12 January, and GDACS no longer marks them as burning."""
+    with _at(datetime(2025, 1, 20, 12, 0, 0, tzinfo=timezone.utc)), _los_angeles_fires(feeds) as urlopen:
+        body = _call(IN_THE_PALISADES_FIRE)["body"]
+
+    _every_feed_answered(body)
+    assert body["disaster_detected"] is False
+    assert not [u for u in _urls(urlopen) if u.startswith(FIRE_AREAS)]
+
+
+def test_a_wildfire_response_survives_json_serialisation(feeds, during_the_los_angeles_fires):
+    with _los_angeles_fires(feeds):
+        res = _call(IN_THE_PALISADES_FIRE)
+    # Both fires, not an error body that would serialise just as well.
+    _every_feed_answered(res["body"])
+    assert [e["event_id"] for e in res["body"]["events"]] == ["gdacs-WF-1023255", "gdacs-WF-1023277"]
+    assert json.loads(json.dumps(res, allow_nan=False)) == res
 
 
 # -------------------------------------------------------------------------
@@ -371,7 +518,7 @@ def test_a_repeated_request_asks_no_feed_at_all(feeds, on_the_day_of_the_earthqu
     with feeds(usgs=KAHRAMANMARAS) as urlopen:
         first = _call(GAZIANTEP)
         second = _call(GAZIANTEP)
-    assert urlopen.call_count == 2, "one call per feed, for the first request only"
+    assert urlopen.call_count == 3, "one call per feed, for the first request only"
     assert second == first
 
 
@@ -384,9 +531,11 @@ def test_a_cached_answer_reports_when_the_feed_actually_answered(feeds):
         clock.now = start + timedelta(seconds=45)
         body = _call(GAZIANTEP)["body"]
 
-    assert {s["source"]: s["retrieved_at"] for s in body["sources_checked"]} == {
-        "USGS": "2023-02-06T12:00:00Z", "GDACS": "2023-02-06T12:00:00Z",
-    }
+    assert [(s["source"], s["event_types"], s["retrieved_at"]) for s in body["sources_checked"]] == [
+        ("USGS", ["earthquake"], "2023-02-06T12:00:00Z"),
+        ("GDACS", ["flood"], "2023-02-06T12:00:00Z"),
+        ("GDACS", ["wildfire"], "2023-02-06T12:00:00Z"),
+    ]
     assert body["events"][0]["verified_by"][0]["retrieved_at"] == "2023-02-06T12:00:00Z"
 
 
@@ -399,21 +548,22 @@ def test_while_gdacs_is_down_its_last_answer_stands_in_marked_stale(feeds):
         with _india_flood(feeds):
             _call(CHENNAI)
         clock.now = start + timedelta(minutes=20)
-        with feeds(floods=DOWN):
+        with feeds(floods=DOWN, wildfires=DOWN):
             body = _call(CHENNAI)["body"]
 
     assert body["disaster_detected"] is True
     (flood,) = body["events"]
     assert flood["verified_by"][0]["retrieved_at"] == "2026-10-06T12:00:00Z"
-    assert [(s["source"], s["status"], s["retrieved_at"]) for s in body["sources_checked"]] == [
-        ("USGS", "ok", "2026-10-06T12:20:00Z"),
-        ("GDACS", "stale", "2026-10-06T12:00:00Z"),
+    assert [(s["source"], s["event_types"], s["status"], s["retrieved_at"]) for s in body["sources_checked"]] == [
+        ("USGS", ["earthquake"], "ok", "2026-10-06T12:20:00Z"),
+        ("GDACS", ["flood"], "stale", "2026-10-06T12:00:00Z"),
+        ("GDACS", ["wildfire"], "stale", "2026-10-06T12:00:00Z"),
     ]
 
 
 def test_a_quiet_location_while_gdacs_is_down_is_an_error_not_an_all_clear(feeds):
-    """Raised in the review of part 6. The list standing in may be missing a
-    flood GDACS has raised to Orange since, and a client reading only
+    """Raised in the review of part 6. A list standing in may be missing a
+    flood or fire GDACS has raised to Orange since, and a client reading only
     `disaster_detected` would never see that it was stale. With nothing found,
     the answer is a 502 rather than a `false` resting on it."""
     start = datetime(2026, 10, 6, 12, 0, 0, tzinfo=timezone.utc)
@@ -422,7 +572,7 @@ def test_a_quiet_location_while_gdacs_is_down_is_an_error_not_an_all_clear(feeds
         with _india_flood(feeds):
             assert _call(KOCHI)["body"]["disaster_detected"] is False
         clock.now = start + timedelta(minutes=20)
-        with feeds(floods=DOWN):
+        with feeds(floods=DOWN, wildfires=DOWN):
             res = _call(KOCHI)
 
     assert res["statusCode"] == 502
@@ -440,7 +590,7 @@ def test_a_request_made_as_midnight_passed_asks_each_feed_once(feeds):
     with mock.patch.object(feed_cache, "utcnow", clock), feeds() as urlopen:
         res = _call({"latitude": 20, "longitude": 10, "window_hours": 168})
     assert res["statusCode"] == 200
-    assert urlopen.call_count == 2, "one call per feed"
+    assert urlopen.call_count == 3, "one call per feed"
 
 
 def test_an_earthquake_answer_never_stands_in_once_usgs_is_down(feeds):
@@ -467,17 +617,29 @@ def test_a_quiet_location_is_a_first_class_negative_answer(feeds):
     assert res["body"]["disaster_detected"] is False
     assert res["body"]["events"] == []
     assert res["body"]["confidence"] is None
-    assert urlopen.call_count == 2, "the negative answer must cost one call per feed"
+    assert urlopen.call_count == 3, "the negative answer must cost one call per feed"
+
+
+def test_each_gdacs_list_is_asked_for_its_own_event_type(feeds):
+    with feeds() as urlopen:
+        _call({"latitude": 20, "longitude": 10})
+
+    lists = [u for u in _urls(urlopen) if u.startswith(gdacs_floods.LIST_URL)]
+    assert sorted(u.split("&")[0] for u in lists) == [
+        f"{gdacs_floods.LIST_URL}?eventlist=FL",
+        f"{gdacs_wildfires.LIST_URL}?eventlist=WF",
+    ]
 
 
 def test_a_negative_answer_names_what_it_covers(feeds):
-    """`false` covers earthquakes and floods, and nothing else."""
+    """`false` covers earthquakes, floods and wildfires, and nothing else."""
     with feeds():
         sources = _call({"latitude": 20, "longitude": 10})["body"]["sources_checked"]
 
     assert [(s["source"], s["event_types"], s["status"]) for s in sources] == [
         ("USGS", ["earthquake"], "ok"),
         ("GDACS", ["flood"], "ok"),
+        ("GDACS", ["wildfire"], "ok"),
     ]
 
 
@@ -488,7 +650,7 @@ def test_a_negative_answer_names_what_it_covers(feeds):
 DOWN = urllib.error.URLError("no route to host")
 
 
-@pytest.mark.parametrize("down", ["usgs", "floods"])
+@pytest.mark.parametrize("down", ["usgs", "floods", "wildfires"])
 def test_any_feed_outage_with_nothing_found_is_an_error_not_an_all_clear(feeds, down):
     with feeds(**{down: DOWN}):
         res = _call(GAZIANTEP)
@@ -504,12 +666,34 @@ def test_any_feed_outage_with_nothing_found_is_an_error_not_an_all_clear(feeds, 
 
 def test_an_earthquake_is_still_reported_while_gdacs_is_down(feeds, on_the_day_of_the_earthquake):
     """A detection stands on its own feed; the dead one is named."""
-    with feeds(usgs=KAHRAMANMARAS, floods=DOWN):
+    with feeds(usgs=KAHRAMANMARAS, floods=DOWN, wildfires=DOWN):
         body = _call(GAZIANTEP)["body"]
 
     assert body["disaster_detected"] is True
-    assert [(s["source"], s["status"]) for s in body["sources_checked"]] == [
-        ("USGS", "ok"), ("GDACS", "unavailable"),
+    assert [(s["source"], s["event_types"], s["status"]) for s in body["sources_checked"]] == [
+        ("USGS", ["earthquake"], "ok"),
+        ("GDACS", ["flood"], "unavailable"),
+        ("GDACS", ["wildfire"], "unavailable"),
+    ]
+
+
+def test_a_flood_is_still_reported_while_the_wildfire_feed_is_down(feeds, during_the_india_flood):
+    with feeds(floods=_india_listing(), areas=[INDIA_FLOOD], wildfires=DOWN):
+        body = _call(CHENNAI)["body"]
+
+    assert [e["event_id"] for e in body["events"]] == ["gdacs-FL-1104121"]
+    assert [(s["event_types"], s["status"]) for s in body["sources_checked"]] == [
+        (["earthquake"], "ok"), (["flood"], "ok"), (["wildfire"], "unavailable"),
+    ]
+
+
+def test_a_wildfire_is_still_reported_while_the_flood_feed_is_down(feeds, during_the_los_angeles_fires):
+    with _los_angeles_fires(feeds, floods=DOWN):
+        body = _call({**IN_THE_PALISADES_FIRE, "radius_km": 1})["body"]
+
+    assert [e["event_id"] for e in body["events"]] == ["gdacs-WF-1023255"]
+    assert [(s["event_types"], s["status"]) for s in body["sources_checked"]] == [
+        (["earthquake"], "ok"), (["flood"], "unavailable"), (["wildfire"], "ok"),
     ]
 
 
@@ -518,8 +702,28 @@ def test_a_nearby_flood_without_its_area_is_an_outage(feeds, during_the_india_fl
     with feeds(floods=_india_listing(), areas=()) as urlopen:
         res = _call(CHENNAI)
     # The area request found no canned answer, which counts as GDACS failing.
-    assert any(u.startswith(gdacs_floods.GEOMETRY_URL) for u in _urls(urlopen))
+    assert any(u.startswith(FLOOD_AREAS) for u in _urls(urlopen))
     assert res["statusCode"] == 502
+
+
+def test_a_nearby_wildfire_without_its_burned_area_is_an_outage(web, during_the_los_angeles_fires, capsys):
+    """No burned area, no way to tell who is in the fire - so no `false` either.
+
+    GDACS answers the area request with an HTTP error, as it does for a fire
+    or update it does not know, rather than the test fixture refusing it.
+    """
+    no_area = urllib.error.HTTPError(gdacs_wildfires.GEOMETRY_URL, 400, "Bad Request", None, None)
+    with web({
+        FIRE_AREAS: no_area,
+        f"{gdacs_wildfires.LIST_URL}?eventlist=WF&": (GDACS / WILDFIRES).read_bytes(),
+        f"{gdacs_floods.LIST_URL}?eventlist=FL&": 204,
+        usgs_earthquakes.QUERY_URL: (USGS / NO_EARTHQUAKES).read_bytes(),
+    }) as urlopen:
+        res = _call(SANTA_MONICA)
+
+    assert any(u.startswith(FIRE_AREAS) for u in _urls(urlopen))
+    assert res["statusCode"] == 502
+    assert "disaster_check feed GDACS (wildfire) failed: FeedUnreachable" in capsys.readouterr().out
 
 
 def test_an_unreadable_feed_answer_is_an_outage_too(feeds):
@@ -531,7 +735,7 @@ def test_an_unreadable_feed_answer_is_an_outage_too(feeds):
 
 def test_an_outage_does_not_leak_the_feed_error(feeds):
     leaky = urllib.error.URLError("proxy 10.0.0.7 refused the connection")
-    with feeds(usgs=leaky, floods=leaky):
+    with feeds(usgs=leaky, floods=leaky, wildfires=leaky):
         res = _call(GAZIANTEP)
     assert "10.0.0.7" not in json.dumps(res["body"])
 

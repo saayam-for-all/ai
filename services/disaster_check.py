@@ -10,12 +10,13 @@ cross-check that goes with it, are not built yet.
 import math
 from datetime import timedelta, timezone
 
-from services import feed_cache, gdacs_floods, usgs_earthquakes
+from services import feed_cache, gdacs_floods, gdacs_wildfires, usgs_earthquakes
 from services.geometry import circle_polygon, distance_km, distance_to_area_km
 
 # One adapter per authoritative feed. See services/usgs_earthquakes.py for the
-# four names an adapter has to expose.
-FEEDS = (usgs_earthquakes, gdacs_floods)
+# four names an adapter has to expose. Two feeds can come from one source, as
+# GDACS's floods and wildfires do; they are told apart by their event types.
+FEEDS = (usgs_earthquakes, gdacs_floods, gdacs_wildfires)
 
 DEFAULT_RADIUS_KM = 50.0
 MAX_RADIUS_KM = 500.0
@@ -103,7 +104,7 @@ def check_location(latitude, longitude, radius_km, window_hours, now=None):
         except Exception as e:
             # Fail closed: anything a feed raises, including a bug in its
             # adapter, is an unanswered question rather than an empty answer.
-            print(f"ERROR: disaster_check feed {feed.SOURCE} failed: {type(e).__name__}: {e}")
+            print(f"ERROR: disaster_check feed {_label(source)} failed: {type(e).__name__}: {e}")
             sources_checked.append({**source, "status": "unavailable"})
             continue
         status = "stale" if answer.stale else "ok"
@@ -113,7 +114,7 @@ def check_location(latitude, longitude, radius_km, window_hours, now=None):
     # Raised in the review of part 6: a client that reads only
     # disaster_detected never sees a stale status, so a stale answer must not
     # stand behind a `false`.
-    not_current = [source["source"] for source in sources_checked if source["status"] != "ok"]
+    not_current = [_label(source) for source in sources_checked if source["status"] != "ok"]
     if not_current and not events:
         raise DisasterCheckUnavailable(f"no current answer from: {', '.join(not_current)}")
 
@@ -131,6 +132,11 @@ def check_location(latitude, longitude, radius_km, window_hours, now=None):
         "events": [_render(event, source, retrieved_at) for event, source, retrieved_at in events],
         "sources_checked": sources_checked,
     }
+
+
+def _label(source):
+    """A feed's name for logs, such as "GDACS (wildfire)"."""
+    return f"{source['source']} ({', '.join(source['event_types'])})"
 
 
 class UnusableEvent(ValueError):
