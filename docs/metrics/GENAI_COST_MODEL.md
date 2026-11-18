@@ -25,7 +25,7 @@ Following the telemetry double-counting fix and reasoning effort pin (PR #212) a
 | **Failover Multiplier (Gemini)** | 6.34× | Up to 15×+ | **~6.9× (Mean vs Groq)** | **~6.8× (Lower Bound)** | Gemini output ($2.50/M) makes fallback runs cost ~10× to 15×+ per call. |
 | **Self-Hosting Breakeven** | ~875,000 / mo | ~233,000 / mo | **~82,000 / mo** | **~565,000 / mo** | At 25% fallback breakeven is ~82k/mo; on Groq-only it is ~565k/mo. |
 
-*\*Note: The Measured Baseline Mean (~6,300–6,400 tokens at ~$0.0046 per request) reflects pricing each call at its actual provider: primary calls on Groq ($0.075 / $0.30 per 1M) and the 25% empty-result fallback runs in `search_orgs` on Gemini 2.5 Flash ($0.30 / $2.50 per 1M). In normal operation where all primary calls succeed, token usage is ~4,800 tokens at $0.00067 per request ($0.67 per 1,000 requests).*
+*\*Note: The Measured Baseline Mean (~6,300–6,400 tokens at ~$0.0046 per request, measured across a corpus of 8 benchmark scenarios in `docs/metrics/token_baseline.json`) reflects pricing each call at its actual provider: primary calls on Groq ($0.075 / $0.30 per 1M) and the 25% empty-result fallback runs in `search_orgs` on Gemini 2.5 Flash ($0.30 / $2.50 per 1M). In normal operation where all primary calls succeed, token usage is ~4,800 tokens at $0.00067 per request ($0.67 per 1,000 requests).*
 
 ---
 
@@ -52,7 +52,7 @@ Tokens are measured against live model calls in `docs/metrics/token_baseline.jso
 2. **LangChain Reasoning Token Accounting (PR #212):** In standard LangChain (`langchain-groq`, `langchain-google-genai`), `output_tokens` already includes reasoning/thought tokens; `output_token_details.reasoning` is an itemized breakdown. Prior to PR #212, `utils/token_usage.py` added reasoning a second time. The counting logic now correctly handles itemized breakdowns without double-counting.
 3. **Reasoning Effort Control:** Groq's `openai/gpt-oss-20b` defaults to `medium` reasoning effort in provider API specifications. Explicitly pinning `reasoning_effort="low"` across `ModelTarget` and `config/model_routing.json` prevents runaway completion tokens while maintaining high summary quality.
 4. **Observed Reduction Consistency:** The −21% reduction in total request token consumption on `271a402` (6,405 vs 8,116 ceiling) is consistent with the ~23% saving estimated from the reasoning effort pin alone.
-5. **The `search_orgs` Fallback Finding:** In the benchmark suite, `food-short` (8,135 tokens) and `clothing-short` (9,024 tokens) encountered empty organization responses from Groq, triggering failover to Gemini. The other 6 runs completed on Groq at 2,089–2,246 tokens. Therefore, **the empty-result fallback rate to Gemini, rather than token count drift, is the primary operational cost driver**.
+5. **The `search_orgs` Fallback Finding:** In the benchmark suite (`docs/metrics/token_baseline.json`), `housing-short` (8,492 tokens) and `food-short` (7,537 tokens) encountered empty organization responses from Groq, triggering failover to Gemini. The other 6 runs (including `clothing-short`) completed on Groq at 2,062–2,231 tokens. Therefore, **the empty-result fallback rate to Gemini, rather than token count drift, is the primary operational cost driver**.
 
 ---
 
@@ -222,7 +222,7 @@ Operational inputs requiring cross-team coordination:
 | Gap | Responsible Team / Reference | Current Status / Details |
 | :--- | :--- | :--- |
 | **Requests per User per Month** | Product & Request Teams | Tracked with a placeholder of **1.0 request/user/month** pending user analytics. |
-| **AWS Lambda Configurations** | DevOps / AWS Cloud Administrator | Mustakim recorded live AWS Console readings on #153 (9 Sep 2026):<br>• `Predict Category`: 128 MB, 3 s<br>• `Generate Subject`: 128 MB, 30 s<br>• `Generate Answer`: 128 MB, 120 s<br>• `Search Orgs`: 512 MB, 30 s<br>• `Emergency Contacts`: 128 MB, 3 s<br>*Status:* Readings documented; formal DevOps re-confirmation pending. |
+| **AWS Lambda Configurations** | DevOps / AWS Cloud Administrator | Mustakim recorded live AWS Console readings on #153 (9 Sep 2026) and updated `Predict Category` in late Sep 2026:<br>• `Predict Category`: 512 MB, 10 s *(updated late Sep 2026)*<br>• `Generate Subject`: 128 MB, 30 s *(9 Sep 2026)*<br>• `Generate Answer`: 128 MB, 120 s *(9 Sep 2026)*<br>• `Search Orgs`: 512 MB, 30 s *(9 Sep 2026)*<br>• `Emergency Contacts`: 128 MB, 3 s *(9 Sep 2026)*<br>*Status:* Readings documented; formal DevOps re-confirmation pending. |
 | **Provider Billing Tiers & Nonprofit Pricing** | DevOps / Account Administrator | Investigated in weekly AI meetings (Nov 2025; Saurabh's LLM comparison sheet with nonprofit pricing). Status: confirming whether educational/nonprofit grant credits are currently applied to Groq and Google accounts. |
 
 ---
