@@ -56,6 +56,7 @@ FILE_META = {
     "test_geometry.py": ("#191", "services/geometry.py"),
     "test_feed_cache.py": ("#191", "services/feed_cache.py"),
     "test_gdacs_wildfires.py": ("#191", "services/gdacs_wildfires.py"),
+    "test_area_simplification.py": ("#191", "services/area_simplification.py"),
 }
 
 HEADER = """# Test catalogue
