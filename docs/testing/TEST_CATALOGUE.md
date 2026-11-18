@@ -36,7 +36,7 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_emergency_s3_reader.py`](../../tests/test_emergency_s3_reader.py) | Unit | #334 | `services/emergency.py S3 reader` | 23 |
 | [`tests/test_generate_answer.py`](../../tests/test_generate_answer.py) | Contract | #169 | `generate_answer_handler` | 50 |
 | [`tests/test_import_blast_radius.py`](../../tests/test_import_blast_radius.py) | Integration | #169, #171 | `module-scope imports` | 4 |
-| [`tests/test_lazy_provider_keys.py`](../../tests/test_lazy_provider_keys.py) | Unit | #237 | `utils/client.py key loading` | 16 |
+| [`tests/test_lazy_provider_keys.py`](../../tests/test_lazy_provider_keys.py) | Unit | #237 | `utils/client.py key loading` | 17 |
 | [`tests/test_model_fallback.py`](../../tests/test_model_fallback.py) | Unit | #193 | `utils/model_fallback.py` | 24 |
 | [`tests/test_org_search_contract.py`](../../tests/test_org_search_contract.py) | Contract | #170 | `utils/search_orgs.py` | 25 |
 | [`tests/test_request_db_schema.py`](../../tests/test_request_db_schema.py) | Unit | #169 | `utils/request_db.py` | 54 |
@@ -44,7 +44,7 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_router.py`](../../tests/test_router.py) | Integration | #171 | `lambda_function.lambda_handler` | 34 |
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
 | [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 58 |
-| | | | **Total** | **597** |
+| | | | **Total** | **598** |
 
 ## Every test
 
@@ -382,7 +382,7 @@ Cross-service blast radius at import time - issue #171.
 
 ### `test_lazy_provider_keys.py`
 
-*Unit · issue #237 · 16 tests*
+*Unit · issue #237 · 17 tests*
 
 Provider keys load from SSM on first use, not at import (#237). Successful reads are cached; failed reads back off, then retry.
 
@@ -394,6 +394,7 @@ Provider keys load from SSM on first use, not at import (#237). Successful reads
 | `test_parameter_not_found_is_a_successful_read_and_is_cached` | Parameter not found is a successful read and is cached. |
 | `test_a_failed_read_is_not_cached_and_the_next_call_retries` | A failed read is not cached and the next call retries. |
 | `test_calls_inside_the_backoff_window_do_not_call_ssm` | Calls inside the backoff window do not call ssm. |
+| `test_a_call_29_seconds_after_a_failure_does_not_reach_ssm` | A call 29s after a failure stays inside the 30s backoff window. |
 | `test_a_retry_that_fails_again_starts_a_new_window` | A retry that fails again starts a new window. |
 | `test_ssm_client_is_created_with_short_timeouts` | Ssm client is created with short timeouts. |
 | `test_accessors_recover_once_keys_become_available` | Accessors recover once keys become available. |
@@ -404,7 +405,7 @@ Provider keys load from SSM on first use, not at import (#237). Successful reads
 | `test_groq_llm_accessor_swallows_a_constructor_failure` | Groq llm accessor swallows a constructor failure. |
 | `test_gemini_llm_accessor_swallows_a_constructor_failure` | Gemini llm accessor swallows a constructor failure. |
 
-> 15 test functions expand to 16 cases through parametrisation.
+> 16 test functions expand to 17 cases through parametrisation.
 
 ### `test_model_fallback.py`
 

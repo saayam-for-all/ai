@@ -1,14 +1,12 @@
 """Provider clients, built on first use (#237).
 
-Keys are read from SSM on first use, not at import; call the accessors where used."""
+Keys and provider SDKs are loaded on first use, not at import; call the accessors where used."""
 from functools import lru_cache
+import importlib
 import logging
+import sys
 import time
 
-from groq import Groq
-from google import genai
-from langchain_groq import ChatGroq
-from langchain_google_genai import ChatGoogleGenerativeAI
 import boto3
 from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
@@ -16,6 +14,26 @@ from botocore.exceptions import BotoCoreError, ClientError
 from utils.model_fallback import ModelTarget
 
 logger = logging.getLogger(__name__)
+_THIS_MODULE = sys.modules[__name__]
+
+_LAZY_SDK_ATTRS = {
+    "Groq": ("groq", "Groq"),
+    "genai": ("google.genai", None),
+    "ChatGroq": ("langchain_groq", "ChatGroq"),
+    "ChatGoogleGenerativeAI": ("langchain_google_genai", "ChatGoogleGenerativeAI"),
+}
+
+
+def __getattr__(name: str):
+    """Load provider SDKs on first attribute access rather than at cold start."""
+    if name in _LAZY_SDK_ATTRS:
+        module_name, attr_name = _LAZY_SDK_ATTRS[name]
+        module = importlib.import_module(module_name)
+        value = getattr(module, attr_name) if attr_name else module
+        globals()[name] = value
+        return value
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 GROQ_PARAM = "/dev/saayam/GenAI/groq/key"
 GEMINI_PARAM = "/dev/saayam/GenAI/gemini/key"
@@ -105,10 +123,10 @@ def _create_chat_model_cached(
         }
         if reasoning_effort:
             kwargs["reasoning_effort"] = reasoning_effort
-        return ChatGroq(**kwargs)
+        return _THIS_MODULE.ChatGroq(**kwargs)
 
     if provider == "gemini":
-        return ChatGoogleGenerativeAI(
+        return _THIS_MODULE.ChatGoogleGenerativeAI(
             google_api_key=api_key,
             model=model_name,
             temperature=temperature,
@@ -142,14 +160,14 @@ def create_chat_model(target: ModelTarget, *, temperature: float):
 
 @lru_cache(maxsize=4)
 def _build_groq_client(api_key: str):
-    client = Groq(api_key=api_key)
+    client = _THIS_MODULE.Groq(api_key=api_key)
     print("INIT LOG: Groq raw client initialized.")
     return client
 
 
 @lru_cache(maxsize=4)
 def _build_gemini_client(api_key: str):
-    client = genai.Client(api_key=api_key)
+    client = _THIS_MODULE.genai.Client(api_key=api_key)
     print("INIT LOG: Gemini raw client initialized.")
     return client
 
