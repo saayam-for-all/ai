@@ -40,15 +40,20 @@ _COLD_START_SCRIPT = textwrap.dedent(
     urllib.request.urlopen = _no_network
 
     import lambda_function as LF
+    provider_sdks = ("groq", "google.genai", "langchain_groq", "langchain_google_genai")
     after_import = list(created)
+    sdks_after_import = [m for m in provider_sdks if m in sys.modules]
     response = LF.emergency_contacts_handler(
         {"queryStringParameters": {"country": "IN"},
          "requestContext": {"identity": {"sourceIp": "8.8.8.8"}}},
         None,
     )
+    sdks_after_handler = [m for m in provider_sdks if m in sys.modules]
     print(json.dumps({
         "after_import": after_import,
         "after_handler": created,
+        "sdks_after_import": sdks_after_import,
+        "sdks_after_handler": sdks_after_handler,
         "status": response["statusCode"],
     }))
     """
@@ -75,6 +80,8 @@ def test_cold_start_and_emergency_contacts_never_create_an_ssm_client():
 
     assert "ssm" not in report["after_import"], "SSM client created at import"
     assert "ssm" not in report["after_handler"], "SSM client created by Emergency Contacts"
+    assert report["sdks_after_import"] == [], f"Provider SDKs imported at cold start: {report['sdks_after_import']}"
+    assert report["sdks_after_handler"] == [], f"Provider SDKs imported by Emergency Contacts: {report['sdks_after_handler']}"
     assert report["status"] == 200
 
 
@@ -197,6 +204,20 @@ def test_calls_inside_the_backoff_window_do_not_call_ssm(monkeypatch, clock):
         assert client_module.get_groq_llm() is None
 
     assert fake.calls == 1
+
+
+def test_a_call_29_seconds_after_a_failure_does_not_reach_ssm(monkeypatch, clock):
+    """A call 29s after a failure stays inside the 30s backoff window."""
+    fake = _FakeSSM(_ACCESS_DENIED, _BOTH_KEYS)
+    _install_ssm(monkeypatch, fake)
+
+    assert client_module._load_keys() == (None, None)
+    clock.advance(29)
+    assert client_module._load_keys() == (None, None)
+    assert fake.calls == 1
+    clock.advance(1)
+    assert client_module._load_keys() == ("groq-key", "gemini-key")
+    assert fake.calls == 2
 
 
 def test_a_retry_that_fails_again_starts_a_new_window(monkeypatch, clock):

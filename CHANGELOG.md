@@ -14,7 +14,7 @@ team works and reviews in.
 
 **Changed**
 
-- Provider keys are read from SSM on first model use, not at import, so cold starts (including Emergency Contacts) skip SSM.
+- Provider keys and provider SDKs (`groq`, `google.genai`, `langchain_groq`, `langchain_google_genai`) are loaded on first model use, not at import, so cold starts (including Emergency Contacts) skip SSM and provider SDK imports.
 - Import-time singletons replaced by accessors: `get_groq_client()`, `get_gemini_client()`, `get_groq_llm()`, `get_gemini_llm()`, `has_groq()`.
 - The `INIT LOG: ... Key Found` lines now appear on first model use, not at cold start.
 
