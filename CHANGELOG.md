@@ -10,6 +10,97 @@ team works and reviews in.
 
 ## Unreleased
 
+### Volunteer skill suggestions — [#216](https://github.com/saayam-for-all/ai/issues/216)
+
+**Added**
+
+- **`"mode": "volunteer_skills"` on `predict_category_api`.** A volunteer's
+  free-text description of their skills now returns matching skill categories
+  for the Become a Volunteer wizard to pre-select. The new
+  `services/skill_suggestion_service.py` makes one model call over all 69
+  selectable leaf categories, rather than walking one branch of the tree, so a
+  volunteer who tutors, gardens and offers emotional support gets all three.
+  It does not apply the elderly keyword shortcut, because "retired" describes
+  the volunteer. The response uses the same `categories[]` fields as help
+  requests, plus an optional `evidence` phrase per item and an
+  `unmatched_skills` list. A tester can observe:
+  - every returned `category_number` is a leaf, never General or a parent
+    such as `4.3`, with at most 6 items, highest confidence first;
+  - "nothing matched" is a `200` with `categories: []`;
+  - a total model outage is a `502` with `SKILL_SUGGESTION_UNAVAILABLE`;
+  - an unknown `mode` is a `400`.
+- **`suggest_skills` in the unified router**, served by
+  `lambda_function.suggest_skills_handler`, so the mode can move to its own
+  Lambda later without code changes.
+- **A labelled evaluation set and an accuracy harness**, so the accuracy claim
+  behind this feature is reproducible.
+  `docs/metrics/volunteer_skills_eval_set.json` holds 67 volunteer
+  descriptions covering the cases the issue named: bare professions, profiles
+  spanning several areas, text that calls the volunteer retired or senior,
+  five non-English languages, descriptions over 1,000 characters and
+  descriptions stating no skill the taxonomy covers. Eight of them (#239) pair
+  a medical skill named outright with the same skill only described, so the
+  cost of the medical evidence rule is measured. A labelled skill carries
+  a set of acceptable IDs, because 5.1.1 and 5.1.11, and 6.5 and 6.6, say the
+  same thing twice and a model is not wrong for picking either.
+  `python tools/measure_skill_suggestion_accuracy.py` runs it twice against
+  live models and writes `docs/metrics/volunteer_skills_eval.json`; the
+  counting rules live in `tools/skill_eval_scoring.py` and are unit tested.
+  Findings are written up in `docs/metrics/VOLUNTEER_SKILLS_EVAL.md`.
+  `--classifier help_request` runs the same set through today's classifier
+  for comparison, and each pass reports prompt and completion tokens, p95
+  latency, failovers, the cases a fallback model answered, and the medical
+  suggestions the evidence rule dropped. `--session-demo` measures a
+  describe / add more / repeat session. The issue's own ten cases are in
+  `docs/metrics/volunteer_skills_issue_cases.json`, outside the scored set.
+- **Session memory.** The request may carry a `session`, and every response
+  returns the updated one for the web app to send back next time, the same
+  client-held pattern as `conversation_history` in Generate Answer. It holds
+  the free text the volunteer has written in this sitting and what was
+  suggested for each piece; nothing is stored server-side. A description
+  already in the session is answered with no model call (`"cached": true`,
+  zero tokens), and a new one sends only the new text to the model and merges
+  its suggestions with the earlier ones (at most 12, highest first). A session
+  coming back from the client is re-validated like model output.
+- **An explanation on every suggestion**: `explanation.user_said` (the quote
+  from the volunteer's text), `explanation.matched_to` (the category path) and
+  `explanation.why` (the model's reason, at most about ten words). A quote that
+  is not actually in the text is not shown. Medical consultation categories
+  (`5.1.*`) are suggested automatically, but only with such a quote; without
+  one the suggestion is dropped.
+
+**Changed**
+
+- **The prompt is 60% smaller** (4,808 characters, from 11,897). The category
+  list was 86% of it: a full path and the help-request description for every
+  leaf, and the medical descriptions are long symptom-triage text that does not
+  help match a skill. It now writes each group's path once and a short
+  skill-side hint per leaf (`SKILL_HINTS`). A test holds the prompt under 5,000
+  characters. The accuracy figures above were measured on the old prompt and
+  must be re-run on this one.
+
+**Fixed**
+
+- **User text no longer reaches failover logs or the help-request `500`**
+  (from #220, with Surabhi Nair). The model chain logged `str(error)` on
+  every failover, and the Groq SDK's message is the whole HTTP response body:
+  for `json_validate_failed` that includes `failed_generation`, the model's
+  output, which can quote the description. A failover reason now keeps only
+  the exception type, HTTP status and provider error code
+  (`describe_model_error` in `utils/model_fallback.py`), for every service, so
+  a 429 or a timeout still shows. Messages our own code writes are raised as
+  `ModelResponseError` and kept verbatim. An unexpected error in
+  `predict_category` returns `{"error": "Category prediction failed"}` instead
+  of the exception text.
+  *Observable difference:* a rate-limited failover logs
+  `reason=RateLimitError status=429 code=rate_limit_exceeded` and nothing from
+  the response body.
+
+**Unchanged**
+
+- A request without `mode`, or with `mode` null or `""`, returns exactly what
+  it did before. `tests/test_skill_suggestion.py` pins the full response.
+
 ### Emergency Contacts: request logging and location fields — [#146](https://github.com/saayam-for-all/ai/issues/146) · PR [#229](https://github.com/saayam-for-all/ai/pull/229)
 
 **Added**

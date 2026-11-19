@@ -181,6 +181,7 @@ def install_clients(groq_key: str, gemini_key: str) -> list[str]:
     import utils
     import utils.subject_generator as SG
     import services.classification_service as CS
+    import services.skill_suggestion_service as SS
 
     for module in (utils, SG):
         module.groq_llm = C.groq_llm
@@ -189,9 +190,13 @@ def install_clients(groq_key: str, gemini_key: str) -> list[str]:
         module._use_groq = C._use_groq
         module._use_gemini = C._use_gemini
 
-    CS.client = C.client
-    CS._use_groq = C._use_groq
-    CS._gemini_client = C._gemini_client
+    # Both of these do `from utils.client import client, ...` at import time,
+    # so each holds its own copy of the None that was there before the keys
+    # were loaded. Setting them on utils.client alone measures nothing.
+    for module in (CS, SS):
+        module.client = C.client
+        module._use_groq = C._use_groq
+        module._gemini_client = C._gemini_client
 
     return installed
 
