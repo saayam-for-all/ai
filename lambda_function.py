@@ -5,6 +5,11 @@ import json
 import logging
 from utils.subject_generator import generate_subject_from_description
 from services.classification_service import predict_categories
+from services.skill_suggestion_service import (
+    MAX_DESCRIPTION_CHARS,
+    suggest_skills,
+    suggest_skills_for_session,
+)
 from utils.categories import help_categories
 from utils.generate_answer_service import generate_ai_answer
 from utils.model_fallback import ModelChainExhausted
@@ -218,6 +223,18 @@ def predict_category_handler(event, context):
         if isinstance(body, str):
             body = json.loads(body)
 
+        # Volunteer skills share this endpoint (issue #216). A request without
+        # `mode` must behave exactly as it always has, so the branch is taken
+        # only when a mode is actually given.
+        mode = body.get("mode")
+        if mode not in (None, ""):
+            if isinstance(mode, str) and mode.strip().lower() == VOLUNTEER_SKILLS_MODE:
+                return _suggest_skills_response(body)
+            return _response(
+                400,
+                {"error": "Unsupported mode", "supported_modes": [VOLUNTEER_SKILLS_MODE]},
+            )
+
         description = body.get("description")
 
         if not description:
@@ -240,7 +257,80 @@ def predict_category_handler(event, context):
             },
         )
     except Exception as e:
-        return _response(500, {"error": str(e)})
+        # str(e) can quote the description, so neither the log nor the caller
+        # gets it. The exception type is enough to find the failure.
+        print(f"ERROR: category prediction failed: {type(e).__name__}")
+        return _response(500, {"error": "Category prediction failed"})
+
+
+# 1b. Suggest Volunteer Skills (predict_category with mode "volunteer_skills")
+VOLUNTEER_SKILLS_MODE = "volunteer_skills"
+
+
+def _suggest_skills_response(body):
+    """Suggest skill categories for a parsed request body.
+
+    The description is the volunteer's own account of themselves, and the
+    `evidence` quotes in the result are copied from it. Neither is logged, and
+    nor is the `session`, which carries earlier descriptions: only the body's
+    keys, the description's length and the number of session entries.
+    """
+    try:
+        description = body.get("description")
+        if not isinstance(description, str) or not description.strip():
+            return _response(400, {"error": "Description is required"})
+        description = description.strip()[:MAX_DESCRIPTION_CHARS]
+
+        session = body.get("session")
+        session_entries = session.get("entries") if isinstance(session, dict) else None
+        print(
+            "LOG: suggest_skills invoked, body keys:", sorted(body.keys()),
+            "description_chars:", len(description),
+            "session_entries:", len(session_entries) if isinstance(session_entries, list) else 0,
+        )
+
+        # Same item fields the client already reads for help requests, plus
+        # `evidence` and `explanation`. Every category_number is a selectable
+        # leaf. The client sends `session` back unchanged on its next call.
+        return _response(
+            200,
+            suggest_skills_for_session(description, session, suggest=suggest_skills),
+        )
+
+    except ModelChainExhausted:
+        # The exception text names only the operation, but it is not needed:
+        # the model chain has already logged each provider failure.
+        print("ERROR: suggest_skills model chain exhausted")
+        return _response(
+            502,
+            {
+                "error": "Skill suggestion failed",
+                "code": "SKILL_SUGGESTION_UNAVAILABLE",
+            },
+        )
+    except Exception as e:
+        # Only the type: a message here could quote the volunteer's text.
+        print(f"ERROR: suggest_skills failed: {type(e).__name__}")
+        return _response(500, {"error": "Skill suggestion failed"})
+
+
+def suggest_skills_handler(event, context):
+    """AWS Lambda entry point for volunteer skill suggestions.
+
+    The web app reaches this through predict_category_api with
+    `"mode": "volunteer_skills"`. This entry point exists so the router can
+    name it directly, and so it can move to its own Lambda without code
+    changes.
+    """
+    try:
+        body = _parse_event_body(event)
+        if isinstance(body, str):
+            body = json.loads(body)
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return _response(400, {"error": "Request body is not valid JSON"})
+    if not isinstance(body, dict):
+        return _response(400, {"error": "Request body must be a JSON object"})
+    return _suggest_skills_response(body)
 
 
 # 2. More Organizations (Search Orgs)
@@ -784,7 +874,7 @@ def _without_routing_key(event, service):
 def lambda_handler(event, context):
     """
     Unified Lambda handler that routes requests to appropriate service.
-    Supports: predict_category, generate_subject, generate_answer, emergency_contacts, search_orgs
+    Supports: predict_category, suggest_skills, generate_subject, generate_answer, emergency_contacts, search_orgs
     """
     service = None
     try:
@@ -812,6 +902,8 @@ def lambda_handler(event, context):
         # Route to appropriate handler
         if service == "predict_category":
             return predict_category_handler(event, context)
+        elif service == "suggest_skills":
+            return suggest_skills_handler(event, context)
         elif service == "generate_subject":
             return generate_subject_handler(event, context)
         elif service == "generate_answer":
@@ -821,7 +913,7 @@ def lambda_handler(event, context):
         elif service in ["search_orgs", "search_org", "find_nonprofits"]:
             return search_orgs_handler(event, context)
         else:
-            return _response(400, {"error": f"Unknown service: {service}. Supported: predict_category, generate_subject, generate_answer, emergency_contacts, search_orgs"})
+            return _response(400, {"error": f"Unknown service: {service}. Supported: predict_category, suggest_skills, generate_subject, generate_answer, emergency_contacts, search_orgs"})
 
     except Exception as e:
         # str(e) put the raw exception text in the response. Provider and driver

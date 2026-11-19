@@ -27,6 +27,7 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | --- | --- | --- | --- | ---: |
 | [`tests/test_answer_conversation.py`](../../tests/test_answer_conversation.py) | Unit | #183 | `utils/__init__.py prompt assembly` | 24 |
 | [`tests/test_answer_memory.py`](../../tests/test_answer_memory.py) | Unit | #197 | `utils/__init__.py memory_context` | 4 |
+| [`tests/test_classification_privacy.py`](../../tests/test_classification_privacy.py) | Unit | #216 | `utils/model_fallback.py failover reasons, predict_category 500` | 11 |
 | [`tests/test_classification_resilience.py`](../../tests/test_classification_resilience.py) | Unit | - | `services/classification_service.py` | 10 |
 | [`tests/test_client_factory.py`](../../tests/test_client_factory.py) | Unit | #193 | `utils/client.py create_chat_model` | 9 |
 | [`tests/test_client_imports.py`](../../tests/test_client_imports.py) | Integration | #154 | `utils/client.py` | 2 |
@@ -51,9 +52,12 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_session_memory_corrections.py`](../../tests/test_session_memory_corrections.py) | Integration | #197 | `services/session_memory.py corrections` | 1 |
 | [`tests/test_session_memory_privacy.py`](../../tests/test_session_memory_privacy.py) | Integration | #197 | `services/session_memory.py redaction` | 16 |
 | [`tests/test_session_sqlite.py`](../../tests/test_session_sqlite.py) | Integration | #197 | `services/sqlite_memory_store.py` | 21 |
+| [`tests/test_skill_eval_dataset.py`](../../tests/test_skill_eval_dataset.py) | Dataset | #216 | `docs/metrics/volunteer_skills_eval_set.json` | 28 |
+| [`tests/test_skill_eval_scoring.py`](../../tests/test_skill_eval_scoring.py) | Unit | #216 | `tools/skill_eval_scoring.py` | 36 |
+| [`tests/test_skill_suggestion.py`](../../tests/test_skill_suggestion.py) | Unit | #216 | `services/skill_suggestion_service.py` | 76 |
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
 | [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 57 |
-| | | | **Total** | **667** |
+| | | | **Total** | **818** |
 
 ## Every test
 
@@ -100,6 +104,24 @@ Tests for memory-aware answer generation.
 | `test_no_memory_preserves_existing_message_flow` | No memory preserves existing message flow. |
 | `test_oversized_memory_is_rejected` | Oversized memory is rejected. |
 | `test_wrapper_forwards_memory` | Wrapper forwards memory. |
+
+### `test_classification_privacy.py`
+
+*Unit · issue #216 · 11 tests*
+
+Help-request and volunteer text stays out of logs and error bodies (issue #216).
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_model_failure_does_not_log_private_text` | Model failure does not log private text. |
+| `test_prediction_error_does_not_expose_private_text` | Prediction error does not expose private text. |
+| `test_model_not_found_error_logs_safe_reason` | Model not found error logs safe reason. |
+| `test_a_provider_error_keeps_status_and_code_but_not_text` | A 429 or a timeout must still show in CloudWatch; the text must not. |
+| `test_our_own_response_errors_are_logged_verbatim` | A ModelResponseError is written by our code, so its message is kept. |
+| `test_a_free_text_error_with_no_code_logs_only_its_type` | A free text error with no code logs only its type. |
+| `test_classification_failover_never_logs_the_description` | Classification failover never logs the description. |
+
+> 7 test functions expand to 11 cases through parametrisation.
 
 ### `test_classification_resilience.py`
 
@@ -707,6 +729,143 @@ Offline tests of SQLite-backed, session-scoped summarized memory.
 | `test_deletion_does_not_affect_new_session` | Deletion does not affect new session. |
 
 > 12 test functions expand to 21 cases through parametrisation.
+
+### `test_skill_eval_dataset.py`
+
+*Dataset · issue #216 · 28 tests*
+
+The volunteer evaluation set itself (issue #216).
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_every_accepted_id_is_a_selectable_leaf` | The same guarantee the service makes about its own output. |
+| `test_no_label_is_general_or_a_parent` | No label is general or a parent. |
+| `test_accept_sets_are_non_empty_and_free_of_duplicates` | Accept sets are non empty and free of duplicates. |
+| `test_a_skill_name_is_not_reused_within_a_case` | Two skills with the same name would be indistinguishable in the report. |
+| `test_the_set_meets_the_minimum_size` | The set meets the minimum size. |
+| `test_case_ids_are_unique` | Case ids are unique. |
+| `test_each_required_trait_is_represented` | Each required trait is represented. |
+| `test_at_least_two_non_english_languages_appear` | At least two non english languages appear. |
+| `test_every_case_declares_a_language` | Every case declares a language. |
+| `test_short_cases_are_actually_short` | Short cases are actually short. |
+| `test_long_cases_are_actually_long` | Long cases are actually long. |
+| `test_retired_cases_actually_say_retired_or_senior` | Retired cases actually say retired or senior. |
+| `test_multi_area_cases_span_at_least_two_top_level_branches` | Three skills inside one branch is not the case volunteer mode exists for. |
+| `test_no_match_cases_label_no_skills` | No match cases label no skills. |
+| `test_unmatched_skill_cases_say_what_should_land_there` | Unmatched skill cases say what should land there. |
+| `test_no_case_reuses_a_description_from_issue_216` | Paraphrasing the situations is fine; reusing the text is not. |
+| `test_descriptions_fit_within_the_services_own_cap` | Over 2,000 characters the service truncates, and a label at the end of a longer description would be unreachable rather than missed. |
+| `test_descriptions_are_unique` | Descriptions are unique. |
+| `test_the_issue_cases_file_is_the_ten_cases_the_issue_publishes` | Same texts as ISSUE_216_CASES, and the 19 skills the issue's table counts. |
+| `test_the_issue_cases_label_only_selectable_leaves` | The issue cases label only selectable leaves. |
+
+> 20 test functions expand to 28 cases through parametrisation.
+
+### `test_skill_eval_scoring.py`
+
+*Unit · issue #216 · 36 tests*
+
+How volunteer skill suggestions are scored (issue #216).
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_an_exact_single_match_is_one_true_positive` | An exact single match is one true positive. |
+| `test_an_acceptable_alternative_counts_as_found` | 5.1.11 Other Medical Concern stands in for 5.1.1 General Consultation. |
+| `test_one_prediction_cannot_satisfy_two_skills` | Otherwise a single 5.1.1 would score both labelled medical skills. |
+| `test_pairing_does_not_depend_on_the_order_the_labels_were_written` | The case a greedy walk gets wrong. |
+| `test_an_ambiguous_pairing_credits_the_confident_prediction` | Totals do not depend on this, but the report should be deterministic. |
+| `test_leftover_predictions_are_false_positives` | Leftover predictions are false positives. |
+| `test_unfound_skills_are_false_negatives` | Unfound skills are false negatives. |
+| `test_predicting_nothing_on_a_labelled_case_is_all_misses` | Predicting nothing on a labelled case is all misses. |
+| `test_a_no_match_case_with_suggestions_is_all_false_positives` | A no match case with suggestions is all false positives. |
+| `test_a_correctly_empty_no_match_case_counts_nowhere` | A correctly empty no match case counts nowhere. |
+| `test_false_suggestion_rate_isolates_the_invented_skills` | Recall cannot see this, and precision dilutes it across every case. |
+| `test_a_provider_error_scores_every_labelled_skill_as_missed` | A run full of 429s must not read as perfect precision. |
+| `test_errors_are_counted_in_the_aggregate` | Errors are counted in the aggregate. |
+| `test_totals_are_micro_averaged_across_cases` | Worked by hand: 3 TP, 1 FP, 2 FN. |
+| `test_a_run_that_answered_nothing_reports_undefined_not_zero` | 0% reads as "always wrong"; the model was never asked a question it answered. |
+| `test_aggregating_no_cases_does_not_divide_by_zero` | Aggregating no cases does not divide by zero. |
+| `test_trait_buckets_are_scored_independently` | Trait buckets are scored independently. |
+| `test_expected_skills_are_read_from_the_eval_set_shape` | Expected skills are read from the eval set shape. |
+| `test_predictions_are_read_from_the_service_response_shape` | Predictions are read from the service response shape. |
+| `test_empty_inputs_read_as_empty_lists` | Empty inputs read as empty lists. |
+| `test_a_missing_confidence_does_not_break_reading_a_prediction` | A missing confidence does not break reading a prediction. |
+| `test_percentile_is_nearest_rank` | Percentile is nearest rank. |
+| `test_percentile_of_nothing_is_none_not_zero` | Percentile of nothing is none not zero. |
+| `test_percentile_rejects_a_fraction_outside_zero_to_one` | Percentile rejects a fraction outside zero to one. |
+| `test_run_statistics_reports_mean_tokens_split_and_total` | Run statistics reports mean tokens split and total. |
+| `test_run_statistics_counts_reliability_separately_from_accuracy` | Run statistics counts reliability separately from accuracy. |
+| `test_without_a_primary_model_no_case_is_called_a_fallback` | Without a primary model no case is called a fallback. |
+| `test_run_statistics_reports_explanation_shares_and_medical_drops` | Run statistics reports explanation shares and medical drops. |
+| `test_run_statistics_of_rows_from_the_older_harness_does_not_guess` | Rows from before the token split have only `tokens` and `seconds`. |
+
+> 29 test functions expand to 36 cases through parametrisation.
+
+### `test_skill_suggestion.py`
+
+*Unit · issue #216 · 76 tests*
+
+Volunteer skill suggestions: predict_category_api with mode "volunteer_skills" (issue #216).
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_leaf_set_is_exactly_the_selectable_categories` | Every leaf, and nothing else: no General, no parent. |
+| `test_prompt_offers_every_leaf_and_no_parent_or_general` | Prompt offers every leaf and no parent or general. |
+| `test_category_list_is_a_fixed_system_message` | The category list never changes between requests, so it can be cached; only the user message carries the volunteer's text. |
+| `test_skills_from_several_areas_are_all_returned` | The case the help-request walk cannot serve: one volunteer, three areas. |
+| `test_general_parents_and_unknown_ids_are_dropped` | General parents and unknown ids are dropped. |
+| `test_a_category_name_is_mapped_to_its_leaf_id` | A category name is mapped to its leaf id. |
+| `test_duplicates_keep_the_highest_confidence` | Duplicates keep the highest confidence. |
+| `test_confidence_is_clamped_and_unparseable_values_are_dropped` | Confidence is clamped and unparseable values are dropped. |
+| `test_nan_confidence_is_treated_as_zero` | Nan confidence is treated as zero. |
+| `test_threshold_is_inclusive_at_the_default` | Threshold is inclusive at the default. |
+| `test_results_are_capped_at_six_highest_first` | Results are capped at six highest first. |
+| `test_threshold_and_cap_are_configurable` | Threshold and cap are configurable. |
+| `test_bad_configuration_falls_back_to_the_defaults` | Bad configuration falls back to the defaults. |
+| `test_unmatched_skills_are_cleaned` | Unmatched skills are cleaned. |
+| `test_missing_unmatched_skills_is_an_empty_list` | Missing unmatched skills is an empty list. |
+| `test_description_is_capped_before_it_reaches_the_model` | Description is capped before it reaches the model. |
+| `test_retired_volunteer_is_not_routed_to_elderly_care` | Retired volunteer is not routed to elderly care. |
+| `test_no_match_is_a_valid_answer_and_does_not_fail_over` | No match is a valid answer and does not fail over. |
+| `test_only_filtered_out_results_is_still_a_valid_answer` | General-only output is filtered to nothing; that is 'no match', not an outage. |
+| `test_errors_and_malformed_output_fail_over_to_the_next_model` | Errors and malformed output fail over to the next model. |
+| `test_all_groq_failures_reach_gemini_with_the_same_instructions` | All groq failures reach gemini with the same instructions. |
+| `test_total_outage_is_a_502_through_the_handler` | Total outage is a 502 through the handler. |
+| `test_volunteer_mode_response_envelope` | Volunteer mode response envelope. |
+| `test_mode_value_is_matched_leniently` | Mode value is matched leniently. |
+| `test_volunteer_mode_requires_a_description` | Volunteer mode requires a description. |
+| `test_unknown_mode_is_rejected_rather_than_guessed` | Unknown mode is rejected rather than guessed. |
+| `test_handler_trims_and_caps_the_description` | Handler trims and caps the description. |
+| `test_unexpected_failure_is_a_generic_500` | Unexpected failure is a generic 500. |
+| `test_router_reaches_suggest_skills_by_service_name` | Router reaches suggest skills by service name. |
+| `test_suggest_skills_handler_rejects_a_malformed_body` | Suggest skills handler rejects a malformed body. |
+| `test_request_without_mode_returns_exactly_what_it_did_before` | Create Help Request must not notice that volunteer mode exists. |
+| `test_request_without_mode_still_reports_its_own_errors` | Request without mode still reports its own errors. |
+| `test_description_and_evidence_are_not_logged_on_success` | Description and evidence are not logged on success. |
+| `test_description_is_not_logged_when_models_fail` | Failover warnings quote the exception; ours must not quote the text. |
+| `test_provider_error_text_quoting_the_output_is_not_logged` | Groq's json_validate_failed error carries the model's partial output. |
+| `test_session_text_is_not_logged` | The session carries earlier descriptions; they are no more loggable. |
+| `test_hints_name_only_selectable_leaves` | Hints name only selectable leaves. |
+| `test_prompt_stays_within_its_size_budget` | The category list is most of every call's tokens, on every call. |
+| `test_shared_paths_are_written_once_per_group` | Shared paths are written once per group. |
+| `test_each_suggestion_says_what_was_written_what_matched_and_why` | Each suggestion says what was written what matched and why. |
+| `test_a_quote_the_volunteer_did_not_write_is_not_shown` | A quote the volunteer did not write is not shown. |
+| `test_quotes_match_across_case_spacing_and_punctuation` | Quotes match across case spacing and punctuation. |
+| `test_medical_skill_is_suggested_with_its_quote` | Medical skill is suggested with its quote. |
+| `test_medical_skill_without_a_real_quote_is_not_suggested` | Medical skill without a real quote is not suggested. |
+| `test_wellbeing_skills_outside_medical_consultation_need_no_quote` | Wellbeing skills outside medical consultation need no quote. |
+| `test_first_call_starts_a_session_holding_the_text` | First call starts a session holding the text. |
+| `test_repeating_a_description_costs_no_tokens` | Repeating a description costs no tokens. |
+| `test_only_the_new_text_is_sent_and_results_are_merged` | Only the new text is sent and results are merged. |
+| `test_a_skill_named_twice_keeps_its_most_confident_suggestion` | A skill named twice keeps its most confident suggestion. |
+| `test_a_session_from_the_client_is_revalidated_not_trusted` | A session from the client is revalidated not trusted. |
+| `test_a_missing_or_malformed_session_is_a_fresh_one` | A missing or malformed session is a fresh one. |
+| `test_a_session_remembers_its_latest_entries_only` | A session remembers its laentries only. |
+| `test_merged_results_are_capped` | Merged results are capped. |
+| `test_handler_round_trips_the_session` | Handler round trips the session. |
+| `test_describe_add_more_then_repeat_the_first` | One volunteer's session: describe, add more, then repeat the first text. |
+
+> 55 test functions expand to 76 cases through parametrisation.
 
 ### `test_subject_generator.py`
 
