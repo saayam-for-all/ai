@@ -9,7 +9,7 @@ def add_volunteer(volunteer):
         df = pd.read_csv(CSV_PATH)
     else:
         df = pd.DataFrame(columns=[
-            "VOL_ID", "VolunteerName", "ContactInformation", "Location",
+            "VolunteerId", "VOL_ID", "VolunteerName", "ContactInformation", "Location",
             "Skills", "LanguagesSpoken", "PreferredServiceAreas",
             "Rating", "Status", "TransportationAvailability", "WillingnessToTravel"
         ])
@@ -17,6 +17,7 @@ def add_volunteer(volunteer):
     new_id = generate_id(CSV_PATH, "VOL")
 
     new_row = {
+        "VolunteerId": new_id,  # Keep VolunteerId consistent with VOL_ID
         "VOL_ID": new_id,
         "VolunteerName": volunteer.VolunteerName,
         "ContactInformation": volunteer.ContactInformation,

@@ -20,7 +20,7 @@ def add_request(req):
 
     # Create new row with proper mapping
     new_row = {
-        "RequestId": new_id,  # Will be auto-generated or can use UUID
+        "RequestId": new_id,  # Keep RequestId consistent with REQ_ID
         "REQ_ID": new_id,
         "RequestCategory": req.RequestCategory,
         "Location": req.Location,
