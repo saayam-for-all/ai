@@ -1,0 +1,3568 @@
+{
+  "issue": "#216",
+  "eval_set": "volunteer_skills_eval_set.json",
+  "cases": 59,
+  "threshold": 0.8,
+  "passes": [
+    {
+      "label": "run 1",
+      "runs": [
+        {
+          "case": "short-dentist",
+          "traits": [
+            "short"
+          ],
+          "predicted": [
+            {
+              "id": "5.1.3",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "dentistry": "5.1.3"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2613,
+          "seconds": 0.68,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "short-welder",
+          "traits": [
+            "short"
+          ],
+          "predicted": [
+            {
+              "id": "3.3.11",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "welding": "3.3.11"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2609,
+          "seconds": 0.46,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "short-optometrist",
+          "traits": [
+            "short"
+          ],
+          "predicted": [
+            {
+              "id": "5.1.4",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "eye care": "5.1.4"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2626,
+          "seconds": 0.46,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "short-roofer",
+          "traits": [
+            "short"
+          ],
+          "predicted": [
+            {
+              "id": "3.3.7",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "roofing": "3.3.7"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2610,
+          "seconds": 0.34,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "short-paediatrician",
+          "traits": [
+            "short"
+          ],
+          "predicted": [
+            {
+              "id": "5.1.10",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "child health": "5.1.10"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2642,
+          "seconds": 0.53,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "short-locksmith",
+          "traits": [
+            "short"
+          ],
+          "predicted": [
+            {
+              "id": "3.3.8",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "locksmithing": "3.3.8"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2601,
+          "seconds": 0.69,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "hvac-science-tutor-bulk-cook",
+          "traits": [
+            "multi_area"
+          ],
+          "predicted": [
+            {
+              "id": "3.3.6",
+              "confidence": 0.9
+            },
+            {
+              "id": "4.3.3",
+              "confidence": 0.9
+            },
+            {
+              "id": "1.3.2",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "hvac": "3.3.6",
+            "science tutoring": "4.3.3",
+            "bulk cooking": "1.3.2"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 3,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2702,
+          "seconds": 1.56,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "carpenter-essay-driver",
+          "traits": [
+            "multi_area"
+          ],
+          "predicted": [
+            {
+              "id": "3.3.4",
+              "confidence": 0.9
+            },
+            {
+              "id": "4.2",
+              "confidence": 0.9
+            },
+            {
+              "id": "6.5",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "carpentry": "3.3.4",
+            "essay review": "4.2",
+            "driving to appointments": "6.5"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 3,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2705,
+          "seconds": 0.52,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "nurse-listener-prescriptions-driver",
+          "traits": [
+            "multi_area"
+          ],
+          "predicted": [
+            {
+              "id": "5.1.1",
+              "confidence": 0.9
+            },
+            {
+              "id": "5.2",
+              "confidence": 0.9
+            },
+            {
+              "id": "5.3",
+              "confidence": 0.8
+            },
+            {
+              "id": "6.5",
+              "confidence": 0.8
+            },
+            {
+              "id": "6.6",
+              "confidence": 0.8
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "nursing consultation": "5.1.1",
+            "emotional support": "5.3",
+            "medicine delivery": "5.2",
+            "transport": "6.5"
+          },
+          "missed": [],
+          "spurious": [
+            "6.6"
+          ],
+          "true_positives": 4,
+          "false_positives": 1,
+          "false_negatives": 0,
+          "tokens": 2886,
+          "seconds": 0.89,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "tailor-career-coach-gardener",
+          "traits": [
+            "multi_area"
+          ],
+          "predicted": [
+            {
+              "id": "2.4",
+              "confidence": 0.9
+            },
+            {
+              "id": "4.6",
+              "confidence": 0.9
+            },
+            {
+              "id": "3.3.5",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "tailoring": "2.4",
+            "career guidance": "4.6",
+            "gardening": "3.3.5"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 3,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2711,
+          "seconds": 0.57,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "mason-maths-groceries",
+          "traits": [
+            "multi_area"
+          ],
+          "predicted": [
+            {
+              "id": "3.3.10",
+              "confidence": 0.9
+            },
+            {
+              "id": "4.3.1",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "masonry": "3.3.10",
+            "maths tutoring": "4.3.1"
+          },
+          "missed": [
+            "grocery shopping"
+          ],
+          "spurious": [],
+          "true_positives": 2,
+          "false_positives": 0,
+          "false_negatives": 1,
+          "tokens": 2769,
+          "seconds": 0.99,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "painter-english-roommate",
+          "traits": [
+            "multi_area"
+          ],
+          "predicted": [
+            {
+              "id": "3.3.9",
+              "confidence": 0.9
+            },
+            {
+              "id": "4.3.2",
+              "confidence": 0.9
+            },
+            {
+              "id": "3.6",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "painting": "3.3.9",
+            "english tutoring": "4.3.2",
+            "finding a flatmate": "3.6"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 3,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2722,
+          "seconds": 0.64,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "physio-meal-plans-visits",
+          "traits": [
+            "multi_area"
+          ],
+          "predicted": [
+            {
+              "id": "5.1.6",
+              "confidence": 0.9
+            },
+            {
+              "id": "1.3.3",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "physiotherapy": "5.1.6",
+            "meal planning": "1.3.3"
+          },
+          "missed": [
+            "social connection"
+          ],
+          "spurious": [],
+          "true_positives": 2,
+          "false_positives": 0,
+          "false_negatives": 1,
+          "tokens": 2753,
+          "seconds": 1.43,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "electrician-scholarships-pool",
+          "traits": [
+            "multi_area"
+          ],
+          "predicted": [
+            {
+              "id": "3.3.3",
+              "confidence": 0.9
+            },
+            {
+              "id": "4.4",
+              "confidence": 0.9
+            },
+            {
+              "id": "3.3.12",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "electrical work": "3.3.3",
+            "scholarship knowledge": "4.4",
+            "pool maintenance": "3.3.12"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 3,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2737,
+          "seconds": 0.74,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "devices-for-elders-testprep-coding",
+          "traits": [
+            "multi_area"
+          ],
+          "predicted": [
+            {
+              "id": "6.2",
+              "confidence": 0.9
+            },
+            {
+              "id": "4.3.5",
+              "confidence": 0.9
+            },
+            {
+              "id": "4.3.4",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "digital support for seniors": "6.2",
+            "test prep": "4.3.5",
+            "computer science tutoring": "4.3.4"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 3,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2724,
+          "seconds": 0.63,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "retired-accountant-maths-tutor",
+          "traits": [
+            "contains_retired",
+            "unmatched_skills"
+          ],
+          "predicted": [
+            {
+              "id": "4.3.1",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [
+            "accounting"
+          ],
+          "matched": {
+            "maths tutoring": "4.3.1"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2640,
+          "seconds": 0.68,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "retired-nurse-medication",
+          "traits": [
+            "contains_retired"
+          ],
+          "predicted": [
+            {
+              "id": "6.3",
+              "confidence": 0.9
+            },
+            {
+              "id": "5.5",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "medication reminders": "6.3",
+            "health education": "5.5"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 2,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2662,
+          "seconds": 0.68,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "senior-carpenter-handyman",
+          "traits": [
+            "contains_retired"
+          ],
+          "predicted": [
+            {
+              "id": "3.3.4",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "carpentry": "3.3.4"
+          },
+          "missed": [
+            "handyman work"
+          ],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 1,
+          "tokens": 2632,
+          "seconds": 1.18,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "retired-teacher-reading-writing",
+          "traits": [
+            "contains_retired"
+          ],
+          "predicted": [
+            {
+              "id": "4.3.2",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "english tutoring": "4.3.2"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2624,
+          "seconds": 1.14,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "retired-engineer-welding-tutoring",
+          "traits": [
+            "contains_retired",
+            "multi_area"
+          ],
+          "predicted": [
+            {
+              "id": "3.3.11",
+              "confidence": 0.9
+            },
+            {
+              "id": "4.3.1",
+              "confidence": 0.9
+            },
+            {
+              "id": "4.3.3",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "welding": "3.3.11",
+            "science tutoring": "4.3.3",
+            "maths tutoring": "4.3.1"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 3,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2770,
+          "seconds": 3.49,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "retired-driver",
+          "traits": [
+            "contains_retired"
+          ],
+          "predicted": [
+            {
+              "id": "6.6",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "transport to appointments": "6.6"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2679,
+          "seconds": 1.47,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "es-electricista-pintor-cerrajero",
+          "traits": [
+            "non_english"
+          ],
+          "predicted": [
+            {
+              "id": "3.3.3",
+              "confidence": 0.9
+            },
+            {
+              "id": "3.3.9",
+              "confidence": 0.9
+            },
+            {
+              "id": "3.3.8",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "electrical work": "3.3.3",
+            "painting": "3.3.9",
+            "locksmithing": "3.3.8"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 3,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2681,
+          "seconds": 0.57,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "es-cocina-comunitaria",
+          "traits": [
+            "non_english"
+          ],
+          "predicted": [
+            {
+              "id": "1.3.2",
+              "confidence": 0.9
+            },
+            {
+              "id": "1.3.3",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "bulk cooking": "1.3.2",
+            "nutritional meal planning": "1.3.3"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 2,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2675,
+          "seconds": 0.82,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "fr-jardinage-peinture",
+          "traits": [
+            "non_english"
+          ],
+          "predicted": [
+            {
+              "id": "3.3.5",
+              "confidence": 0.9
+            },
+            {
+              "id": "3.3.9",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "gardening": "3.3.5",
+            "painting": "3.3.9"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 2,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2650,
+          "seconds": 0.56,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "hi-ganit-vigyan",
+          "traits": [
+            "non_english",
+            "short"
+          ],
+          "predicted": [
+            {
+              "id": "4.3.1",
+              "confidence": 0.9
+            },
+            {
+              "id": "4.3.3",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "maths tutoring": "4.3.1",
+            "science tutoring": "4.3.3"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 2,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2642,
+          "seconds": 0.45,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "de-pflege-termine",
+          "traits": [
+            "non_english"
+          ],
+          "predicted": [
+            {
+              "id": "6.6",
+              "confidence": 0.9
+            },
+            {
+              "id": "6.5",
+              "confidence": 0.8
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "transport to appointments": "6.6"
+          },
+          "missed": [
+            "nursing consultation"
+          ],
+          "spurious": [
+            "6.5"
+          ],
+          "true_positives": 1,
+          "false_positives": 1,
+          "false_negatives": 1,
+          "tokens": 2821,
+          "seconds": 0.73,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "zh-dentist-carpentry",
+          "traits": [
+            "non_english"
+          ],
+          "predicted": [
+            {
+              "id": "5.1.3",
+              "confidence": 0.9
+            },
+            {
+              "id": "3.3.4",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "dentistry": "5.1.3",
+            "carpentry": "3.3.4"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 2,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2694,
+          "seconds": 0.68,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "long-handyman-and-cook",
+          "traits": [
+            "long",
+            "multi_area"
+          ],
+          "predicted": [
+            {
+              "id": "3.3.1",
+              "confidence": 0.9
+            },
+            {
+              "id": "3.3.2",
+              "confidence": 0.9
+            },
+            {
+              "id": "3.3.9",
+              "confidence": 0.9
+            },
+            {
+              "id": "3.3.5",
+              "confidence": 0.9
+            },
+            {
+              "id": "1.3.2",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "plumbing": "3.3.1",
+            "painting": "3.3.9",
+            "handyman work": "3.3.2",
+            "gardening": "3.3.5",
+            "bulk cooking": "1.3.2"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 5,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 3090,
+          "seconds": 1.76,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "long-teacher-career",
+          "traits": [
+            "long"
+          ],
+          "predicted": [
+            {
+              "id": "4.3.1",
+              "confidence": 0.95
+            },
+            {
+              "id": "4.6",
+              "confidence": 0.92
+            },
+            {
+              "id": "4.1",
+              "confidence": 0.9
+            },
+            {
+              "id": "4.2",
+              "confidence": 0.88
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "maths tutoring": "4.3.1",
+            "college application help": "4.1",
+            "essay review": "4.2",
+            "career guidance": "4.6"
+          },
+          "missed": [
+            "test prep"
+          ],
+          "spurious": [],
+          "true_positives": 4,
+          "false_positives": 0,
+          "false_negatives": 1,
+          "tokens": 2977,
+          "seconds": 0.55,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "long-community-health",
+          "traits": [
+            "long"
+          ],
+          "predicted": [
+            {
+              "id": "5.1.5",
+              "confidence": 0.9
+            },
+            {
+              "id": "5.4",
+              "confidence": 0.9
+            },
+            {
+              "id": "5.2",
+              "confidence": 0.9
+            },
+            {
+              "id": "5.5",
+              "confidence": 0.8
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "health education": "5.5",
+            "medication reminders": "5.4",
+            "medicine delivery": "5.2"
+          },
+          "missed": [
+            "general consultation",
+            "emotional support"
+          ],
+          "spurious": [
+            "5.1.5"
+          ],
+          "true_positives": 3,
+          "false_positives": 1,
+          "false_negatives": 2,
+          "tokens": 3055,
+          "seconds": 0.89,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "no-match-free-weekends",
+          "traits": [
+            "no_match"
+          ],
+          "predicted": [],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {},
+          "missed": [],
+          "spurious": [],
+          "true_positives": 0,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2579,
+          "seconds": 0.57,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "no-match-friendly",
+          "traits": [
+            "no_match"
+          ],
+          "predicted": [],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {},
+          "missed": [],
+          "spurious": [],
+          "true_positives": 0,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2580,
+          "seconds": 0.45,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "no-match-es-domingos",
+          "traits": [
+            "no_match",
+            "non_english"
+          ],
+          "predicted": [],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {},
+          "missed": [],
+          "spurious": [],
+          "true_positives": 0,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2574,
+          "seconds": 0.58,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "no-match-enthusiastic",
+          "traits": [
+            "no_match"
+          ],
+          "predicted": [],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {},
+          "missed": [],
+          "spurious": [],
+          "true_positives": 0,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2570,
+          "seconds": 0.58,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "no-match-translator-bookkeeper",
+          "traits": [
+            "no_match",
+            "unmatched_skills"
+          ],
+          "predicted": [],
+          "unmatched_skills": [
+            "I translate documents between Portuguese and English",
+            "I do the bookkeeping for two small businesses"
+          ],
+          "expected_unmatched": [
+            "translation",
+            "bookkeeping"
+          ],
+          "matched": {},
+          "missed": [],
+          "spurious": [],
+          "true_positives": 0,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2621,
+          "seconds": 1.09,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "photographer-plumber",
+          "traits": [
+            "unmatched_skills"
+          ],
+          "predicted": [
+            {
+              "id": "3.3.1",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [
+            "professional photographer"
+          ],
+          "expected_unmatched": [
+            "photography"
+          ],
+          "matched": {
+            "plumbing": "3.3.1"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2635,
+          "seconds": 0.81,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "solicitor-english-tutor",
+          "traits": [
+            "unmatched_skills"
+          ],
+          "predicted": [
+            {
+              "id": "4.3.2",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [
+            "legal advice"
+          ],
+          "matched": {
+            "english tutoring": "4.3.2"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2626,
+          "seconds": 0.55,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "pet-boarding-painter",
+          "traits": [
+            "unmatched_skills"
+          ],
+          "predicted": [
+            {
+              "id": "3.3.9",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [
+            "I board dogs and cats when their owners are away"
+          ],
+          "expected_unmatched": [
+            "pet care"
+          ],
+          "matched": {
+            "painting": "3.3.9"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2655,
+          "seconds": 3.03,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "hvac-only",
+          "traits": [],
+          "predicted": [
+            {
+              "id": "3.3.6",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "hvac": "3.3.6"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2620,
+          "seconds": 1.93,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "clothing-donations",
+          "traits": [],
+          "predicted": [
+            {
+              "id": "2.1",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "donating clothes": "2.1"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2619,
+          "seconds": 0.59,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "lease-reader",
+          "traits": [],
+          "predicted": [
+            {
+              "id": "3.1",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "lease support": "3.1"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2642,
+          "seconds": 1.4,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "van-owner-moving",
+          "traits": [],
+          "predicted": [
+            {
+              "id": "3.7",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "move in help": "3.7"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2695,
+          "seconds": 0.51,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "therapist-listening",
+          "traits": [],
+          "predicted": [
+            {
+              "id": "5.3",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "mental wellbeing support": "5.3"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2633,
+          "seconds": 0.6,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "utilities-setup",
+          "traits": [],
+          "predicted": [
+            {
+              "id": "3.4",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "utilities setup": "3.4"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2634,
+          "seconds": 0.5,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "study-groups",
+          "traits": [],
+          "predicted": [
+            {
+              "id": "4.5",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "study group formation": "4.5"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2618,
+          "seconds": 0.47,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "vaccination-drives",
+          "traits": [],
+          "predicted": [
+            {
+              "id": "5.1.9",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "vaccinations and screenings": "5.1.9"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2659,
+          "seconds": 0.58,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "selling-furniture",
+          "traits": [],
+          "predicted": [
+            {
+              "id": "3.10",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "selling things": "3.10"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2608,
+          "seconds": 0.41,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "emergency-winter-coats",
+          "traits": [],
+          "predicted": [
+            {
+              "id": "2.1",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "emergency clothing": "2.1"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2638,
+          "seconds": 0.95,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "senior-meals",
+          "traits": [],
+          "predicted": [
+            {
+              "id": "1.3.1",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "meal support for elders": "1.3.1"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2642,
+          "seconds": 0.39,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "scheduling-appointments",
+          "traits": [],
+          "predicted": [
+            {
+              "id": "6.7",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "scheduling appointments": "6.7"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2632,
+          "seconds": 1.76,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "rent-support",
+          "traits": [],
+          "predicted": [
+            {
+              "id": "3.2",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "tenant rent support": "3.2"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2636,
+          "seconds": 0.59,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "senior-relocation",
+          "traits": [],
+          "predicted": [
+            {
+              "id": "6.1",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "senior relocation": "6.1"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2673,
+          "seconds": 0.59,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "medical-devices",
+          "traits": [],
+          "predicted": [
+            {
+              "id": "6.4",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "medical device setup": "6.4"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2674,
+          "seconds": 0.52,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "food-bank",
+          "traits": [],
+          "predicted": [
+            {
+              "id": "1.1",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "food assistance": "1.1"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2611,
+          "seconds": 0.4,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "borrow-formal-clothes",
+          "traits": [],
+          "predicted": [
+            {
+              "id": "2.1",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "borrowing clothes": "2.1"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2614,
+          "seconds": 0.57,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "education-resources",
+          "traits": [],
+          "predicted": [
+            {
+              "id": "4.7",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "education resource sharing": "4.7"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2630,
+          "seconds": 0.82,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "rental-search",
+          "traits": [],
+          "predicted": [
+            {
+              "id": "3.5",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "looking for rental": "3.5"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2614,
+          "seconds": 0.58,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "dermatology",
+          "traits": [],
+          "predicted": [
+            {
+              "id": "5.1.7",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "dermatology": "5.1.7"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2662,
+          "seconds": 0.66,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "cultural-cuisine",
+          "traits": [],
+          "predicted": [
+            {
+              "id": "1.3.4",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "cultural cuisine guidance": "1.3.4"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2624,
+          "seconds": 0.39,
+          "rate_limit_retries": 0,
+          "error": null
+        }
+      ],
+      "summary": {
+        "cases": 59,
+        "errors": 0,
+        "true_positives": 89,
+        "false_positives": 3,
+        "false_negatives": 7,
+        "recall": 0.9270833333333334,
+        "precision": 0.967391304347826,
+        "f1": 0.9468085106382979
+      },
+      "by_trait": {
+        "contains_retired": {
+          "cases": 6,
+          "errors": 0,
+          "true_positives": 9,
+          "false_positives": 0,
+          "false_negatives": 1,
+          "recall": 0.9,
+          "precision": 1.0,
+          "f1": 0.9473684210526316
+        },
+        "long": {
+          "cases": 3,
+          "errors": 0,
+          "true_positives": 12,
+          "false_positives": 1,
+          "false_negatives": 3,
+          "recall": 0.8,
+          "precision": 0.9230769230769231,
+          "f1": 0.8571428571428571
+        },
+        "multi_area": {
+          "cases": 11,
+          "errors": 0,
+          "true_positives": 34,
+          "false_positives": 1,
+          "false_negatives": 2,
+          "recall": 0.9444444444444444,
+          "precision": 0.9714285714285714,
+          "f1": 0.9577464788732395
+        },
+        "no_match": {
+          "cases": 5,
+          "errors": 0,
+          "true_positives": 0,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "recall": null,
+          "precision": null,
+          "f1": null
+        },
+        "non_english": {
+          "cases": 7,
+          "errors": 0,
+          "true_positives": 12,
+          "false_positives": 1,
+          "false_negatives": 1,
+          "recall": 0.9230769230769231,
+          "precision": 0.9230769230769231,
+          "f1": 0.9230769230769231
+        },
+        "short": {
+          "cases": 7,
+          "errors": 0,
+          "true_positives": 8,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "recall": 1.0,
+          "precision": 1.0,
+          "f1": 1.0
+        },
+        "unmatched_skills": {
+          "cases": 5,
+          "errors": 0,
+          "true_positives": 4,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "recall": 1.0,
+          "precision": 1.0,
+          "f1": 1.0
+        }
+      },
+      "false_suggestions": {
+        "cases": 5,
+        "cases_with_suggestions": 0,
+        "suggestions": 0,
+        "rate": 0.0
+      },
+      "tokens_total": 157920
+    },
+    {
+      "label": "run 2",
+      "runs": [
+        {
+          "case": "short-dentist",
+          "traits": [
+            "short"
+          ],
+          "predicted": [
+            {
+              "id": "5.1.3",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "dentistry": "5.1.3"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2604,
+          "seconds": 0.25,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "short-welder",
+          "traits": [
+            "short"
+          ],
+          "predicted": [
+            {
+              "id": "3.3.11",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "welding": "3.3.11"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2609,
+          "seconds": 0.61,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "short-optometrist",
+          "traits": [
+            "short"
+          ],
+          "predicted": [
+            {
+              "id": "5.1.4",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "eye care": "5.1.4"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2624,
+          "seconds": 0.52,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "short-roofer",
+          "traits": [
+            "short"
+          ],
+          "predicted": [
+            {
+              "id": "3.3.7",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "roofing": "3.3.7"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2602,
+          "seconds": 0.55,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "short-paediatrician",
+          "traits": [
+            "short"
+          ],
+          "predicted": [
+            {
+              "id": "5.1.10",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "child health": "5.1.10"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2645,
+          "seconds": 0.68,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "short-locksmith",
+          "traits": [
+            "short"
+          ],
+          "predicted": [
+            {
+              "id": "3.3.8",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "locksmithing": "3.3.8"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2604,
+          "seconds": 0.91,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "hvac-science-tutor-bulk-cook",
+          "traits": [
+            "multi_area"
+          ],
+          "predicted": [
+            {
+              "id": "3.3.6",
+              "confidence": 0.9
+            },
+            {
+              "id": "4.3.3",
+              "confidence": 0.9
+            },
+            {
+              "id": "1.3.2",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "hvac": "3.3.6",
+            "science tutoring": "4.3.3",
+            "bulk cooking": "1.3.2"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 3,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2754,
+          "seconds": 0.75,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "carpenter-essay-driver",
+          "traits": [
+            "multi_area"
+          ],
+          "predicted": [
+            {
+              "id": "3.3.4",
+              "confidence": 0.9
+            },
+            {
+              "id": "4.2",
+              "confidence": 0.9
+            },
+            {
+              "id": "6.5",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "carpentry": "3.3.4",
+            "essay review": "4.2",
+            "driving to appointments": "6.5"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 3,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2705,
+          "seconds": 1.11,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "nurse-listener-prescriptions-driver",
+          "traits": [
+            "multi_area"
+          ],
+          "predicted": [
+            {
+              "id": "5.1.1",
+              "confidence": 0.9
+            },
+            {
+              "id": "5.2",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "nursing consultation": "5.1.1",
+            "medicine delivery": "5.2"
+          },
+          "missed": [
+            "emotional support",
+            "transport"
+          ],
+          "spurious": [],
+          "true_positives": 2,
+          "false_positives": 0,
+          "false_negatives": 2,
+          "tokens": 2758,
+          "seconds": 0.94,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "tailor-career-coach-gardener",
+          "traits": [
+            "multi_area"
+          ],
+          "predicted": [
+            {
+              "id": "2.4",
+              "confidence": 0.9
+            },
+            {
+              "id": "4.6",
+              "confidence": 0.9
+            },
+            {
+              "id": "3.3.5",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "tailoring": "2.4",
+            "career guidance": "4.6",
+            "gardening": "3.3.5"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 3,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2707,
+          "seconds": 0.94,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "mason-maths-groceries",
+          "traits": [
+            "multi_area"
+          ],
+          "predicted": [
+            {
+              "id": "3.3.10",
+              "confidence": 0.9
+            },
+            {
+              "id": "4.3.1",
+              "confidence": 0.9
+            },
+            {
+              "id": "1.2",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "masonry": "3.3.10",
+            "maths tutoring": "4.3.1",
+            "grocery shopping": "1.2"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 3,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2763,
+          "seconds": 0.74,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "painter-english-roommate",
+          "traits": [
+            "multi_area"
+          ],
+          "predicted": [
+            {
+              "id": "3.3.9",
+              "confidence": 0.9
+            },
+            {
+              "id": "4.3.2",
+              "confidence": 0.9
+            },
+            {
+              "id": "3.6",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "painting": "3.3.9",
+            "english tutoring": "4.3.2",
+            "finding a flatmate": "3.6"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 3,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2717,
+          "seconds": 0.61,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "physio-meal-plans-visits",
+          "traits": [
+            "multi_area"
+          ],
+          "predicted": [
+            {
+              "id": "5.1.6",
+              "confidence": 0.9
+            },
+            {
+              "id": "6.8",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "physiotherapy": "5.1.6",
+            "social connection": "6.8"
+          },
+          "missed": [
+            "meal planning"
+          ],
+          "spurious": [],
+          "true_positives": 2,
+          "false_positives": 0,
+          "false_negatives": 1,
+          "tokens": 2722,
+          "seconds": 0.55,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "electrician-scholarships-pool",
+          "traits": [
+            "multi_area"
+          ],
+          "predicted": [
+            {
+              "id": "3.3.3",
+              "confidence": 0.9
+            },
+            {
+              "id": "4.4",
+              "confidence": 0.9
+            },
+            {
+              "id": "3.3.12",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "electrical work": "3.3.3",
+            "scholarship knowledge": "4.4",
+            "pool maintenance": "3.3.12"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 3,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2743,
+          "seconds": 0.66,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "devices-for-elders-testprep-coding",
+          "traits": [
+            "multi_area"
+          ],
+          "predicted": [
+            {
+              "id": "6.2",
+              "confidence": 0.9
+            },
+            {
+              "id": "4.3.5",
+              "confidence": 0.9
+            },
+            {
+              "id": "4.3.4",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "digital support for seniors": "6.2",
+            "test prep": "4.3.5",
+            "computer science tutoring": "4.3.4"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 3,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2726,
+          "seconds": 0.55,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "retired-accountant-maths-tutor",
+          "traits": [
+            "contains_retired",
+            "unmatched_skills"
+          ],
+          "predicted": [
+            {
+              "id": "4.3.1",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [
+            "accounting"
+          ],
+          "matched": {
+            "maths tutoring": "4.3.1"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2641,
+          "seconds": 0.75,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "retired-nurse-medication",
+          "traits": [
+            "contains_retired"
+          ],
+          "predicted": [
+            {
+              "id": "6.3",
+              "confidence": 0.9
+            },
+            {
+              "id": "5.5",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "medication reminders": "6.3",
+            "health education": "5.5"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 2,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2664,
+          "seconds": 1.05,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "senior-carpenter-handyman",
+          "traits": [
+            "contains_retired"
+          ],
+          "predicted": [
+            {
+              "id": "3.3.4",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "carpentry": "3.3.4"
+          },
+          "missed": [
+            "handyman work"
+          ],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 1,
+          "tokens": 2673,
+          "seconds": 0.58,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "retired-teacher-reading-writing",
+          "traits": [
+            "contains_retired"
+          ],
+          "predicted": [
+            {
+              "id": "4.3.2",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "english tutoring": "4.3.2"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2645,
+          "seconds": 0.98,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "retired-engineer-welding-tutoring",
+          "traits": [
+            "contains_retired",
+            "multi_area"
+          ],
+          "predicted": [
+            {
+              "id": "3.3.11",
+              "confidence": 0.9
+            },
+            {
+              "id": "4.3.3",
+              "confidence": 0.9
+            },
+            {
+              "id": "4.3.1",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "welding": "3.3.11",
+            "science tutoring": "4.3.3",
+            "maths tutoring": "4.3.1"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 3,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2718,
+          "seconds": 0.76,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "retired-driver",
+          "traits": [
+            "contains_retired"
+          ],
+          "predicted": [
+            {
+              "id": "6.6",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "transport to appointments": "6.6"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2671,
+          "seconds": 0.53,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "es-electricista-pintor-cerrajero",
+          "traits": [
+            "non_english"
+          ],
+          "predicted": [
+            {
+              "id": "3.3.3",
+              "confidence": 0.9
+            },
+            {
+              "id": "3.3.9",
+              "confidence": 0.9
+            },
+            {
+              "id": "3.3.8",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "electrical work": "3.3.3",
+            "painting": "3.3.9",
+            "locksmithing": "3.3.8"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 3,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2681,
+          "seconds": 0.54,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "es-cocina-comunitaria",
+          "traits": [
+            "non_english"
+          ],
+          "predicted": [
+            {
+              "id": "1.3.2",
+              "confidence": 0.9
+            },
+            {
+              "id": "1.3.3",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "bulk cooking": "1.3.2",
+            "nutritional meal planning": "1.3.3"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 2,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2676,
+          "seconds": 1.81,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "fr-jardinage-peinture",
+          "traits": [
+            "non_english"
+          ],
+          "predicted": [
+            {
+              "id": "3.3.5",
+              "confidence": 0.9
+            },
+            {
+              "id": "3.3.9",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "gardening": "3.3.5",
+            "painting": "3.3.9"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 2,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2652,
+          "seconds": 0.59,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "hi-ganit-vigyan",
+          "traits": [
+            "non_english",
+            "short"
+          ],
+          "predicted": [
+            {
+              "id": "4.3.1",
+              "confidence": 0.9
+            },
+            {
+              "id": "4.3.3",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "maths tutoring": "4.3.1",
+            "science tutoring": "4.3.3"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 2,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2637,
+          "seconds": 0.56,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "de-pflege-termine",
+          "traits": [
+            "non_english"
+          ],
+          "predicted": [
+            {
+              "id": "6.6",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "transport to appointments": "6.6"
+          },
+          "missed": [
+            "nursing consultation"
+          ],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 1,
+          "tokens": 2769,
+          "seconds": 0.76,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "zh-dentist-carpentry",
+          "traits": [
+            "non_english"
+          ],
+          "predicted": [
+            {
+              "id": "5.1.3",
+              "confidence": 0.9
+            },
+            {
+              "id": "3.3.4",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "dentistry": "5.1.3",
+            "carpentry": "3.3.4"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 2,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2705,
+          "seconds": 0.75,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "long-handyman-and-cook",
+          "traits": [
+            "long",
+            "multi_area"
+          ],
+          "predicted": [
+            {
+              "id": "3.3.1",
+              "confidence": 0.9
+            },
+            {
+              "id": "3.3.2",
+              "confidence": 0.9
+            },
+            {
+              "id": "3.3.9",
+              "confidence": 0.9
+            },
+            {
+              "id": "3.3.5",
+              "confidence": 0.9
+            },
+            {
+              "id": "1.3.2",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "plumbing": "3.3.1",
+            "painting": "3.3.9",
+            "handyman work": "3.3.2",
+            "gardening": "3.3.5",
+            "bulk cooking": "1.3.2"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 5,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 3150,
+          "seconds": 1.56,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "long-teacher-career",
+          "traits": [
+            "long"
+          ],
+          "predicted": [
+            {
+              "id": "4.3.1",
+              "confidence": 0.95
+            },
+            {
+              "id": "4.1",
+              "confidence": 0.93
+            },
+            {
+              "id": "4.2",
+              "confidence": 0.92
+            },
+            {
+              "id": "4.6",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "maths tutoring": "4.3.1",
+            "college application help": "4.1",
+            "essay review": "4.2",
+            "career guidance": "4.6"
+          },
+          "missed": [
+            "test prep"
+          ],
+          "spurious": [],
+          "true_positives": 4,
+          "false_positives": 0,
+          "false_negatives": 1,
+          "tokens": 2950,
+          "seconds": 48.2,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "long-community-health",
+          "traits": [
+            "long"
+          ],
+          "predicted": [
+            {
+              "id": "5.1.5",
+              "confidence": 0.9
+            },
+            {
+              "id": "5.4",
+              "confidence": 0.8
+            },
+            {
+              "id": "5.2",
+              "confidence": 0.8
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "medication reminders": "5.4",
+            "medicine delivery": "5.2"
+          },
+          "missed": [
+            "general consultation",
+            "health education",
+            "emotional support"
+          ],
+          "spurious": [
+            "5.1.5"
+          ],
+          "true_positives": 2,
+          "false_positives": 1,
+          "false_negatives": 3,
+          "tokens": 3038,
+          "seconds": 0.8,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "no-match-free-weekends",
+          "traits": [
+            "no_match"
+          ],
+          "predicted": [],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {},
+          "missed": [],
+          "spurious": [],
+          "true_positives": 0,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2584,
+          "seconds": 3.54,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "no-match-friendly",
+          "traits": [
+            "no_match"
+          ],
+          "predicted": [],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {},
+          "missed": [],
+          "spurious": [],
+          "true_positives": 0,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2573,
+          "seconds": 0.56,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "no-match-es-domingos",
+          "traits": [
+            "no_match",
+            "non_english"
+          ],
+          "predicted": [],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {},
+          "missed": [],
+          "spurious": [],
+          "true_positives": 0,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2599,
+          "seconds": 0.58,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "no-match-enthusiastic",
+          "traits": [
+            "no_match"
+          ],
+          "predicted": [],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {},
+          "missed": [],
+          "spurious": [],
+          "true_positives": 0,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2572,
+          "seconds": 0.78,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "no-match-translator-bookkeeper",
+          "traits": [
+            "no_match",
+            "unmatched_skills"
+          ],
+          "predicted": [],
+          "unmatched_skills": [
+            "translate documents between Portuguese and English",
+            "do the bookkeeping for two small businesses"
+          ],
+          "expected_unmatched": [
+            "translation",
+            "bookkeeping"
+          ],
+          "matched": {},
+          "missed": [],
+          "spurious": [],
+          "true_positives": 0,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2626,
+          "seconds": 0.68,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "photographer-plumber",
+          "traits": [
+            "unmatched_skills"
+          ],
+          "predicted": [
+            {
+              "id": "3.3.1",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [
+            "professional photographer"
+          ],
+          "expected_unmatched": [
+            "photography"
+          ],
+          "matched": {
+            "plumbing": "3.3.1"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2641,
+          "seconds": 0.59,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "solicitor-english-tutor",
+          "traits": [
+            "unmatched_skills"
+          ],
+          "predicted": [
+            {
+              "id": "4.3.2",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [
+            "qualified solicitor"
+          ],
+          "expected_unmatched": [
+            "legal advice"
+          ],
+          "matched": {
+            "english tutoring": "4.3.2"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2629,
+          "seconds": 0.77,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "pet-boarding-painter",
+          "traits": [
+            "unmatched_skills"
+          ],
+          "predicted": [
+            {
+              "id": "3.3.9",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [
+            "board dogs and cats when their owners are away"
+          ],
+          "expected_unmatched": [
+            "pet care"
+          ],
+          "matched": {
+            "painting": "3.3.9"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2663,
+          "seconds": 2.47,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "hvac-only",
+          "traits": [],
+          "predicted": [
+            {
+              "id": "3.3.6",
+              "confidence": 0.95
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "hvac": "3.3.6"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2610,
+          "seconds": 0.63,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "clothing-donations",
+          "traits": [],
+          "predicted": [
+            {
+              "id": "2.1",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "donating clothes": "2.1"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2605,
+          "seconds": 0.7,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "lease-reader",
+          "traits": [],
+          "predicted": [
+            {
+              "id": "3.1",
+              "confidence": 0.95
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "lease support": "3.1"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2633,
+          "seconds": 0.66,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "van-owner-moving",
+          "traits": [],
+          "predicted": [
+            {
+              "id": "3.7",
+              "confidence": 0.95
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "move in help": "3.7"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2629,
+          "seconds": 0.63,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "therapist-listening",
+          "traits": [],
+          "predicted": [
+            {
+              "id": "5.3",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "mental wellbeing support": "5.3"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2660,
+          "seconds": 0.53,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "utilities-setup",
+          "traits": [],
+          "predicted": [
+            {
+              "id": "3.4",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "utilities setup": "3.4"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2625,
+          "seconds": 0.82,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "study-groups",
+          "traits": [],
+          "predicted": [
+            {
+              "id": "4.5",
+              "confidence": 0.95
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "study group formation": "4.5"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2653,
+          "seconds": 1.35,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "vaccination-drives",
+          "traits": [],
+          "predicted": [
+            {
+              "id": "5.1.9",
+              "confidence": 0.95
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "vaccinations and screenings": "5.1.9"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2651,
+          "seconds": 0.7,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "selling-furniture",
+          "traits": [],
+          "predicted": [],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {},
+          "missed": [
+            "selling things"
+          ],
+          "spurious": [],
+          "true_positives": 0,
+          "false_positives": 0,
+          "false_negatives": 1,
+          "tokens": 2600,
+          "seconds": 0.65,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "emergency-winter-coats",
+          "traits": [],
+          "predicted": [
+            {
+              "id": "2.1",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "emergency clothing": "2.1"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2634,
+          "seconds": 0.9,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "senior-meals",
+          "traits": [],
+          "predicted": [
+            {
+              "id": "6.9",
+              "confidence": 0.95
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "meal support for elders": "6.9"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 3564,
+          "seconds": 2.92,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "scheduling-appointments",
+          "traits": [],
+          "predicted": [
+            {
+              "id": "6.7",
+              "confidence": 0.95
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "scheduling appointments": "6.7"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2674,
+          "seconds": 1.21,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "rent-support",
+          "traits": [],
+          "predicted": [
+            {
+              "id": "3.2",
+              "confidence": 0.95
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "tenant rent support": "3.2"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2624,
+          "seconds": 0.67,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "senior-relocation",
+          "traits": [],
+          "predicted": [
+            {
+              "id": "6.1",
+              "confidence": 0.95
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "senior relocation": "6.1"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2677,
+          "seconds": 0.78,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "medical-devices",
+          "traits": [],
+          "predicted": [
+            {
+              "id": "6.4",
+              "confidence": 0.95
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "medical device setup": "6.4"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2680,
+          "seconds": 0.98,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "food-bank",
+          "traits": [],
+          "predicted": [
+            {
+              "id": "1.1",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "food assistance": "1.1"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2619,
+          "seconds": 0.66,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "borrow-formal-clothes",
+          "traits": [],
+          "predicted": [
+            {
+              "id": "2.1",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "borrowing clothes": "2.1"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2630,
+          "seconds": 1.0,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "education-resources",
+          "traits": [],
+          "predicted": [
+            {
+              "id": "4.7",
+              "confidence": 0.9
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "education resource sharing": "4.7"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2680,
+          "seconds": 0.74,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "rental-search",
+          "traits": [],
+          "predicted": [
+            {
+              "id": "3.5",
+              "confidence": 0.95
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "looking for rental": "3.5"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2615,
+          "seconds": 0.63,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "dermatology",
+          "traits": [],
+          "predicted": [
+            {
+              "id": "5.1.7",
+              "confidence": 0.95
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "dermatology": "5.1.7"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2666,
+          "seconds": 0.7,
+          "rate_limit_retries": 0,
+          "error": null
+        },
+        {
+          "case": "cultural-cuisine",
+          "traits": [],
+          "predicted": [
+            {
+              "id": "1.3.4",
+              "confidence": 0.95
+            }
+          ],
+          "unmatched_skills": [],
+          "expected_unmatched": [],
+          "matched": {
+            "cultural cuisine guidance": "1.3.4"
+          },
+          "missed": [],
+          "spurious": [],
+          "true_positives": 1,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "tokens": 2623,
+          "seconds": 1.22,
+          "rate_limit_retries": 0,
+          "error": null
+        }
+      ],
+      "summary": {
+        "cases": 59,
+        "errors": 0,
+        "true_positives": 86,
+        "false_positives": 1,
+        "false_negatives": 10,
+        "recall": 0.8958333333333334,
+        "precision": 0.9885057471264368,
+        "f1": 0.9398907103825137
+      },
+      "by_trait": {
+        "contains_retired": {
+          "cases": 6,
+          "errors": 0,
+          "true_positives": 9,
+          "false_positives": 0,
+          "false_negatives": 1,
+          "recall": 0.9,
+          "precision": 1.0,
+          "f1": 0.9473684210526316
+        },
+        "long": {
+          "cases": 3,
+          "errors": 0,
+          "true_positives": 11,
+          "false_positives": 1,
+          "false_negatives": 4,
+          "recall": 0.7333333333333333,
+          "precision": 0.9166666666666666,
+          "f1": 0.8148148148148148
+        },
+        "multi_area": {
+          "cases": 11,
+          "errors": 0,
+          "true_positives": 33,
+          "false_positives": 0,
+          "false_negatives": 3,
+          "recall": 0.9166666666666666,
+          "precision": 1.0,
+          "f1": 0.9565217391304348
+        },
+        "no_match": {
+          "cases": 5,
+          "errors": 0,
+          "true_positives": 0,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "recall": null,
+          "precision": null,
+          "f1": null
+        },
+        "non_english": {
+          "cases": 7,
+          "errors": 0,
+          "true_positives": 12,
+          "false_positives": 0,
+          "false_negatives": 1,
+          "recall": 0.9230769230769231,
+          "precision": 1.0,
+          "f1": 0.9600000000000001
+        },
+        "short": {
+          "cases": 7,
+          "errors": 0,
+          "true_positives": 8,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "recall": 1.0,
+          "precision": 1.0,
+          "f1": 1.0
+        },
+        "unmatched_skills": {
+          "cases": 5,
+          "errors": 0,
+          "true_positives": 4,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "recall": 1.0,
+          "precision": 1.0,
+          "f1": 1.0
+        }
+      },
+      "false_suggestions": {
+        "cases": 5,
+        "cases_with_suggestions": 0,
+        "suggestions": 0,
+        "rate": 0.0
+      },
+      "tokens_total": 158792
+    }
+  ],
+  "verdict": {
+    "passes_threshold": true,
+    "per_run": [
+      {
+        "label": "run 1",
+        "recall": 0.9270833333333334,
+        "precision": 0.967391304347826,
+        "clears": true
+      },
+      {
+        "label": "run 2",
+        "recall": 0.8958333333333334,
+        "precision": 0.9885057471264368,
+        "clears": true
+      }
+    ]
+  },
+  "models": {
+    "groq": "openai/gpt-oss-20b",
+    "gemini": "gemini-2.5-flash"
+  }
+}
