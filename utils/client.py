@@ -1,3 +1,4 @@
+import os
 from groq import Groq
 from google import genai
 from langchain_groq import ChatGroq
@@ -5,6 +6,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 import logging
+
 
 from utils.model_fallback import ModelTarget
 
@@ -83,6 +85,13 @@ except (BotoCoreError, ClientError) as e:
 except Exception as e:
     logger.exception("INIT: Unexpected error fetching from Parameter Store: %s", str(e))
 
+if (
+    os.getenv("SAAYAM_LOCAL_MODEL_KEYS") == "1"
+    and not os.getenv("AWS_LAMBDA_FUNCTION_NAME")
+    and not os.getenv("AWS_EXECUTION_ENV")
+):
+    GROQ_API_KEY = GROQ_API_KEY or os.getenv("GROQ_API_KEY")
+    GEMINI_API_KEY = GEMINI_API_KEY or os.getenv("GEMINI_API_KEY")
 # --- BOOTSTRAP LOGGING ---
 print(f"INIT LOG: Groq Key Found: {bool(GROQ_API_KEY)}")
 print(f"INIT LOG: Gemini Key Found: {bool(GEMINI_API_KEY)}")

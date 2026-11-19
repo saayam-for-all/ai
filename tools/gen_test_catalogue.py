@@ -46,10 +46,21 @@ FILE_META = {
     "test_classification_resilience.py": ("-", "services/classification_service.py"),
     "test_subject_generator.py": ("-", "utils/subject_generator.py"),
     "test_emergency_s3_reader.py": ("#334", "services/emergency.py S3 reader"),
+    "test_emergency_logging.py": ("#146", "services/emergency.py logging"),
+    "test_emergency_location_fields.py": ("#146, webapp#1959", "location_source, display_location"),
     "test_token_usage.py": ("#159", "utils/token_usage.py"),
     "test_model_fallback.py": ("#193", "utils/model_fallback.py"),
     "test_client_factory.py": ("#193", "utils/client.py create_chat_model"),
     "test_gardening_category.py": ("#217", "services/classification_service.py"),
+    "test_lambda_session_memory.py": ("#197", "generate_answer_handler session memory"),
+    "test_answer_memory.py": ("#197", "utils/__init__.py memory_context"),
+    "test_session_sqlite.py": ("#197", "services/sqlite_memory_store.py"),
+    "test_session_memory_privacy.py": ("#197", "services/session_memory.py redaction"),
+    "test_session_memory_corrections.py": ("#197", "services/session_memory.py corrections"),
+    "test_memory_validation.py": ("#197", "services/memory_validation.py"),
+    "test_memory_summarizer.py": ("#197", "services/memory_summarizer.py"),
+    "test_memory_controls.py": ("#197", "local_memory_controls_handler"),
+    "test_memory_integration.py": ("#197", "session_memory + SQLite store"),
 }
 
 HEADER = """# Test catalogue

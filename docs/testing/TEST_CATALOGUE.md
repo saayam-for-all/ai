@@ -26,23 +26,34 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | File | Kind | Issue | Covers | Tests |
 | --- | --- | --- | --- | ---: |
 | [`tests/test_answer_conversation.py`](../../tests/test_answer_conversation.py) | Unit | #183 | `utils/__init__.py prompt assembly` | 24 |
+| [`tests/test_answer_memory.py`](../../tests/test_answer_memory.py) | Unit | #197 | `utils/__init__.py memory_context` | 4 |
 | [`tests/test_classification_resilience.py`](../../tests/test_classification_resilience.py) | Unit | - | `services/classification_service.py` | 10 |
 | [`tests/test_client_factory.py`](../../tests/test_client_factory.py) | Unit | #193 | `utils/client.py create_chat_model` | 9 |
 | [`tests/test_client_imports.py`](../../tests/test_client_imports.py) | Integration | #154 | `utils/client.py` | 2 |
 | [`tests/test_emergency_dataset.py`](../../tests/test_emergency_dataset.py) | Dataset | #146 | `services/emergency_numbers.json` | 17 |
 | [`tests/test_emergency_locale.py`](../../tests/test_emergency_locale.py) | Unit | #146 | `services/emergency.py` | 67 |
+| [`tests/test_emergency_location_fields.py`](../../tests/test_emergency_location_fields.py) | Contract | #146, webapp#1959 | `location_source, display_location` | 59 |
+| [`tests/test_emergency_logging.py`](../../tests/test_emergency_logging.py) | Unit | #146 | `services/emergency.py logging` | 94 |
 | [`tests/test_emergency_s3_reader.py`](../../tests/test_emergency_s3_reader.py) | Unit | #334 | `services/emergency.py S3 reader` | 23 |
 | [`tests/test_gardening_category.py`](../../tests/test_gardening_category.py) | Unit | #217 | `services/classification_service.py` | 15 |
 | [`tests/test_generate_answer.py`](../../tests/test_generate_answer.py) | Contract | #169 | `generate_answer_handler` | 50 |
 | [`tests/test_import_blast_radius.py`](../../tests/test_import_blast_radius.py) | Integration | #169, #171 | `module-scope imports` | 4 |
+| [`tests/test_lambda_session_memory.py`](../../tests/test_lambda_session_memory.py) | Integration | #197 | `generate_answer_handler session memory` | 11 |
+| [`tests/test_memory_controls.py`](../../tests/test_memory_controls.py) | Integration | #197 | `local_memory_controls_handler` | 5 |
+| [`tests/test_memory_integration.py`](../../tests/test_memory_integration.py) | Integration | #197 | `session_memory + SQLite store` | 1 |
+| [`tests/test_memory_summarizer.py`](../../tests/test_memory_summarizer.py) | Unit | #197 | `services/memory_summarizer.py` | 5 |
+| [`tests/test_memory_validation.py`](../../tests/test_memory_validation.py) | Unit | #197 | `services/memory_validation.py` | 13 |
 | [`tests/test_model_fallback.py`](../../tests/test_model_fallback.py) | Unit | #193 | `utils/model_fallback.py` | 24 |
 | [`tests/test_org_search_contract.py`](../../tests/test_org_search_contract.py) | Contract | #170 | `utils/search_orgs.py` | 24 |
 | [`tests/test_request_db_schema.py`](../../tests/test_request_db_schema.py) | Unit | #169 | `utils/request_db.py` | 54 |
 | [`tests/test_response_contract.py`](../../tests/test_response_contract.py) | Contract | #146, #169, #170 | `response envelopes` | 10 |
 | [`tests/test_router.py`](../../tests/test_router.py) | Integration | #171 | `lambda_function.lambda_handler` | 34 |
+| [`tests/test_session_memory_corrections.py`](../../tests/test_session_memory_corrections.py) | Integration | #197 | `services/session_memory.py corrections` | 1 |
+| [`tests/test_session_memory_privacy.py`](../../tests/test_session_memory_privacy.py) | Integration | #197 | `services/session_memory.py redaction` | 16 |
+| [`tests/test_session_sqlite.py`](../../tests/test_session_sqlite.py) | Integration | #197 | `services/sqlite_memory_store.py` | 21 |
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
 | [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 57 |
-| | | | **Total** | **437** |
+| | | | **Total** | **667** |
 
 ## Every test
 
@@ -76,6 +87,19 @@ What the model is actually asked, turn by turn - issue #183.
 | `test_location_gender_and_age_still_reach_the_system_prompt` | Location gender and age still reach the system prompt. |
 
 > 20 test functions expand to 24 cases through parametrisation.
+
+### `test_answer_memory.py`
+
+*Unit · issue #197 · 4 tests*
+
+Tests for memory-aware answer generation.
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_memory_reaches_answer_prompt` | Memory reaches answer prompt. |
+| `test_no_memory_preserves_existing_message_flow` | No memory preserves existing message flow. |
+| `test_oversized_memory_is_rejected` | Oversized memory is rejected. |
+| `test_wrapper_forwards_memory` | Wrapper forwards memory. |
 
 ### `test_classification_resilience.py`
 
@@ -197,6 +221,87 @@ Behaviour tests for issue #146 - Emergency Contacts must never show a user a num
 
 > 39 test functions expand to 67 cases through parametrisation.
 
+### `test_emergency_location_fields.py`
+
+*Contract · issue #146, webapp#1959 · 59 tests*
+
+location_source and display_location in the Emergency Contacts response.
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_a_resolved_gps_position_is_reported_as_gps` | A resolved gps position is reported as gps. |
+| `test_gps_that_did_not_resolve_is_reported_as_an_ip_estimate` | The Prague report: the browser sent a position, the answer came from the IP. |
+| `test_a_position_with_no_country_falls_back_to_the_ip` | A point at sea: Nominatim answers, but with no country. |
+| `test_an_ip_answer_replaces_everything_the_gps_answer_left` | Nothing from a GPS answer without a country survives into the IP's result: not its region (a name mixing two sources), not its empty keys. |
+| `test_a_request_without_gps_is_reported_as_an_ip_estimate` | A request without gps is reported as an ip estimate. |
+| `test_a_country_parameter_alone_is_reported_as_country_param` | A country parameter alone is reported as country param. |
+| `test_a_country_parameter_that_confirms_the_gps_result_keeps_gps` | A country parameter that confirms the gps result keeps gps. |
+| `test_a_country_parameter_that_overrides_the_gps_result_is_reported_as_country_param` | A country parameter that overrides the gps result is reported as country param. |
+| `test_a_place_search_is_reported_as_place` | A place search is reported as place. |
+| `test_a_city_found_only_in_the_directory_is_reported_as_city_directory` | A city found only in the directory is reported as city directory. |
+| `test_a_404_body_is_unchanged` | A 404 body is unchanged. |
+| `test_a_position_that_found_no_country_is_logged_with_source_none` | A position that found no country is logged with source none. |
+| `test_a_city_state_reads_without_null` | Vienna has no separate state; the old page printed "Wien, null (AT)". |
+| `test_a_prefecture_given_as_province_is_used_for_the_name_only` | A prefecture given as province is used for the name only. |
+| `test_a_region_given_under_another_key_is_used_for_the_name` | A region given under another key is used for the name. |
+| `test_a_municipality_is_used_when_there_is_no_city_town_or_village` | A municipality is used when there is no city town or village. |
+| `test_a_real_state_and_city_win_over_the_other_keys` | The other keys only fill a gap: a district or municipality never replaces a state or city Nominatim did give. |
+| `test_a_resolver_used_twice_does_not_carry_names_over` | One resolver per request in production; this keeps resolve() self-contained anyway. |
+| `test_both_nominatim_lookups_ask_for_english_names` | Both nominatim lookups ask for english names. |
+| `test_display_location_uses_only_the_parts_that_exist` | Display location uses only the parts that exist. |
+| `test_a_json_value_that_is_not_text_is_treated_as_not_sent` | Only a JSON body can carry these types. A list or object used to raise (city.title(), or a list as a dict key) and turn the lookup into a 500. |
+| `test_a_number_where_text_belongs_is_read_as_text` | A number where text belongs is read as text. |
+| `test_the_response_only_adds_the_two_fields` | Every field the page already reads keeps its name and shape. |
+| `test_the_lambda_handler_returns_both_fields_through_api_gateway` | The lambda handler returns both fields through api gateway. |
+
+> 24 test functions expand to 59 cases through parametrisation.
+
+### `test_emergency_logging.py`
+
+*Unit · issue #146 · 94 tests*
+
+Logging for the Emergency Contacts Lambda (follow-up to issue #146).
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_gps_request_logs_what_was_sent_how_it_was_found_and_what_came_back` | Gps request logs what was sent how it was found and what came back. |
+| `test_exact_coordinates_and_full_ip_never_reach_the_log` | Exact coordinates and full ip never reach the log. |
+| `test_gps_that_does_not_resolve_says_the_ip_was_used_instead` | The Prague report: a position was sent, but the answer came from the IP. |
+| `test_a_rate_limited_lookup_is_named_as_one` | A rate limited lookup is named as one. |
+| `test_ip_only_request_is_logged_with_the_ip_as_its_source` | Ip only request is logged with the ip as its source. |
+| `test_country_parameter_is_logged_as_the_source_without_any_lookup` | Country parameter is logged as the source without any lookup. |
+| `test_place_search_without_a_match_is_logged` | Place search without a match is logged. |
+| `test_failed_place_search_is_logged_with_the_reason` | Failed place search is logged with the reason. |
+| `test_ipinfo_answer_without_a_country_is_a_warning` | Ipinfo answer without a country is a warning. |
+| `test_a_position_with_no_country_is_a_warning` | A point at sea: Nominatim answers, but with no country in it. |
+| `test_every_parameter_name_is_logged_but_not_its_value` | A client sending "latitude" instead of "lat" is visible as the reason GPS was ignored. |
+| `test_parameter_names_are_capped_in_length_and_number` | A JSON body can carry any number of keys, of any length. |
+| `test_a_postcode_is_logged_cut_to_its_region` | A full UK postcode or a US ZIP+4 can point to a handful of addresses. |
+| `test_caller_text_cannot_start_a_log_line_of_its_own` | A value made to look like one of our lines stays escaped inside its own field. |
+| `test_a_404_reason_escapes_the_service_it_names` | With a valid country the 404 reason quotes the service as sent. |
+| `test_names_from_the_geocoder_are_escaped_too` | Names from the geocoder are escaped too. |
+| `test_a_long_value_is_cut_short` | A long value is cut short. |
+| `test_the_response_line_names_the_services_filled_with_the_general_number` | The response line names the services filled with the general number. |
+| `test_the_response_line_leaves_the_fallback_part_out_when_nothing_fell_back` | The response line leaves the fallback part out when nothing fell back. |
+| `test_a_city_in_several_countries_is_logged_as_not_guessed` | A city in several countries is logged as not guessed. |
+| `test_a_handler_failure_logs_its_traceback_as_one_record` | Logged, not printed: Lambda splits printed output into one event per line, while a logged record, traceback included, stays one event with the request ID. |
+| `test_an_invalid_caller_ip_is_logged_without_the_value` | An invalid caller ip is logged without the value. |
+| `test_unusable_coordinates_are_logged` | Unusable coordinates are logged. |
+| `test_a_404_logs_why` | A 404 logs why. |
+| `test_an_unexpected_error_is_logged_with_its_traceback` | An unexpected error is logged with its traceback. |
+| `test_the_handler_never_logs_the_login_token` | The handler never logs the login token. |
+| `test_logging_does_not_change_the_fields_the_web_client_reads` | Logging adds nothing to the body; location_source and display_location are pinned in test_emergency_location_fields.py. |
+| `test_info_lines_are_emitted_even_though_the_root_logger_is_at_warning` | The Lambda runtime leaves root at WARNING; the module's own level must let INFO through. |
+| `test_log_level_comes_from_the_environment_and_a_typo_falls_back_to_info` | Log level comes from the environment and a typo falls back to info. |
+| `test_ip_addresses_are_masked` | Ip addresses are masked. |
+| `test_lookup_failures_are_described_in_a_few_words` | Lookup failures are described in a few words. |
+| `test_a_zip_keeps_only_its_first_three_characters` | A zip keeps only its first three characters. |
+| `test_clean_escapes_what_is_not_printable_and_caps_the_length` | Clean escapes what is not printable and caps the length. |
+| `test_a_refused_connection_is_a_network_error` | A refused connection is a network error. |
+| `test_location_description_skips_empty_parts` | Location description skips empty parts. |
+
+> 35 test functions expand to 94 cases through parametrisation.
+
 ### `test_emergency_s3_reader.py`
 
 *Unit · issue #334 · 23 tests*
@@ -315,6 +420,82 @@ Cross-service blast radius at import time - issue #171.
 | `test_the_module_imports_without_any_api_key_configured` | No key is present in CI, and import must not depend on one. |
 
 > 3 test functions expand to 4 cases through parametrisation.
+
+### `test_lambda_session_memory.py`
+
+*Integration · issue #197 · 11 tests*
+
+Test the local session-memory integration in the Lambda handler.
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_memory_is_disabled_by_default` | Memory is disabled by default. |
+| `test_lambda_restores_sqlite_session_memory` | Lambda restores sqlite session memory. |
+| `test_different_session_does_not_inherit_memory` | Different session does not inherit memory. |
+| `test_value_error_from_answer_generation_is_not_a_bad_request` | Value error from answer generation is not a bad request. |
+| `test_invalid_session_id_is_still_a_bad_request` | Invalid session id is still a bad request. |
+| `test_memory_config_error_answers_without_memory` | Memory config error answers without memory. |
+| `test_version_conflict_answers_without_memory` | Version conflict answers without memory. |
+| `test_deleted_session_is_gone_not_bad_request` | Deleted session is gone not bad request. |
+| `test_memory_modules_are_not_imported_when_demo_is_off` | Production must not load, or depend on, the demo's memory code. |
+| `test_oversized_history_answers_without_memory` | Past 500 messages the chat loses memory, not its answers. |
+| `test_restarted_history_answers_without_the_old_memory` | A transcript restarted under the same session_id is still answered. |
+
+### `test_memory_controls.py`
+
+*Integration · issue #197 · 5 tests*
+
+Tests for local session memory controls.
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_user_can_view_saved_memory` | User can view saved memory. |
+| `test_deleting_memory_invalidates_session` | Deleting memory invalidates session. |
+| `test_memory_controls_disabled_by_default` | Memory controls disabled by default. |
+| `test_invalid_session_id_is_rejected` | Invalid session id is rejected. |
+| `test_unusable_store_path_returns_503` | Unusable store path returns 503. |
+
+### `test_memory_integration.py`
+
+*Integration · issue #197 · 1 tests*
+
+Offline integration test for SQLite-backed session memory.
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_complete_memory_pipeline_across_requests` | Verify rolling summary persistence across multiple requests. |
+
+### `test_memory_summarizer.py`
+
+*Unit · issue #197 · 5 tests*
+
+Offline tests for the real memory summarization adapter.
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_summarizer_uses_conversation_facts` | Verify that real conversation data reaches the model adapter. |
+| `test_summarizer_uses_existing_memory` | Verify that prior memory is included in the next summary request. |
+| `test_empty_batch_does_not_call_model` | An empty batch should preserve memory without model usage. |
+| `test_groq_failure_falls_back_to_gemini` | A Groq error should allow Gemini to produce the memory. |
+| `test_overlong_summary_is_returned_not_rejected` | An overlong summary is capped by session_memory, not discarded here. |
+
+### `test_memory_validation.py`
+
+*Unit · issue #197 · 13 tests*
+
+Tests for validating conversation memory inputs.
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_invalid_messages_are_removed` | Invalid messages are removed. |
+| `test_non_string_content_is_kept_as_the_prompt_keeps_it` | Non string content is kept as the prompt keeps it. |
+| `test_memory_and_prompt_normalizers_agree` | Both normalizers must keep the same messages, in the same order. |
+| `test_long_messages_are_truncated` | Long messages are truncated. |
+| `test_old_messages_are_not_discarded` | Old messages are not discarded. |
+| `test_oversized_transcript_is_rejected` | Oversized transcript is rejected. |
+| `test_session_memory_processes_normalized_history` | Verify invalid roles are excluded before summarization. |
+
+> 7 test functions expand to 13 cases through parametrisation.
 
 ### `test_model_fallback.py`
 
@@ -474,6 +655,58 @@ Router-level regression tests - issue #171.
 | `test_routed_emergency_can_still_ask_for_one_service` | Routing in the query string leaves the body free to name the service. |
 
 > 16 test functions expand to 34 cases through parametrisation.
+
+### `test_session_memory_corrections.py`
+
+*Integration · issue #197 · 1 tests*
+
+Regression tests for changing facts in session memory.
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_corrected_schedule_survives_expiration` | Corrected schedule survives expiration. |
+
+### `test_session_memory_privacy.py`
+
+*Integration · issue #197 · 16 tests*
+
+Privacy and deletion regression tests for session memory.
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_secret_not_sent_to_summarizer` | Sensitive values must not reach the memory summarizer. |
+| `test_sqlite_does_not_store_raw_transcript` | SQLite should persist summaries, not the original conversation. |
+| `test_deleted_session_cannot_be_recreated` | An old transcript must not recreate a deleted session. |
+| `test_redaction_that_lengthens_summary_does_not_stick_session` | A summary inside the cap must not leave it once secrets are redacted. |
+| `test_overlong_model_summary_is_capped_and_saved` | A 2100-char model summary is stored cut to the cap, so the cursor moves. |
+| `test_redaction_keeps_ordinary_prose_and_postal_codes` | Redaction keeps ordinary prose and postal codes. |
+| `test_redaction_removes_numeric_codes` | Redaction removes numeric codes. |
+| `test_bare_pin_label_is_redacted_even_when_it_may_be_a_postal_code` | A six-digit UPI PIN and a postal code look identical after "PIN:". |
+
+> 8 test functions expand to 16 cases through parametrisation.
+
+### `test_session_sqlite.py`
+
+*Integration · issue #197 · 21 tests*
+
+Offline tests of SQLite-backed, session-scoped summarized memory.
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_summary_is_durable_but_raw_turns_are_not` | Summary is durable but raw turns are not. |
+| `test_every_turn_is_in_the_summary_or_the_prompt_window` | Every turn is in the summary or the prompt window. |
+| `test_new_session_starts_empty_and_delete_is_scoped` | New session starts empty and delete is scoped. |
+| `test_redact_secrets_before_summarizer_and_db_write` | Redact secrets before summarizer and db write. |
+| `test_editing_summarized_history_restarts_the_summary` | An edited transcript is a different conversation: summarize it afresh. |
+| `test_trimmed_history_drops_the_stale_summary` | A transcript shorter than what was summarized must not reuse it. |
+| `test_long_backlog_is_summarized_a_bounded_share_per_request` | 400 messages on a new session must not mean 76 model calls at once. |
+| `test_each_batch_is_saved_before_the_next_runs` | A failure partway through keeps the batches already summarized. |
+| `test_sqlite_optimistic_locking` | Sqlite optimistic locking. |
+| `test_expiry_removes_access_to_old_summary` | Expiry removes access to old summary. |
+| `test_deleted_session_cannot_recreate_memory` | Deleted session cannot recreate memory. |
+| `test_deletion_does_not_affect_new_session` | Deletion does not affect new session. |
+
+> 12 test functions expand to 21 cases through parametrisation.
 
 ### `test_subject_generator.py`
 

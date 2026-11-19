@@ -38,7 +38,13 @@ ai/
 ├── services/
 │   ├── emergency.py               # Emergency contact geolocation and lookup logic
 │   ├── emergency_numbers.json     # Global emergency numbers database by country/state/city
-│   └── classification_service.py  # Category prediction algorithms
+│   ├── classification_service.py  # Category prediction algorithms
+│   ├── session_memory.py          # Agentic memory: rolling summaries of turns past the cap
+│   ├── memory_summarizer.py       # Agentic memory: summarization through the model chain
+│   ├── sqlite_memory_store.py     # Agentic memory: local SQLite session store
+│   ├── memory_validation.py       # Agentic memory: transcript validation
+│   ├── memory_privacy.py          # Agentic memory: secret redaction
+│   └── memory_store.py            # Agentic memory: shared VersionConflict error
 ├── utils/
 │   ├── categories.py              # Category mappings
 │   ├── categories_with_description.py # Category description mappings
@@ -258,8 +264,18 @@ curl -X GET "https://<api-gateway-url>/emergency-contacts?zip=95112&country=US&l
   "language": "hi",
   "country": "IN",
   "match_level": "country",
-  "resolved_location": { "country": "IN" }
+  "resolved_location": { "country": "IN" },
+  "location_source": "country_param",
+  "display_location": "IN"
 }
+```
+
+For a browser position in Vienna the last three fields read:
+
+```json
+  "resolved_location": { "zip": "1010", "city": "Vienna", "state": null, "country": "AT" },
+  "location_source": "gps",
+  "display_location": "Vienna (AT)"
 ```
 
 - `dial_number` is always ASCII and is what a click-to-call link must use.
@@ -268,6 +284,21 @@ curl -X GET "https://<api-gateway-url>/emergency-contacts?zip=95112&country=US&l
   that country and the country's own general emergency line is being returned
   instead. Label those rows as a general emergency line rather than presenting
   them as the specific service.
+- `location_source` says how the location was found: `gps` (the browser's
+  position), `place` (a `zip`, `city` or `state` that was searched),
+  `city_directory` (a bare `city` found in the directory), `country_param` (the
+  `country` parameter) or `ip` (the caller's IP address). **`ip` is an
+  estimate**: a VPN, a phone hotspot or a roaming phone can place it in another
+  country, so show it as "Location estimated from your internet connection". It
+  can be `ip` even when the browser sent a position, if that position could not
+  be resolved (OpenStreetMap failed, or the point is at sea), so the client
+  cannot work this out on its own.
+- `display_location` is a ready-to-show place name, built only from the parts
+  that exist: "Vienna (AT)", "Osaka, Osaka Prefecture (JP)", "City of
+  Westminster, England (GB)", "Doha (QA)". It never contains "null". Prefer it to
+  assembling `resolved_location` yourself: countries name their regions
+  differently (state, prefecture, province), and city-states have none.
+- Place names are requested from OpenStreetMap in English ("Vienna", not "Wien").
 - Numbers never cross a border. If the country cannot be resolved, or the
   country is not in the directory, the endpoint answers `404` rather than
   returning another country's numbers. **Clients must render "unavailable" in
@@ -276,7 +307,12 @@ curl -X GET "https://<api-gateway-url>/emergency-contacts?zip=95112&country=US&l
   [issue #146](https://github.com/saayam-for-all/ai/issues/146).
 - Pass `service=<name>` to request a single service. Recognised names are
   `general_emergency`, `police`, `ambulance`, `fire`, `disaster_management`,
-  `women_helpline` and `suicide_helpline`.
+  `women_helpline`, `suicide_helpline`, `child_helpline`, `coastguard`,
+  `traffic_police`, `gendarmerie`, `gas_leak` and `general_emergency_alternate`.
+- In a JSON body, a list, an object or `true`/`false` where text belongs
+  (`zip`, `city`, `state`, `country`, `service`, `language`) is treated as not
+  sent, and a number is read as text, so a malformed body cannot turn a lookup
+  into a `500`.
 
 Provenance for the numbers in `services/emergency_numbers.json` is recorded in
 [`docs/emergency_numbers_provenance.md`](docs/emergency_numbers_provenance.md).
@@ -300,13 +336,45 @@ including the error paths and the router fallback, now goes through
 
 `lat`/`lng` (reverse geocoded) → `zip`/`city`/`state` (geocoded) → bare `city`
 matched in the directory, but **only when exactly one country contains it** →
-caller IP. An explicit `country` overrides all of the above and **discards**
+caller IP. The caller IP also takes over when the coordinates resolve to no
+country (a point at sea), and its answer then replaces the position's entirely.
+An explicit `country` overrides all of the above and **discards**
 finer-grained fields resolved elsewhere, so a city belonging to a different
-country cannot match by coincidence.
+country cannot match by coincidence. A `country` that only confirms the
+position's own country changes nothing, and `location_source` stays `gps`.
 
 Within a country: the requested state or city entry, else that **same
 country's** `general_emergency` line, marked `is_fallback: true`. There is no
 step that leaves the country.
+
+#### Logs
+
+Every request writes these lines to CloudWatch (log group
+`/aws/lambda/emergency_number_api`), each prefixed with the Lambda request ID:
+- `emergency request:` what was sent (whether GPS was present, and the names of
+  the parameters received);
+- one line per OpenStreetMap or ipinfo lookup, with the result or the reason it
+  failed (`timeout`, `HTTP 429 (rate limited)`, `HTTP 503`, `network error`);
+- `emergency response:` the status, country, `match_level`, how the location was
+  found (`source=`) and the numbers returned, or why it was a `404`. A `500`
+  logs its traceback as one record, so CloudWatch shows it as one event.
+
+What is kept out of the logs:
+- **Coordinates** are rounded to one decimal (about 11 km).
+- **A zip code** keeps only its first three characters (`560*`): a full UK
+  postcode or a US ZIP+4 can point to a handful of addresses.
+- **An IP address** loses its last part (`203.0.113.x`); IPv6 is cut to its
+  `/48`.
+- **Headers and login tokens** are never logged.
+
+Everything else the caller sends (city, state, country, service, language) is
+logged in quotes, cut after 80 characters, with line breaks and other
+invisible characters escaped, so a value can never start a log line of its own
+or pass for one of ours. Place names from OpenStreetMap and ipinfo are escaped
+the same way.
+
+The level is INFO; set the environment variable `EMERGENCY_LOG_LEVEL` (e.g.
+`WARNING`) to change it. A value that is not a level name falls back to INFO.
 
 #### Known limitation
 
@@ -324,6 +392,9 @@ the alpha-2 code. Widening this is tracked as remaining work on issue #146.
 | `test_emergency_dataset.py` | Every entry in the shipped directory is well-formed: no empty or undialable value, no number belonging to another country. |
 | `test_emergency_locale.py` | Resolution order, within-country fallback, `is_fallback` flagging, per-service match level, and numeral localisation. |
 | `test_response_contract.py` | The proxy envelope, including on the error paths, so the `502` cannot come back. |
+| `test_emergency_s3_reader.py` | Loading the directory from S3: one attempt that fits the function timeout, the warm-container cache, and the fallback to the bundled copy when S3 fails or returns a malformed or incomplete object. |
+| `test_emergency_logging.py` | What each request logs, that exact coordinates, full IP addresses, full zip codes and login tokens never reach the log, and that text from a caller or a geocoder cannot break a log line. |
+| `test_emergency_location_fields.py` | `location_source` and `display_location`, English place names, the IP fallback for a position with no country, and that the older fields keep their shape. |
 
 ---
 
@@ -462,6 +533,136 @@ curl -X POST https://<api-gateway-url>/more-organizations \
     "location": "San Jose, CA"
   }'
 ```
+
+---
+
+## Agentic Memory (issue #197)
+
+Generate Answer forwards only the last 20 messages of `conversation_history`
+(`MAX_HISTORY_MESSAGES`, `utils/__init__.py`), so in a long chat the earliest
+turns - often the ones that state the actual need - are silently dropped.
+Session memory summarizes turns as they leave that window and passes the
+summary to the model alongside the recent turns, so what truncation drops is
+kept.
+
+**Status: local demonstration only.** Memory runs only when
+`SAAYAM_SESSION_MEMORY_DEMO=1` is set and never inside AWS Lambda, because the
+store is a local SQLite file and Lambda instances share no disk. With the flag
+off, Generate Answer behaves exactly as documented above and does not import
+any memory module.
+
+#### How it works
+
+1. The client sends a `session_id` with `conversation_history`.
+2. Turns older than the 20-message window are summarized in batches of five
+   through the existing Groq → Gemini model chain
+   (`services/memory_summarizer.py`). At most three batches run per request,
+   each saved before the next, so a long backlog catches up over several
+   requests rather than holding one past API Gateway's timeout.
+3. The summary is capped at 2,000 characters (`MAX_SUMMARY_CHARS`) and stored
+   with the count and fingerprint of the turns it covers. The raw transcript
+   is never stored. Sessions expire after 24 hours.
+4. The answer model receives the summary as untrusted reference data, ahead
+   of the recent turns.
+
+Passwords, PINs, OTPs, API keys, card numbers and SSNs are redacted before the
+summarizer sees a turn and again before a summary is saved. Concurrent writes
+to one session are detected with an optimistic version check.
+
+#### request Payload
+```json
+{
+  "subject": "Transport assistance",
+  "description": "I need a ride.",
+  "category": "Transportation",
+  "session_id": "session-3f9c2a71",
+  "conversation_history": [
+    {"role": "user", "content": "I need transportation every Friday."}
+  ]
+}
+```
+
+`session_id` is 8-128 characters of letters, digits, `_` and `-`. Without it,
+memory is skipped. Use a new id for each new conversation.
+
+#### Status codes added by memory
+
+| Status | Meaning |
+| --- | --- |
+| 400 | `session_id` is malformed. |
+| 410 | The session was deleted. Start a new session. |
+
+Nothing else about memory can fail a request. A model outage, a write
+conflict, a locked database, a transcript over 500 messages, or a transcript
+that no longer starts with the turns already summarized (trimmed by the
+client, or restarted under the same id) all answer **without** memory. A
+restarted transcript discards the stored summary and summarizes afresh, so an
+answer is never built from a conversation the client no longer has.
+
+#### View and delete memory
+
+`local_memory_controls_handler` views or deletes a session's summary. It is
+local only and **not routed** by `lambda_handler`; it is not an authenticated
+API.
+
+```json
+{ "session_id": "session-3f9c2a71", "action": "view" }
+```
+
+`action` is `view` or `delete`. A deleted session id cannot be reused: later
+requests with it receive 410.
+
+#### Running it locally
+
+Create `.env` in the repository root (it is git-ignored):
+
+```dotenv
+GROQ_API_KEY=your_groq_key
+SAAYAM_LOCAL_MODEL_KEYS=1
+```
+
+`SAAYAM_LOCAL_MODEL_KEYS=1` lets `utils/client.py` fall back to keys from the
+environment when Parameter Store is unreachable. It is ignored inside AWS.
+Then set the flags and call the handler:
+
+```powershell
+$env:SAAYAM_SESSION_MEMORY_DEMO = "1"
+$env:SAAYAM_MEMORY_SQLITE_PATH = ".local/session_memory.db"   # optional; this is the default
+python -m pytest tests/test_lambda_session_memory.py           # offline, model mocked
+```
+
+`.local/` is git-ignored.
+
+#### Regression tests covering this feature
+
+All run offline: the summarizer and the answer model are mocked, and SQLite
+uses a temporary file.
+
+| File | Proves |
+| --- | --- |
+| `test_lambda_session_memory.py` | Memory is off by default and never imported when off; sessions are isolated; 400/410 mapping; every server-side failure answers without memory. |
+| `test_session_memory_corrections.py` | Facts the 20-message cap would drop survive in the summary, and a corrected fact replaces the old one. |
+| `test_memory_integration.py` | The complete pipeline across requests through SQLite. |
+| `test_session_sqlite.py` | Only summaries are stored; expiry; optimistic locking; restart on an edited or trimmed transcript; the per-request batch limit. |
+| `test_session_memory_privacy.py` | Secrets never reach the summarizer or the store; deleted sessions stay deleted; summaries are capped after redaction. |
+| `test_memory_validation.py` | Transcript validation, and that it keeps exactly the messages the answer service keeps. |
+| `test_memory_summarizer.py` | Model fallback and summary handling. |
+| `test_answer_memory.py` | The summary reaches the prompt as untrusted data, within the size cap. |
+| `test_memory_controls.py` | View and delete. |
+
+#### Limitations before production
+
+- **Store:** SQLite must be replaced by a store shared across Lambda instances
+  (for example DynamoDB with TTL) before the AWS gate can be lifted.
+- **Authorization:** memory is keyed by `session_id` alone. In production it
+  must also be bound to `user_id`, or anyone holding a session id can read it.
+- **Client:** the web app does not yet send `session_id`, and the More
+  Information chat stops at five questions (at most 11 messages), which never
+  reaches the 20-message window. Memory has no effect on that chat until both
+  change.
+
+See [`docs/concepts/agentic_memory_implementation.md`](docs/concepts/agentic_memory_implementation.md)
+for the design and the evaluation results.
 
 ---
 
