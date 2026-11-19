@@ -14,10 +14,11 @@ are a contract rather than an implementation detail. See issue #170.
 
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_groq import ChatGroq
 from pydantic import BaseModel, Field
 
 from utils import token_usage
+from utils.client import create_chat_model
+from utils.model_fallback import ModelTarget
 
 
 # -----------------------------
@@ -81,15 +82,21 @@ class OrganizationSearchError(RuntimeError):
 # -----------------------------
 def load_llm():
     """Groq chat model, or None when no Groq key is configured."""
-    from utils.client import GROQ_API_KEY, GROQ_MODEL
+    from utils.client import GROQ_API_KEY, GROQ_MODEL, GROQ_REASONING_EFFORT
 
     if not GROQ_API_KEY:
         return None
-    kwargs = dict(model=GROQ_MODEL, temperature=0.1, groq_api_key=GROQ_API_KEY)
-    # gpt-oss reasoning models: keep effort low so the JSON output is fast and reliable.
-    if "gpt-oss" in GROQ_MODEL:
-        kwargs["reasoning_effort"] = "low"
-    return ChatGroq(**kwargs)
+    # Route through create_chat_model so org search gets the same request
+    # timeout / retry limits as every other LangChain call (#263).
+    reasoning = GROQ_REASONING_EFFORT if "gpt-oss" in GROQ_MODEL else None
+    return create_chat_model(
+        ModelTarget(
+            provider="groq",
+            model=GROQ_MODEL,
+            reasoning_effort=reasoning,
+        ),
+        temperature=0.1,
+    )
 
 
 def load_fallback_llm():
