@@ -52,9 +52,6 @@ ai/
 ## Environment & Secrets Configuration
 
 All services leverage **AWS SSM Parameter Store** (and IAM Roles) to access keys rather than exposing them as raw environment variables.
-* **SSM Parameter Names**:
-  - `/dev/saayam/GenAI/groq/key` (Groq API Key)
-  - `/dev/saayam/GenAI/gemini/key` (Gemini API Key)
 
 ---
 
@@ -338,8 +335,8 @@ step that leaves the country.
 
 #### Logs
 
-Every request writes these lines to CloudWatch (log group
-`/aws/lambda/emergency_number_api`), each prefixed with the Lambda request ID:
+Every request writes these lines to the function's CloudWatch log group, each
+prefixed with the Lambda request ID:
 - `emergency request:` what was sent (whether GPS was present, and the names of
   the parameters received);
 - one line per OpenStreetMap or ipinfo lookup, with the result or the reason it
@@ -391,14 +388,14 @@ the alpha-2 code. Widening this is tracked as remaining work on issue #146.
 Returns 6 verified organizations (3 nonprofit, 3 for-profit) close to the user's location related to their request.
 
 **This endpoint has a second consumer outside this repository.** The data
-team's `saayam-org-aggregator` serves `v1/ml/orgAggregatorList` for the Request
+team's org aggregator serves `v1/ml/orgAggregatorList` for the Request
 Details **Organizations** tab, and reaches this function by direct
 `lambda.invoke` rather than through API Gateway:
 
 ```python
 # saayam-for-all/data : data-engineering/src/saayam-org-aggregator/helpers.py
 response = lambda_client.invoke(
-    FunctionName="More_Org_GenAI_Py_v3126",
+    FunctionName="<More Organizations function>",
     Payload=json.dumps({"subject": ..., "description": ..., "location": ...}),
 )
 orgs = pd.DataFrame(json.loads(response["Payload"].read())["body"]["organizations"])
@@ -468,7 +465,7 @@ status gets an empty list rather than a `KeyError`.
 
 #### This endpoint is the GenAI half of `orgAggregatorList`
 
-The data team's `saayam-org-aggregator` Lambda invokes this function directly
+The data team's org aggregator invokes this function directly
 behind `v1/ml/orgAggregatorList` and reads `payload["body"]["organizations"]`.
 That makes the envelope and the field names a **contract**, not an
 implementation detail. Two consequences:
