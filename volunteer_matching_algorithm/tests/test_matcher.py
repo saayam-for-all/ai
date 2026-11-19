@@ -2,8 +2,7 @@
 import numpy as np
 import pandas as pd
 from types import SimpleNamespace
-# Mock app.embeddings before importing matcher.
-# This prevents the unit test from loading SentenceTransformer/PyTorch.
+
 
 from app import crud_volunteers
 from app import crud_requests
@@ -263,3 +262,5 @@ def test_add_volunteer_populates_volunteer_id(monkeypatch, tmp_path):
     assert saved_volunteers.iloc[0]["VolunteerId"] == result["volunteer_id"]
     assert saved_volunteers.iloc[0]["VOL_ID"] == result["volunteer_id"]
     assert saved_volunteers.iloc[0]["VolunteerId"] == saved_volunteers.iloc[0]["VOL_ID"]
+
+    

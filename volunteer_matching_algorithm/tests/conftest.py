@@ -26,3 +26,4 @@ def fake_embeddings(monkeypatch):
     app = sys.modules.get("app")
     if getattr(app, "matcher", None) is matcher:
         delattr(app, "matcher")
+        
