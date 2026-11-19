@@ -1,10 +1,67 @@
+# Every deploy reinstalls from this file, so an unpinned line pulls whatever
+# version is newest on the day. These are the exact versions in the build that
+# is deployed today, so the next build reproduces it. To upgrade something,
+# change its version here in a PR of its own.
+
+# What the code imports
 groq==0.37.1
-google-genai
+google-genai==3.1.0
 python-dotenv==1.0.1
-langchain
-langchain-core
-langchain-groq
-langchain-google-genai
-psycopg2-binary>=2.9.9
-aws-lambda-powertools
-boto3
+langchain==1.4.10
+langchain-core==1.7.7
+langchain-groq==1.1.3
+langchain-google-genai==4.4.3
+psycopg2-binary==2.9.13
+aws-lambda-powertools==3.40.0
+boto3==1.44.0
+
+# What those pull in
+annotated-types==0.8.0
+anyio==4.16.0
+botocore==1.44.0
+certifi==2026.10.23
+cffi==2.1.1
+charset-normalizer==3.5.2
+cryptography==50.0.2
+distro==1.9.0
+filetype==1.2.0
+google-auth==2.62.2
+h11==0.16.0
+httpcore==1.0.9
+httpcore2==2.16.0
+httpx==0.28.1
+httpx2==2.16.0
+idna==3.20
+jmespath==1.1.0
+jsonpatch==1.46
+jsonpointer==3.11
+langchain-protocol==0.0.21
+langgraph==1.2.20
+langgraph-checkpoint==4.3.1
+langgraph-prebuilt==1.1.1
+langgraph-sdk==0.4.14
+langsmith==0.14.17
+orjson==3.13.0
+ormsgpack==1.13.1
+packaging==26.3
+pyasn1==0.6.5
+pyasn1-modules==0.4.2
+pycparser==3.12
+pydantic==2.14.3
+pydantic-core==2.50.4
+python-dateutil==2.9.0.post0
+pyyaml==6.0.3
+requests==2.34.2
+requests-toolbelt==1.0.0
+s3transfer==0.19.3
+six==1.17.0
+sniffio==1.3.1
+tenacity==9.1.4
+truststore==0.10.5
+typing-extensions==4.16.0
+typing-inspection==0.4.5
+urllib3==2.8.0
+uuid-utils==0.19.0
+websockets==17.4
+xxhash==4.1.0
+zstandard==0.25.0
