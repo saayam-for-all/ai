@@ -28,9 +28,11 @@ GEMINI_TEMPERATURE = 0.3
 # Per-call limits for LangChain models built by create_chat_model (#263).
 # API Gateway's integration timeout is 29 s. model_routing.json has four
 # targets (3 Groq + 1 Gemini). With max_retries=0, each target makes one
-# attempt, so 4 × 6 s = 24 s worst case — under the gateway limit, leaving
-# a few seconds for non-model work before/after the chain.
-DEFAULT_MODEL_REQUEST_TIMEOUT_SECONDS = 6.0
+# attempt. Timed-out calls also burn ~0.6–1.2 s of connection/client
+# overhead beyond the configured limit, so 4 × 5 s ≈ 20 s of wait plus
+# ~5 s of overhead ≈ 25 s wall — under the gateway limit, leaving a few
+# seconds for SSM, DB, and response building.
+DEFAULT_MODEL_REQUEST_TIMEOUT_SECONDS = 5.0
 DEFAULT_MODEL_MAX_RETRIES = 0
 
 GROQ_API_KEY = None
