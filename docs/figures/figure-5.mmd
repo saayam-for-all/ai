@@ -1,0 +1,11 @@
+flowchart TD
+  S1["<b>Step 1. Geocode what the caller sent</b><br/>lat + lng given: Nominatim reverse geocode (4 s), source = gps<br/>otherwise zip / city / state given: Nominatim search (4 s), source = place"]
+  S2["<b>Step 2. Bare city fallback</b><br/>still no country and a city was given:<br/>use the dataset only if exactly ONE country has that city, source = city_directory"]
+  S3["<b>Step 3. Explicit country</b><br/>country given: it wins, and finer fields that belong to another country are discarded<br/>source = country_param, unless it only confirms the country already found"]
+  S4["<b>Step 4. Caller IP, last resort</b><br/>still no country: ipinfo.io lookup on the caller IP (3 s)<br/>a usable answer REPLACES everything found so far, source = ip"]
+  Q{"Country resolved<br/>and in the dataset?"}
+  OK["Look up numbers inside that country only<br/>response carries location_source and display_location"]
+  NF["404 Emergency services not found<br/>(never another country's number)"]
+  S1 --> S2 --> S3 --> S4 --> Q
+  Q -- yes --> OK
+  Q -- no --> NF
