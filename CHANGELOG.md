@@ -10,6 +10,15 @@ team works and reviews in.
 
 ## Unreleased
 
+### Configured model fallback — [#193](https://github.com/saayam-for-all/ai/issues/193)
+
+**Changed**
+
+- When a model returns an empty response or fails, answer generation now tries the next configured model instead of immediately returning an error.
+- Each failed model attempt logs a `MODEL_FAILOVER` warning.
+- Removed unused model-name arguments from `GroqAnswerGenerationService`.
+
+
 ### Emergency Contacts: request logging and location fields — [#146](https://github.com/saayam-for-all/ai/issues/146) · PR [#229](https://github.com/saayam-for-all/ai/pull/229)
 
 **Added**
@@ -59,6 +68,7 @@ team works and reviews in.
   as not sent, and a number is read as text.
   *Observable difference:* `{"city": ["a"], "country": "IN"}` returns India's
   numbers instead of a `500`.
+
 
 ### Token usage tracking & reasoning effort — [#194](https://github.com/saayam-for-all/ai/issues/194)
 
