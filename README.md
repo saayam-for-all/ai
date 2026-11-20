@@ -253,8 +253,18 @@ curl -X GET "https://<api-gateway-url>/emergency-contacts?zip=95112&country=US&l
   "language": "hi",
   "country": "IN",
   "match_level": "country",
-  "resolved_location": { "country": "IN" }
+  "resolved_location": { "country": "IN" },
+  "location_source": "country_param",
+  "display_location": "IN"
 }
+```
+
+For a browser position in Vienna the last three fields read:
+
+```json
+  "resolved_location": { "zip": "1010", "city": "Vienna", "state": null, "country": "AT" },
+  "location_source": "gps",
+  "display_location": "Vienna (AT)"
 ```
 
 - `dial_number` is always ASCII and is what a click-to-call link must use.
@@ -263,6 +273,21 @@ curl -X GET "https://<api-gateway-url>/emergency-contacts?zip=95112&country=US&l
   that country and the country's own general emergency line is being returned
   instead. Label those rows as a general emergency line rather than presenting
   them as the specific service.
+- `location_source` says how the location was found: `gps` (the browser's
+  position), `place` (a `zip`, `city` or `state` that was searched),
+  `city_directory` (a bare `city` found in the directory), `country_param` (the
+  `country` parameter) or `ip` (the caller's IP address). **`ip` is an
+  estimate**: a VPN, a phone hotspot or a roaming phone can place it in another
+  country, so show it as "Location estimated from your internet connection". It
+  can be `ip` even when the browser sent a position, if that position could not
+  be resolved (OpenStreetMap failed, or the point is at sea), so the client
+  cannot work this out on its own.
+- `display_location` is a ready-to-show place name, built only from the parts
+  that exist: "Vienna (AT)", "Osaka, Osaka Prefecture (JP)", "City of
+  Westminster, England (GB)", "Doha (QA)". It never contains "null". Prefer it to
+  assembling `resolved_location` yourself: countries name their regions
+  differently (state, prefecture, province), and city-states have none.
+- Place names are requested from OpenStreetMap in English ("Vienna", not "Wien").
 - Numbers never cross a border. If the country cannot be resolved, or the
   country is not in the directory, the endpoint answers `404` rather than
   returning another country's numbers. **Clients must render "unavailable" in
@@ -271,7 +296,12 @@ curl -X GET "https://<api-gateway-url>/emergency-contacts?zip=95112&country=US&l
   [issue #146](https://github.com/saayam-for-all/ai/issues/146).
 - Pass `service=<name>` to request a single service. Recognised names are
   `general_emergency`, `police`, `ambulance`, `fire`, `disaster_management`,
-  `women_helpline` and `suicide_helpline`.
+  `women_helpline`, `suicide_helpline`, `child_helpline`, `coastguard`,
+  `traffic_police`, `gendarmerie`, `gas_leak` and `general_emergency_alternate`.
+- In a JSON body, a list, an object or `true`/`false` where text belongs
+  (`zip`, `city`, `state`, `country`, `service`, `language`) is treated as not
+  sent, and a number is read as text, so a malformed body cannot turn a lookup
+  into a `500`.
 
 Provenance for the numbers in `services/emergency_numbers.json` is recorded in
 [`docs/emergency_numbers_provenance.md`](docs/emergency_numbers_provenance.md).
@@ -295,13 +325,45 @@ including the error paths and the router fallback, now goes through
 
 `lat`/`lng` (reverse geocoded) → `zip`/`city`/`state` (geocoded) → bare `city`
 matched in the directory, but **only when exactly one country contains it** →
-caller IP. An explicit `country` overrides all of the above and **discards**
+caller IP. The caller IP also takes over when the coordinates resolve to no
+country (a point at sea), and its answer then replaces the position's entirely.
+An explicit `country` overrides all of the above and **discards**
 finer-grained fields resolved elsewhere, so a city belonging to a different
-country cannot match by coincidence.
+country cannot match by coincidence. A `country` that only confirms the
+position's own country changes nothing, and `location_source` stays `gps`.
 
 Within a country: the requested state or city entry, else that **same
 country's** `general_emergency` line, marked `is_fallback: true`. There is no
 step that leaves the country.
+
+#### Logs
+
+Every request writes these lines to CloudWatch (log group
+`/aws/lambda/emergency_number_api`), each prefixed with the Lambda request ID:
+- `emergency request:` what was sent (whether GPS was present, and the names of
+  the parameters received);
+- one line per OpenStreetMap or ipinfo lookup, with the result or the reason it
+  failed (`timeout`, `HTTP 429 (rate limited)`, `HTTP 503`, `network error`);
+- `emergency response:` the status, country, `match_level`, how the location was
+  found (`source=`) and the numbers returned, or why it was a `404`. A `500`
+  logs its traceback as one record, so CloudWatch shows it as one event.
+
+What is kept out of the logs:
+- **Coordinates** are rounded to one decimal (about 11 km).
+- **A zip code** keeps only its first three characters (`560*`): a full UK
+  postcode or a US ZIP+4 can point to a handful of addresses.
+- **An IP address** loses its last part (`203.0.113.x`); IPv6 is cut to its
+  `/48`.
+- **Headers and login tokens** are never logged.
+
+Everything else the caller sends (city, state, country, service, language) is
+logged in quotes, cut after 80 characters, with line breaks and other
+invisible characters escaped, so a value can never start a log line of its own
+or pass for one of ours. Place names from OpenStreetMap and ipinfo are escaped
+the same way.
+
+The level is INFO; set the environment variable `EMERGENCY_LOG_LEVEL` (e.g.
+`WARNING`) to change it. A value that is not a level name falls back to INFO.
 
 #### Known limitation
 
@@ -319,6 +381,9 @@ the alpha-2 code. Widening this is tracked as remaining work on issue #146.
 | `test_emergency_dataset.py` | Every entry in the shipped directory is well-formed: no empty or undialable value, no number belonging to another country. |
 | `test_emergency_locale.py` | Resolution order, within-country fallback, `is_fallback` flagging, per-service match level, and numeral localisation. |
 | `test_response_contract.py` | The proxy envelope, including on the error paths, so the `502` cannot come back. |
+| `test_emergency_s3_reader.py` | Loading the directory from S3: one attempt that fits the function timeout, the warm-container cache, and the fallback to the bundled copy when S3 fails or returns a malformed or incomplete object. |
+| `test_emergency_logging.py` | What each request logs, that exact coordinates, full IP addresses, full zip codes and login tokens never reach the log, and that text from a caller or a geocoder cannot break a log line. |
+| `test_emergency_location_fields.py` | `location_source` and `display_location`, English place names, the IP fallback for a position with no country, and that the older fields keep their shape. |
 
 ---
 

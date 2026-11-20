@@ -10,6 +10,7 @@ from utils.model_fallback import ModelTarget, run_model_chain
 
 pytestmark = pytest.mark.unit
 
+
 @pytest.fixture(autouse=True)
 def clear_chat_model_cache():
     client_module._create_chat_model_cached.cache_clear()
@@ -92,6 +93,7 @@ def test_gemini_factory_uses_the_target_model_temperature_and_credentials(monkey
         }
     ]
 
+
 def test_factory_reuses_cached_model_for_same_configuration(monkeypatch):
     calls = []
     expected = object()
@@ -140,6 +142,7 @@ def test_factory_does_not_reuse_model_for_different_configuration(monkeypatch):
     assert first is same_config
     assert first is not different_temperature
     assert len(calls) == 2
+
 
 @pytest.mark.parametrize(
     ("target", "key_name", "expected_message"),

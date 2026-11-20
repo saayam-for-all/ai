@@ -1,5 +1,5 @@
 """
-Answer generation service using Groq with Gemini fallback.
+Answer generation service using the configured model chain.
 Python 3.14+ compatible.
 """
 

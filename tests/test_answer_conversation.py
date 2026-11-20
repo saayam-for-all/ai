@@ -10,33 +10,27 @@ Nothing here calls a provider. The Groq client is replaced with a recorder, so
 these tests assert the exact message list that would have been sent - which is
 the only thing that was ever wrong.
 """
-import json
-from pathlib import Path
 
+import utils
 from types import SimpleNamespace
 from unittest import mock
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-from utils.model_fallback import ModelChainExhausted
 
-import utils
 from utils import (
     MAX_HISTORY_MESSAGES,
     MAX_MESSAGE_CHARS,
     GroqAnswerGenerationService,
 )
+from utils.model_fallback import ModelChainExhausted, _DEFAULT_MODEL_CHAIN
 
 pytestmark = pytest.mark.unit
-with (Path(__file__).resolve().parents[1] / "config" / "model_routing.json").open(
-    encoding="utf-8"
-) as config_file:
-    MODEL_CHAIN = json.load(config_file)["model_chain"]
 
 GROQ_TARGET_COUNT = sum(
-    target["provider"] == "groq" for target in MODEL_CHAIN
+    target.provider == "groq" for target in _DEFAULT_MODEL_CHAIN
 )
-MODEL_CHAIN_LENGTH = len(MODEL_CHAIN)
+MODEL_CHAIN_LENGTH = len(_DEFAULT_MODEL_CHAIN)
 
 
 SUBJECT = "Need help with fixing wooden cabinet"

@@ -9,6 +9,7 @@ import json
 import pytest
 
 from utils import token_usage
+from utils.model_fallback import _DEFAULT_MODEL_CHAIN
 
 
 # ---------------------------------------------------------------------------
@@ -502,10 +503,10 @@ def test_empty_model_responses_are_billed(monkeypatch, capsys):
 
     assert answer
     (record,) = _usage_lines(capsys)
-    assert record["total_tokens"] == 510
-    assert [call["provider"] for call in record["calls"]] == [
-        "groq", "groq", "groq", "gemini"
-    ]
+    expected_providers = [target.provider for target in _DEFAULT_MODEL_CHAIN]
+    groq_count = expected_providers.count("groq")
+    assert [call["provider"] for call in record["calls"]] == expected_providers
+    assert record["total_tokens"] == (100 * groq_count) + 210
 
 
 @pytest.mark.integration
