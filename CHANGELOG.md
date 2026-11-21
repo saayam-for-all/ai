@@ -10,6 +10,17 @@ team works and reviews in.
 
 ## Unreleased
 
+### SSM parameter names and partial provider key reads — [#237](https://github.com/saayam-for-all/ai/issues/237)
+
+**Changed**
+
+- `GROQ_PARAM_NAME` and `GEMINI_PARAM_NAME` (#252) are read when the keys are first loaded, not at import. Unset uses `/dev/saayam/GenAI/groq/key` and `/dev/saayam/GenAI/gemini/key`; an empty name still skips that provider.
+- If only one key exists in SSM, a warning naming the missing parameter is logged and the other provider keeps working; the missing provider's accessors return `None`. Caching, the 30s retry backoff and the short SSM timeouts are unchanged.
+
+**Fixed**
+
+- If the function can't read one provider's key because of a permission error (`AccessDeniedException`), it logs a warning naming that parameter and keeps working with the other provider. Previously one denied parameter failed the whole read, so neither provider loaded.
+
 ### Provider keys loaded on first use — [#237](https://github.com/saayam-for-all/ai/issues/237) (Part A)
 
 **Changed**

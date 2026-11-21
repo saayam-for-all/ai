@@ -37,12 +37,13 @@ def __getattr__(name: str):
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
-# Parameter Store names of the provider keys. The deployed functions use the
-# defaults. The test function sets GROQ_PARAM_NAME to its own test-only key and
-# GEMINI_PARAM_NAME to an empty string, so it runs Groq-only and never asks for
-# a key its role cannot read (#252). An empty name skips that provider.
-GROQ_PARAM = os.environ.get("GROQ_PARAM_NAME", "/dev/saayam/GenAI/groq/key")
-GEMINI_PARAM = os.environ.get("GEMINI_PARAM_NAME", "/dev/saayam/GenAI/gemini/key")
+# Default Parameter Store names of the provider keys; GROQ_PARAM_NAME and
+# GEMINI_PARAM_NAME override them, read when the keys load. The test function
+# sets GROQ_PARAM_NAME to its own test-only key and GEMINI_PARAM_NAME to an
+# empty string, so it runs Groq-only and never asks for a key its role cannot
+# read (#252). An empty name skips that provider.
+GROQ_PARAM = "/dev/saayam/GenAI/groq/key"
+GEMINI_PARAM = "/dev/saayam/GenAI/gemini/key"
 
 # Legacy defaults for get_groq_llm() / get_gemini_llm().
 GROQ_MODEL = "openai/gpt-oss-20b"
@@ -69,22 +70,66 @@ def _print_key_status(groq_key, gemini_key):
     print(f"INIT LOG: Gemini Key Found: {bool(gemini_key)}")
 
 
+def _param_names() -> tuple[str, str]:
+    """SSM parameter names, read from the environment when keys load. Unset uses the default."""
+    return (
+        os.environ.get("GROQ_PARAM_NAME", GROQ_PARAM),
+        os.environ.get("GEMINI_PARAM_NAME", GEMINI_PARAM),
+    )
+
+
+def _is_access_denied(error: ClientError) -> bool:
+    return error.response.get("Error", {}).get("Code") == "AccessDeniedException"
+
+
+def _get_parameters(ssm, names: list[str]) -> dict[str, str]:
+    response = ssm.get_parameters(Names=names, WithDecryption=True)
+    return {p["Name"]: p["Value"] for p in response.get("Parameters", [])}
+
+
+def _get_each_parameter(ssm, names: list[str]) -> tuple[dict[str, str], list[str]]:
+    """Read names one at a time; returns (params, denied). Raises if all are denied."""
+    params, denied = {}, []
+    for name in names:
+        try:
+            params.update(_get_parameters(ssm, [name]))
+        except ClientError as e:
+            if not _is_access_denied(e):
+                raise
+            denied.append(name)
+            last_denial = e
+    if len(denied) == len(names):
+        raise last_denial
+    return params, denied
+
+
 # lru_cache doesn't cache a call that raised, so failed reads aren't cached.
 @lru_cache(maxsize=1)
 def _fetch_keys() -> tuple[str | None, str | None]:
-    """Read the configured keys from SSM; raises on failure. An empty name is skipped."""
-    names = [n for n in (GROQ_PARAM, GEMINI_PARAM) if n]
-    params = {}
+    """Read the configured keys from SSM; raises on failure.
+
+    An empty name is skipped. A missing or denied key is not a failure."""
+    groq_param, gemini_param = _param_names()
+    names = [n for n in (groq_param, gemini_param) if n]
+    params, denied = {}, []
     if names:
         ssm = boto3.client("ssm", config=_SSM_CONFIG)
-        response = ssm.get_parameters(Names=names, WithDecryption=True)
-        params = {p["Name"]: p["Value"] for p in response.get("Parameters", [])}
+        try:
+            params = _get_parameters(ssm, names)
+        except ClientError as e:
+            if len(names) < 2 or not _is_access_denied(e):
+                raise
+            # One denied name fails the whole batch; read each so the other key still loads.
+            params, denied = _get_each_parameter(ssm, names)
 
-    missing = [n for n in names if n not in params]
+    if denied:
+        logger.warning("INIT: Access denied to SSM parameters, continuing without them: %s", denied)
+
+    missing = [n for n in names if n not in params and n not in denied]
     if missing:
-        logger.warning("INIT: Parameters not found in SSM: %s", missing)
+        logger.warning("INIT: Parameters not found in SSM, continuing without them: %s", missing)
 
-    keys = (params.get(GROQ_PARAM), params.get(GEMINI_PARAM))
+    keys = (params.get(groq_param), params.get(gemini_param))
     _print_key_status(*keys)
     return keys
 

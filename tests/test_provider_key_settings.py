@@ -31,9 +31,11 @@ def load_keys(monkeypatch):
     """Load the keys under the given names with a recording Parameter Store."""
     calls = []
 
-    def _load(groq=LIVE_GROQ, gemini=LIVE_GEMINI):
-        monkeypatch.setattr(client_module, "GROQ_PARAM", groq)
-        monkeypatch.setattr(client_module, "GEMINI_PARAM", gemini)
+    def _load(**settings):
+        for name in ("GROQ_PARAM_NAME", "GEMINI_PARAM_NAME"):
+            monkeypatch.delenv(name, raising=False)
+        for name, value in settings.items():
+            monkeypatch.setenv(name, value)
         monkeypatch.setattr(
             client_module,
             "boto3",
@@ -51,12 +53,12 @@ def test_the_deployed_functions_keep_the_default_names(load_keys):
 
 
 def test_the_test_function_asks_only_for_its_own_groq_key(load_keys):
-    keys, calls = load_keys(groq=TEST_GROQ, gemini="")
+    keys, calls = load_keys(GROQ_PARAM_NAME=TEST_GROQ, GEMINI_PARAM_NAME="")
     assert calls == [[TEST_GROQ]]
     assert keys == (f"key-for-{TEST_GROQ}", None)
 
 
 def test_no_names_means_no_request_and_no_keys(load_keys):
-    keys, calls = load_keys(groq="", gemini="")
+    keys, calls = load_keys(GROQ_PARAM_NAME="", GEMINI_PARAM_NAME="")
     assert calls == []
     assert keys == (None, None)
