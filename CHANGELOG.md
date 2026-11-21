@@ -10,6 +10,19 @@ team works and reviews in.
 
 ## Unreleased
 
+### Emergency Contacts: an oversized coordinate is ignored, not a 500 · [#146](https://github.com/saayam-for-all/ai/issues/146) · follow-up to PR [#229](https://github.com/saayam-for-all/ai/pull/229)
+
+**Fixed**
+
+- **A coordinate too large for a float no longer crashes the request.** JSON
+  allows an integer of any length, and `float()` raises `OverflowError` on one
+  with hundreds of digits. `_coarse()` and `_reverse_geocode()` caught only
+  `TypeError` and `ValueError`, so a body like `{"lat": 1000...0}` returned a
+  500. Both now treat it as an unusable coordinate, like any other.
+  *Observable difference:* that request now answers from the caller's IP and
+  logs `GPS coordinates ignored: lat/lng are not numbers`, instead of a 500.
+  The web app sends a query string, so it never sent such a value.
+
 ### Volunteer skill suggestions — [#216](https://github.com/saayam-for-all/ai/issues/216)
 
 **Added**

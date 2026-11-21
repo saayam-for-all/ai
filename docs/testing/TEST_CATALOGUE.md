@@ -34,7 +34,7 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_emergency_dataset.py`](../../tests/test_emergency_dataset.py) | Dataset | #146 | `services/emergency_numbers.json` | 17 |
 | [`tests/test_emergency_locale.py`](../../tests/test_emergency_locale.py) | Unit | #146 | `services/emergency.py` | 67 |
 | [`tests/test_emergency_location_fields.py`](../../tests/test_emergency_location_fields.py) | Contract | #146, webapp#1959 | `location_source, display_location` | 59 |
-| [`tests/test_emergency_logging.py`](../../tests/test_emergency_logging.py) | Unit | #146 | `services/emergency.py logging` | 94 |
+| [`tests/test_emergency_logging.py`](../../tests/test_emergency_logging.py) | Unit | #146 | `services/emergency.py logging` | 96 |
 | [`tests/test_emergency_s3_reader.py`](../../tests/test_emergency_s3_reader.py) | Unit | #334 | `services/emergency.py S3 reader` | 23 |
 | [`tests/test_gardening_category.py`](../../tests/test_gardening_category.py) | Unit | #217 | `services/classification_service.py` | 15 |
 | [`tests/test_generate_answer.py`](../../tests/test_generate_answer.py) | Contract | #169 | `generate_answer_handler` | 50 |
@@ -57,7 +57,7 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_skill_suggestion.py`](../../tests/test_skill_suggestion.py) | Unit | #216 | `services/skill_suggestion_service.py` | 76 |
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
 | [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 57 |
-| | | | **Total** | **818** |
+| | | | **Total** | **820** |
 
 ## Every test
 
@@ -280,7 +280,7 @@ location_source and display_location in the Emergency Contacts response.
 
 ### `test_emergency_logging.py`
 
-*Unit · issue #146 · 94 tests*
+*Unit · issue #146 · 96 tests*
 
 Logging for the Emergency Contacts Lambda (follow-up to issue #146).
 
@@ -309,6 +309,7 @@ Logging for the Emergency Contacts Lambda (follow-up to issue #146).
 | `test_a_handler_failure_logs_its_traceback_as_one_record` | Logged, not printed: Lambda splits printed output into one event per line, while a logged record, traceback included, stays one event with the request ID. |
 | `test_an_invalid_caller_ip_is_logged_without_the_value` | An invalid caller ip is logged without the value. |
 | `test_unusable_coordinates_are_logged` | Unusable coordinates are logged. |
+| `test_a_coordinate_too_large_for_a_float_is_ignored_not_a_500` | JSON allows an integer of any length, and float() cannot hold one with 400 digits. It used to escape `_coarse()` and `_reverse_geocode()` as an OverflowError and turn the request into a 500 (follow-up to #229). Now it is an unusable coordinate like any other, and the IP answers. |
 | `test_a_404_logs_why` | A 404 logs why. |
 | `test_an_unexpected_error_is_logged_with_its_traceback` | An unexpected error is logged with its traceback. |
 | `test_the_handler_never_logs_the_login_token` | The handler never logs the login token. |
@@ -322,7 +323,7 @@ Logging for the Emergency Contacts Lambda (follow-up to issue #146).
 | `test_a_refused_connection_is_a_network_error` | A refused connection is a network error. |
 | `test_location_description_skips_empty_parts` | Location description skips empty parts. |
 
-> 35 test functions expand to 94 cases through parametrisation.
+> 36 test functions expand to 96 cases through parametrisation.
 
 ### `test_emergency_s3_reader.py`
 
