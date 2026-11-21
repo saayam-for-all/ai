@@ -73,10 +73,11 @@ def _coarse(value):
     """A coordinate rounded to one decimal (about 11 km), or None.
 
     Enough to tell Prague from Houston in a log, not enough to locate a person.
+    An integer too large for a float (JSON allows any length) is None too.
     """
     try:
         return round(float(value), 1)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return None
 
 
@@ -496,7 +497,7 @@ class LocationResolver:
         try:
             lat = float(lat)
             lng = float(lng)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             logger.warning("GPS coordinates ignored: lat/lng are not numbers")
             return None
         if not (-90 <= lat <= 90 and -180 <= lng <= 180):
