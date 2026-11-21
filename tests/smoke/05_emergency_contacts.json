@@ -1,0 +1,13 @@
+{
+  "name": "Emergency Contacts: by country",
+  "service": "emergency_contacts",
+  "query": {
+    "country": "IN"
+  },
+  "expect": {
+    "status": 200,
+    "body_keys": [
+      "services"
+    ]
+  }
+}
