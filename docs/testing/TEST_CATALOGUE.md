@@ -36,7 +36,7 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_emergency_s3_reader.py`](../../tests/test_emergency_s3_reader.py) | Unit | #334 | `services/emergency.py S3 reader` | 23 |
 | [`tests/test_generate_answer.py`](../../tests/test_generate_answer.py) | Contract | #169 | `generate_answer_handler` | 50 |
 | [`tests/test_import_blast_radius.py`](../../tests/test_import_blast_radius.py) | Integration | #169, #171 | `module-scope imports` | 4 |
-| [`tests/test_lazy_provider_keys.py`](../../tests/test_lazy_provider_keys.py) | Unit | #237 | `utils/client.py key loading` | 17 |
+| [`tests/test_lazy_provider_keys.py`](../../tests/test_lazy_provider_keys.py) | Unit | #237 | `utils/client.py key loading` | 23 |
 | [`tests/test_model_fallback.py`](../../tests/test_model_fallback.py) | Unit | #193 | `utils/model_fallback.py` | 24 |
 | [`tests/test_org_search_contract.py`](../../tests/test_org_search_contract.py) | Contract | #170 | `utils/search_orgs.py` | 25 |
 | [`tests/test_request_db_schema.py`](../../tests/test_request_db_schema.py) | Unit | #169 | `utils/request_db.py` | 54 |
@@ -44,7 +44,7 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_router.py`](../../tests/test_router.py) | Integration | #171 | `lambda_function.lambda_handler` | 34 |
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
 | [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 58 |
-| | | | **Total** | **598** |
+| | | | **Total** | **604** |
 
 ## Every test
 
@@ -382,7 +382,7 @@ Cross-service blast radius at import time - issue #171.
 
 ### `test_lazy_provider_keys.py`
 
-*Unit · issue #237 · 17 tests*
+*Unit · issue #237 · 23 tests*
 
 Provider keys load from SSM on first use, not at import (#237). Successful reads are cached; failed reads back off, then retry.
 
@@ -398,6 +398,12 @@ Provider keys load from SSM on first use, not at import (#237). Successful reads
 | `test_a_retry_that_fails_again_starts_a_new_window` | A retry that fails again starts a new window. |
 | `test_ssm_client_is_created_with_short_timeouts` | Ssm client is created with short timeouts. |
 | `test_accessors_recover_once_keys_become_available` | Accessors recover once keys become available. |
+| `test_default_parameter_names_are_used_when_env_vars_are_unset` | Default parameter names are used when env vars are unset. |
+| `test_env_var_parameter_names_are_passed_to_ssm` | Env var parameter names are passed to ssm. |
+| `test_a_missing_gemini_key_is_logged_and_groq_still_works` | A missing gemini key is logged and groq still works. |
+| `test_access_denied_on_gemini_alone_still_loads_groq` | Access denied on gemini alone still loads groq. |
+| `test_access_denied_on_both_keys_is_a_failure_and_backs_off` | Access denied on both keys is a failure and backs off. |
+| `test_a_non_permission_error_during_per_key_reads_is_a_failure` | A non permission error during per key reads is a failure. |
 | `test_key_found_lines_are_printed_once_per_container` | Key found lines are printed once per container. |
 | `test_accessors_return_none_without_keys` | Accessors return none without keys. |
 | `test_accessor_swallows_a_constructor_failure` | Accessor swallows a constructor failure. |
@@ -405,7 +411,7 @@ Provider keys load from SSM on first use, not at import (#237). Successful reads
 | `test_groq_llm_accessor_swallows_a_constructor_failure` | Groq llm accessor swallows a constructor failure. |
 | `test_gemini_llm_accessor_swallows_a_constructor_failure` | Gemini llm accessor swallows a constructor failure. |
 
-> 16 test functions expand to 17 cases through parametrisation.
+> 22 test functions expand to 23 cases through parametrisation.
 
 ### `test_model_fallback.py`
 

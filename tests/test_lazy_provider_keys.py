@@ -103,9 +103,11 @@ class _FakeSSM:
     def __init__(self, *outcomes):
         self._outcomes = list(outcomes)
         self.calls = 0
+        self.names = []
 
     def get_parameters(self, Names, WithDecryption):
         self.calls += 1
+        self.names.append(list(Names))
         outcome = self._outcomes.pop(0)
         if isinstance(outcome, BaseException):
             raise outcome
@@ -114,6 +116,27 @@ class _FakeSSM:
                 {"Name": name, "Value": value}
                 for name, value in outcome.items()
                 if name in Names
+            ]
+        }
+
+
+class _PermissionedSSM:
+    """Like IAM: a call naming any denied parameter fails as a whole."""
+
+    def __init__(self, values, denied=()):
+        self._values = values
+        self._denied = set(denied)
+        self.names = []
+
+    def get_parameters(self, Names, WithDecryption):
+        self.names.append(list(Names))
+        if self._denied.intersection(Names):
+            raise _ACCESS_DENIED
+        return {
+            "Parameters": [
+                {"Name": name, "Value": self._values[name]}
+                for name in Names
+                if name in self._values
             ]
         }
 
@@ -156,6 +179,12 @@ _ACCESS_DENIED = ClientError(
     "GetParameters",
 )
 
+# Backoff tests use a non-permission error: AccessDenied falls back to per-key reads.
+_THROTTLED = ClientError(
+    {"Error": {"Code": "ThrottlingException", "Message": "slow down"}},
+    "GetParameters",
+)
+
 
 def test_a_successful_read_is_cached(monkeypatch):
     fake = _FakeSSM(_BOTH_KEYS)
@@ -177,7 +206,7 @@ def test_parameter_not_found_is_a_successful_read_and_is_cached(monkeypatch):
 
 @pytest.mark.parametrize(
     "failure",
-    [_ACCESS_DENIED, TimeoutError("ssm timed out")],
+    [_THROTTLED, TimeoutError("ssm timed out")],
     ids=["client-error", "unexpected-error"],
 )
 def test_a_failed_read_is_not_cached_and_the_next_call_retries(
@@ -193,7 +222,7 @@ def test_a_failed_read_is_not_cached_and_the_next_call_retries(
 
 
 def test_calls_inside_the_backoff_window_do_not_call_ssm(monkeypatch, clock):
-    fake = _FakeSSM(_ACCESS_DENIED)
+    fake = _FakeSSM(_THROTTLED)
     _install_ssm(monkeypatch, fake)
 
     assert client_module._load_keys() == (None, None)
@@ -208,7 +237,7 @@ def test_calls_inside_the_backoff_window_do_not_call_ssm(monkeypatch, clock):
 
 def test_a_call_29_seconds_after_a_failure_does_not_reach_ssm(monkeypatch, clock):
     """A call 29s after a failure stays inside the 30s backoff window."""
-    fake = _FakeSSM(_ACCESS_DENIED, _BOTH_KEYS)
+    fake = _FakeSSM(_THROTTLED, _BOTH_KEYS)
     _install_ssm(monkeypatch, fake)
 
     assert client_module._load_keys() == (None, None)
@@ -221,7 +250,7 @@ def test_a_call_29_seconds_after_a_failure_does_not_reach_ssm(monkeypatch, clock
 
 
 def test_a_retry_that_fails_again_starts_a_new_window(monkeypatch, clock):
-    fake = _FakeSSM(_ACCESS_DENIED, _ACCESS_DENIED, _BOTH_KEYS)
+    fake = _FakeSSM(_THROTTLED, _THROTTLED, _BOTH_KEYS)
     _install_ssm(monkeypatch, fake)
 
     client_module._load_keys()
@@ -257,7 +286,7 @@ def test_ssm_client_is_created_with_short_timeouts(monkeypatch):
 
 
 def test_accessors_recover_once_keys_become_available(monkeypatch, clock):
-    fake = _FakeSSM(_ACCESS_DENIED, _BOTH_KEYS)
+    fake = _FakeSSM(_THROTTLED, _BOTH_KEYS)
     _install_ssm(monkeypatch, fake)
     built = []
     monkeypatch.setattr(
@@ -271,6 +300,86 @@ def test_accessors_recover_once_keys_become_available(monkeypatch, clock):
 
     assert first is not None and first is second
     assert built == ["groq-key"]
+
+
+def test_default_parameter_names_are_used_when_env_vars_are_unset(monkeypatch):
+    monkeypatch.delenv("GROQ_PARAM_NAME", raising=False)
+    monkeypatch.delenv("GEMINI_PARAM_NAME", raising=False)
+    fake = _FakeSSM(_BOTH_KEYS)
+    _install_ssm(monkeypatch, fake)
+
+    assert client_module._load_keys() == ("groq-key", "gemini-key")
+    assert fake.names == [[client_module.GROQ_PARAM, client_module.GEMINI_PARAM]]
+
+
+def test_env_var_parameter_names_are_passed_to_ssm(monkeypatch):
+    monkeypatch.setenv("GROQ_PARAM_NAME", "/prod/groq")
+    monkeypatch.setenv("GEMINI_PARAM_NAME", "/prod/gemini")
+    fake = _FakeSSM({"/prod/groq": "groq-key", "/prod/gemini": "gemini-key"})
+    _install_ssm(monkeypatch, fake)
+
+    assert client_module._load_keys() == ("groq-key", "gemini-key")
+    assert fake.names == [["/prod/groq", "/prod/gemini"]]
+
+
+def test_a_missing_gemini_key_is_logged_and_groq_still_works(monkeypatch, caplog):
+    _install_ssm(monkeypatch, _FakeSSM({client_module.GROQ_PARAM: "groq-key"}))
+    built = []
+    monkeypatch.setattr(
+        client_module, "Groq", lambda api_key: built.append(api_key) or object()
+    )
+
+    with caplog.at_level("WARNING", logger=client_module.logger.name):
+        assert client_module.get_groq_client() is not None
+
+    assert built == ["groq-key"]
+    assert client_module.has_groq() is True
+    assert client_module.get_gemini_client() is None
+    assert client_module.get_gemini_llm() is None
+    assert client_module.GEMINI_PARAM in caplog.text
+    assert client_module.GROQ_PARAM not in caplog.text
+
+
+def test_access_denied_on_gemini_alone_still_loads_groq(monkeypatch, caplog):
+    groq, gemini = client_module.GROQ_PARAM, client_module.GEMINI_PARAM
+    fake = _PermissionedSSM(_BOTH_KEYS, denied=[gemini])
+    _install_ssm(monkeypatch, fake)
+
+    with caplog.at_level("WARNING", logger=client_module.logger.name):
+        assert client_module._load_keys() == ("groq-key", None)
+
+    assert fake.names == [[groq, gemini], [groq], [gemini]]
+    assert "Access denied" in caplog.text and gemini in caplog.text
+    assert "not found" not in caplog.text
+    assert client_module.has_groq() is True
+    assert client_module.get_gemini_client() is None
+    assert len(fake.names) == 3, "a partial read is cached like any success"
+
+
+def test_access_denied_on_both_keys_is_a_failure_and_backs_off(monkeypatch, clock):
+    fake = _PermissionedSSM(
+        _BOTH_KEYS, denied=[client_module.GROQ_PARAM, client_module.GEMINI_PARAM]
+    )
+    _install_ssm(monkeypatch, fake)
+
+    assert client_module._load_keys() == (None, None)
+    clock.advance(_BACKOFF - 1)
+    assert client_module._load_keys() == (None, None)
+    assert len(fake.names) == 3
+
+
+def test_a_non_permission_error_during_per_key_reads_is_a_failure(monkeypatch, clock):
+    fake = _FakeSSM(_ACCESS_DENIED, _THROTTLED, _BOTH_KEYS)
+    _install_ssm(monkeypatch, fake)
+
+    assert client_module._load_keys() == (None, None)
+    assert fake.calls == 2, "the remaining per-key read is skipped once one fails"
+    clock.advance(_BACKOFF - 1)
+    assert client_module._load_keys() == (None, None)
+    assert fake.calls == 2
+    clock.advance(1)
+    assert client_module._load_keys() == ("groq-key", "gemini-key")
+    assert fake.calls == 3
 
 
 def test_key_found_lines_are_printed_once_per_container(monkeypatch, capsys):

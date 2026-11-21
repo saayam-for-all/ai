@@ -4,6 +4,7 @@ Keys and provider SDKs are loaded on first use, not at import; call the accessor
 from functools import lru_cache
 import importlib
 import logging
+import os
 import sys
 import time
 
@@ -35,6 +36,7 @@ def __getattr__(name: str):
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
+# Defaults; GROQ_PARAM_NAME / GEMINI_PARAM_NAME override them when keys load.
 GROQ_PARAM = "/dev/saayam/GenAI/groq/key"
 GEMINI_PARAM = "/dev/saayam/GenAI/gemini/key"
 
@@ -63,22 +65,63 @@ def _print_key_status(groq_key, gemini_key):
     print(f"INIT LOG: Gemini Key Found: {bool(gemini_key)}")
 
 
+def _param_names() -> tuple[str, str]:
+    """SSM parameter names, read from the environment when keys are loaded."""
+    return (
+        os.environ.get("GROQ_PARAM_NAME") or GROQ_PARAM,
+        os.environ.get("GEMINI_PARAM_NAME") or GEMINI_PARAM,
+    )
+
+
+def _is_access_denied(error: ClientError) -> bool:
+    return error.response.get("Error", {}).get("Code") == "AccessDeniedException"
+
+
+def _get_parameters(ssm, names: list[str]) -> dict[str, str]:
+    response = ssm.get_parameters(Names=names, WithDecryption=True)
+    return {p["Name"]: p["Value"] for p in response.get("Parameters", [])}
+
+
+def _get_each_parameter(ssm, names: list[str]) -> tuple[dict[str, str], list[str]]:
+    """Read names one at a time; returns (params, denied). Raises if all are denied."""
+    params, denied = {}, []
+    for name in names:
+        try:
+            params.update(_get_parameters(ssm, [name]))
+        except ClientError as e:
+            if not _is_access_denied(e):
+                raise
+            denied.append(name)
+            last_denial = e
+    if len(denied) == len(names):
+        raise last_denial
+    return params, denied
+
+
 # lru_cache doesn't cache a call that raised, so failed reads aren't cached.
 @lru_cache(maxsize=1)
 def _fetch_keys() -> tuple[str | None, str | None]:
-    """Read both keys from SSM; raises on failure."""
+    """Read both keys from SSM; raises on failure. A missing or denied key is not a failure."""
+    groq_param, gemini_param = _param_names()
+    names = [groq_param, gemini_param]
     ssm = boto3.client("ssm", config=_SSM_CONFIG)
-    response = ssm.get_parameters(
-        Names=[GROQ_PARAM, GEMINI_PARAM],
-        WithDecryption=True,
-    )
-    params = {p["Name"]: p["Value"] for p in response.get("Parameters", [])}
+    denied = []
+    try:
+        params = _get_parameters(ssm, names)
+    except ClientError as e:
+        if not _is_access_denied(e):
+            raise
+        # One denied name fails the whole batch; read each so the other key still loads.
+        params, denied = _get_each_parameter(ssm, names)
 
-    missing = [n for n in [GROQ_PARAM, GEMINI_PARAM] if n not in params]
+    if denied:
+        logger.warning("INIT: Access denied to SSM parameters, continuing without them: %s", denied)
+
+    missing = [n for n in names if n not in params and n not in denied]
     if missing:
-        logger.warning("INIT: Parameters not found in SSM: %s", missing)
+        logger.warning("INIT: Parameters not found in SSM, continuing without them: %s", missing)
 
-    keys = (params.get(GROQ_PARAM), params.get(GEMINI_PARAM))
+    keys = (params.get(groq_param), params.get(gemini_param))
     _print_key_status(*keys)
     return keys
 
