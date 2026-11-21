@@ -1,0 +1,13 @@
+{
+  "name": "Generate Subject",
+  "service": "generate_subject",
+  "body": {
+    "description": "I am an elderly citizen and need help picking up milk and bread this afternoon"
+  },
+  "expect": {
+    "status": 200,
+    "body_keys": [
+      "subject"
+    ]
+  }
+}

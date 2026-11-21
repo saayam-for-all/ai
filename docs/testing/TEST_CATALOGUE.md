@@ -46,6 +46,7 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_memory_validation.py`](../../tests/test_memory_validation.py) | Unit | #197 | `services/memory_validation.py` | 13 |
 | [`tests/test_model_fallback.py`](../../tests/test_model_fallback.py) | Unit | #193 | `utils/model_fallback.py` | 24 |
 | [`tests/test_org_search_contract.py`](../../tests/test_org_search_contract.py) | Contract | #170 | `utils/search_orgs.py` | 24 |
+| [`tests/test_provider_key_settings.py`](../../tests/test_provider_key_settings.py) | Unit | #252 | `utils/client.py key names` | 3 |
 | [`tests/test_request_db_schema.py`](../../tests/test_request_db_schema.py) | Unit | #169 | `utils/request_db.py` | 54 |
 | [`tests/test_response_contract.py`](../../tests/test_response_contract.py) | Contract | #146, #169, #170 | `response envelopes` | 10 |
 | [`tests/test_router.py`](../../tests/test_router.py) | Integration | #171 | `lambda_function.lambda_handler` | 34 |
@@ -55,9 +56,10 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_skill_eval_dataset.py`](../../tests/test_skill_eval_dataset.py) | Dataset | #216 | `docs/metrics/volunteer_skills_eval_set.json` | 28 |
 | [`tests/test_skill_eval_scoring.py`](../../tests/test_skill_eval_scoring.py) | Unit | #216 | `tools/skill_eval_scoring.py` | 36 |
 | [`tests/test_skill_suggestion.py`](../../tests/test_skill_suggestion.py) | Unit | #216 | `services/skill_suggestion_service.py` | 76 |
+| [`tests/test_smoke_tool.py`](../../tests/test_smoke_tool.py) | Unit | #252 | `tools/smoke_check.py, tests/smoke/` | 23 |
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
 | [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 57 |
-| | | | **Total** | **818** |
+| | | | **Total** | **844** |
 
 ## Every test
 
@@ -576,6 +578,18 @@ Tests for More Organizations / the Organizations tab - issue #170.
 | `test_category_is_passed_through_to_the_search` | Category is passed through to the search. |
 | `test_unified_router_reaches_search_orgs` | Unified router reaches search orgs. |
 
+### `test_provider_key_settings.py`
+
+*Unit · issue #252 · 3 tests*
+
+Provider key names come from settings, so the test function can use its own key (#252).
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_the_deployed_functions_keep_the_default_names` | The deployed functions keep the default names. |
+| `test_the_test_function_asks_only_for_its_own_groq_key` | The function asks only for its own groq key. |
+| `test_no_names_means_no_request_and_no_keys` | No names means no request and no keys. |
+
 ### `test_request_db_schema.py`
 
 *Unit · issue #169 · 54 tests*
@@ -866,6 +880,27 @@ Volunteer skill suggestions: predict_category_api with mode "volunteer_skills" (
 | `test_describe_add_more_then_repeat_the_first` | One volunteer's session: describe, add more, then repeat the first text. |
 
 > 55 test functions expand to 76 cases through parametrisation.
+
+### `test_smoke_tool.py`
+
+*Unit · issue #252 · 23 tests*
+
+The smoke test run after every deploy to `test` (#252), checked without AWS.
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_the_samples_cover_every_routed_service` | The samples cover every routed service. |
+| `test_every_sample_reaches_the_service_it_names` | Every sample reaches the service it names. |
+| `test_the_service_goes_in_the_body_or_the_query` | The service goes in the body or the query. |
+| `test_a_malformed_sample_is_named_with_its_problem` | A malformed sample is named with its problem. |
+| `test_proxy_and_plain_responses_are_both_read` | Proxy and plain responses are both read. |
+| `test_a_failing_response_says_why` | A failing response says why. |
+| `test_a_passing_response_has_no_reasons_and_a_function_error_always_fails` | A passing response has no reasons and a function error always fails. |
+| `test_the_run_reports_every_sample_and_fails_on_any_failure` | The run reports every sample and fails on any failure. |
+| `test_a_call_that_raises_is_a_failure_not_a_crash` | A call that raises is a failure not a crash. |
+| `test_main_exits_non_zero_only_when_a_sample_fails` | Main exits non zero only when a sample fails. |
+
+> 10 test functions expand to 23 cases through parametrisation.
 
 ### `test_subject_generator.py`
 

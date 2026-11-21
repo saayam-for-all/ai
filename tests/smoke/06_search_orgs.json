@@ -1,0 +1,15 @@
+{
+  "name": "Organization search",
+  "service": "search_orgs",
+  "body": {
+    "subject": "Food assistance",
+    "description": "I need help accessing food for my family",
+    "location": "Chicago, IL"
+  },
+  "expect": {
+    "status": 200,
+    "body_keys": [
+      "organizations"
+    ]
+  }
+}
