@@ -1,0 +1,41 @@
+name: Sync dev into test
+
+# After every merge into `dev`, open a pull request that brings `test` up to
+# date, so a change checked on `test` was checked against current code (#252).
+# A person merges it, so any conflict is resolved by someone who can judge it.
+
+on:
+  push:
+    branches:
+      - dev
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  open-sync-pull-request:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Open a sync pull request when test is behind dev
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          BEHIND=$(gh api "repos/$REPO/compare/test...dev" --jq '.ahead_by')
+          echo "dev has $BEHIND commit(s) that test does not."
+          if [ "$BEHIND" = "0" ]; then
+            exit 0
+          fi
+
+          OPEN=$(gh pr list --repo "$REPO" --base test --head dev --state open --json number --jq '.[0].number // empty')
+          if [ -n "$OPEN" ]; then
+            echo "Sync pull request #$OPEN is already open."
+            exit 0
+          fi
+
+          BODY="Brings \`test\` up to date with \`dev\` (#252). If it conflicts, merge \`dev\` into a branch cut from \`test\`, keep both sides of CHANGELOG.md, and regenerate the test catalogue with \`python tools/gen_test_catalogue.py\`. See CONTRIBUTING.md."
+          if ! gh pr create --repo "$REPO" --base test --head dev --title "Sync dev into test" --body "$BODY"; then
+            echo "::warning::Could not open the sync pull request. The repository may not allow GitHub Actions to create pull requests. Open one from dev into test by hand."
+          fi

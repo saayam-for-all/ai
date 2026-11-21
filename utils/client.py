@@ -5,13 +5,18 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 import logging
+import os
 
 from utils.model_fallback import ModelTarget
 
 logger = logging.getLogger(__name__)
 
-GROQ_PARAM = "/dev/saayam/GenAI/groq/key"
-GEMINI_PARAM = "/dev/saayam/GenAI/gemini/key"
+# Parameter Store names of the provider keys. The deployed functions use the
+# defaults. The test function sets GROQ_PARAM_NAME to its own test-only key and
+# GEMINI_PARAM_NAME to an empty string, so it runs Groq-only and never asks for
+# a key its role cannot read (#252). An empty name skips that provider.
+GROQ_PARAM = os.environ.get("GROQ_PARAM_NAME", "/dev/saayam/GenAI/groq/key")
+GEMINI_PARAM = os.environ.get("GEMINI_PARAM_NAME", "/dev/saayam/GenAI/gemini/key")
 
 # Legacy defaults used by the prebuilt LangChain exports below.  New fallback
 # code gets model IDs and per-model options from config/model_routing.json.
@@ -62,15 +67,16 @@ def create_chat_model(target: ModelTarget, *, temperature: float):
 
 # Fetching keys from parameter store
 try:
-    ssm = boto3.client("ssm")
-    response = ssm.get_parameters(
-        Names=[GROQ_PARAM, GEMINI_PARAM],
-        WithDecryption=True
-    )
+    # One request for every configured name: a name the role cannot read would
+    # fail the whole request, which is why the test function leaves Gemini out.
+    names = [n for n in (GROQ_PARAM, GEMINI_PARAM) if n]
+    params = {}
+    if names:
+        ssm = boto3.client("ssm")
+        response = ssm.get_parameters(Names=names, WithDecryption=True)
+        params = {p["Name"]: p["Value"] for p in response.get("Parameters", [])}
 
-    params = {p["Name"]: p["Value"] for p in response.get("Parameters", [])}
-
-    missing = [n for n in [GROQ_PARAM, GEMINI_PARAM] if n not in params]
+    missing = [n for n in names if n not in params]
     if missing:
         logger.warning("INIT: Parameters not found in SSM: %s", missing)
 
