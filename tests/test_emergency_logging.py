@@ -246,10 +246,28 @@ def test_an_invalid_caller_ip_is_logged_without_the_value(logs):
 @pytest.mark.parametrize("lat, lng, message", [
     ("north", "east", "lat/lng are not numbers"),
     ("91", "0", "lat/lng out of range"),
+    pytest.param(10 ** 400, "0", "lat/lng are not numbers", id="too-large-for-a-float"),
 ])
 def test_unusable_coordinates_are_logged(logs, lat, lng, message):
     _lookup({"lat": lat, "lng": lng}, None)
     assert message in logs.text
+
+
+def test_a_coordinate_too_large_for_a_float_is_ignored_not_a_500(logs):
+    """JSON allows an integer of any length, and float() cannot hold one with
+    400 digits. It used to escape `_coarse()` and `_reverse_geocode()` as an
+    OverflowError and turn the request into a 500 (follow-up to #229).
+    Now it is an unusable coordinate like any other, and the IP answers."""
+    huge = "1" + "0" * 400
+    event = {
+        "body": f'{{"lat": {huge}, "lng": {huge}}}',
+        "requestContext": {"identity": {"sourceIp": CALLER_IP}},
+    }
+    with mock.patch("urllib.request.urlopen", side_effect=_fake_urlopen(HOUSTON_IP)):
+        response = LF.emergency_contacts_handler(event, None)
+    assert response["statusCode"] == 200
+    assert "lat/lng are not numbers" in logs.text
+    assert em._coarse(int(huge)) is None
 
 
 # -------------------------------------------------------------------------
