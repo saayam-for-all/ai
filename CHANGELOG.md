@@ -14,8 +14,7 @@ team works and reviews in.
 
 **Changed**
 
-- `GROQ_PARAM_NAME` and `GEMINI_PARAM_NAME` (#252) are read when the keys are first loaded, not at import. Unset uses `/dev/saayam/GenAI/groq/key` and `/dev/saayam/GenAI/gemini/key`; an empty name still skips that provider.
-- If only one key exists in SSM, a warning naming the missing parameter is logged and the other provider keeps working; the missing provider's accessors return `None`. Caching, the 30s retry backoff and the short SSM timeouts are unchanged.
+- `GROQ_PARAM_NAME` and `GEMINI_PARAM_NAME` (#252) are read when the keys are first loaded, not at import. Unset uses `/dev/saayam/GenAI/groq/key` and `/dev/saayam/GenAI/gemini/key`; an empty name still skips that provider. The warning for a parameter missing from SSM now reads `Parameters not found in SSM, continuing without them`. Caching, the 30s retry backoff and the short SSM timeouts are unchanged.
 
 **Fixed**
 
