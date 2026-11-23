@@ -16,7 +16,7 @@ This codebase supports two hosting paradigms:
 
 | Lambda Service | Entry Point Handler | Recommended Memory | Recommended Timeout |
 | :--- | :--- | :--- | :--- |
-| **Predict Category** | `lambda_function.predict_category_handler` | 256 MB | 15 seconds |
+| **Predict Category** | `lambda_function.predict_category_handler` (also serves `"mode": "volunteer_skills"`) | 256 MB | 15 seconds |
 | **Generate Subject** | `lambda_function.generate_subject_handler` | 256 MB | 15 seconds |
 | **Generate Answer** | `lambda_function.generate_answer_handler` | 1024 MB | 60 seconds |
 | **Emergency Contacts** | `lambda_function.emergency_contacts_handler` | 256 MB | 15 seconds |
@@ -33,7 +33,8 @@ ai/
 ├── services/
 │   ├── emergency.py               # Emergency contact geolocation and lookup logic
 │   ├── emergency_numbers.json     # Global emergency numbers database by country/state/city
-│   └── classification_service.py  # Category prediction algorithms
+│   ├── classification_service.py  # Category prediction algorithms
+│   └── skill_suggestion_service.py # Volunteer skill suggestions (predict_category mode "volunteer_skills")
 ├── utils/
 │   ├── categories.py              # Category mappings
 │   ├── categories_with_description.py # Category description mappings
@@ -78,6 +79,102 @@ curl -X POST https://<api-gateway-url>/predict-category \
     "description": "Need help with tutoring in math"
   }'
 ```
+
+| Status | Body | When |
+| :--- | :--- | :--- |
+| 400 | `{"error": "Description is required"}` | Missing or blank `description` |
+| 502 | `{"error": "Category prediction failed", "code": "CATEGORY_PREDICTION_UNAVAILABLE"}` | Every model in the fallback chain failed |
+| 500 | `{"error": "Category prediction failed"}` | Any other failure. The exception type is logged; its text is not, because it can quote the description |
+
+#### Volunteer skills mode (issue #216)
+The Become a Volunteer wizard sends a volunteer's own description of their
+skills to the same endpoint with `"mode": "volunteer_skills"`. A request without
+`mode` (or with `mode` null or `""`) is answered exactly as above; any other
+`mode` value is a `400`.
+
+```json
+{
+  "description": "I'm a licensed electrician and I also do some plumbing on weekends.",
+  "mode": "volunteer_skills"
+}
+```
+
+This mode makes one model call over every selectable leaf category, and can
+return skills from several unrelated areas. Unlike help requests, it does not
+apply the elderly keyword shortcut: "retired" describes the volunteer, not
+someone who needs care.
+
+```json
+{
+  "statusCode": 200,
+  "body": {
+    "categories": [
+      {
+        "category_number": "3.3.3",
+        "category_name": "ELECTRICIAN",
+        "confidence": 0.95,
+        "hierarchy": "Housing Assistance > Repair Maintenance Support > Electrician",
+        "evidence": "licensed electrician",
+        "explanation": {
+          "user_said": "licensed electrician",
+          "matched_to": "Housing Assistance > Repair Maintenance Support > Electrician",
+          "why": "states a licensed electrical trade"
+        }
+      }
+    ],
+    "unmatched_skills": [],
+    "token_usage": { "...": "..." },
+    "cached": false,
+    "session": { "entries": [ "..." ] }
+  }
+}
+```
+
+| Guarantee | |
+| :--- | :--- |
+| `category_number` | Always a leaf in `utils/predict_category_list.py`. Never General (`0.0.0.0.0`), never a parent such as `4.3`, never repeated. |
+| Size and order | At most 6 items with confidence ≥ 0.5, highest first. Override with the `SKILL_SUGGESTION_MAX_RESULTS` and `SKILL_SUGGESTION_MIN_CONFIDENCE` environment variables. |
+| `evidence` | Optional. The phrase from the description that supports the suggestion, shown only if it is really in the text. |
+| `explanation` | Always present: `user_said` (the quote, or null), `matched_to` (the category path) and `why` (the model's short reason, or null). |
+| Medical (`5.1.*`) | Suggested only with a quote from the volunteer's own text; otherwise dropped. |
+| `unmatched_skills` | Always a list. Skills the volunteer stated that fit no category, e.g. `["accounting"]`. |
+| `categories: []` | A valid `200`: nothing matched. The web app keeps its manual picker. |
+| `session` | Always returned. Send it back unchanged with the next description from the same volunteer. |
+| `cached` | `true` when the description was already in the session: answered with no model call. |
+
+**Session memory.** The web app keeps the returned `session` for as long as
+the volunteer is in the wizard (component state or `sessionStorage`) and sends
+it with each call, as it already does with `conversation_history` for Generate
+Answer. Nothing is stored server-side. A repeated description costs no tokens;
+a new one sends only the new text to the model, and `categories` merges every
+description in the session (at most 12, `SKILL_SUGGESTION_MAX_SESSION_RESULTS`).
+
+```json
+{
+  "description": "I also tutor maths at weekends.",
+  "mode": "volunteer_skills",
+  "session": {
+    "entries": [
+      {
+        "text": "I'm a licensed electrician.",
+        "skills": [{"category": "3.3.3", "confidence": 0.95,
+                    "evidence": "licensed electrician", "reason": "states a licensed trade"}],
+        "unmatched_skills": []
+      }
+    ]
+  }
+}
+```
+
+| Status | Body | When |
+| :--- | :--- | :--- |
+| 400 | `{"error": "Description is required"}` | Missing or blank `description` |
+| 400 | `{"error": "Unsupported mode", "supported_modes": ["volunteer_skills"]}` | Unknown `mode` |
+| 502 | `{"error": "Skill suggestion failed", "code": "SKILL_SUGGESTION_UNAVAILABLE"}` | Every model in the fallback chain failed |
+
+The description is trimmed and capped at 2,000 characters. It is never logged,
+and neither is `evidence`, which quotes it. The unified router also reaches this
+mode as `"service": "suggest_skills"` (`lambda_function.suggest_skills_handler`).
 
 ---
 
