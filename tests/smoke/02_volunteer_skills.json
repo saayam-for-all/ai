@@ -1,0 +1,15 @@
+{
+  "name": "Predict Category: volunteer skills",
+  "service": "predict_category",
+  "body": {
+    "mode": "volunteer_skills",
+    "description": "I can tutor maths and help out in a community garden"
+  },
+  "expect": {
+    "status": 200,
+    "body_keys": [
+      "categories",
+      "unmatched_skills"
+    ]
+  }
+}

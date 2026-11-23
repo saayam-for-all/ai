@@ -1,0 +1,16 @@
+{
+  "name": "Generate Answer: request text sent directly, no database lookup",
+  "service": "generate_answer",
+  "body": {
+    "subject": "Help with groceries",
+    "description": "I am elderly and cannot carry shopping home",
+    "location": "United States",
+    "category": "General"
+  },
+  "expect": {
+    "status": 200,
+    "body_keys": [
+      "answer"
+    ]
+  }
+}

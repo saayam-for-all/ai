@@ -10,6 +10,26 @@ team works and reviews in.
 
 ## Unreleased
 
+### Test environment: its own key and a smoke test after every deploy · [#252](https://github.com/saayam-for-all/ai/issues/252)
+
+**Added**
+
+- **Provider key names come from settings.** `GROQ_PARAM_NAME` and
+  `GEMINI_PARAM_NAME` override the Parameter Store names, and an empty name
+  skips that provider. The deployed functions keep today's names, so nothing
+  changes for them. The test function points at its own test-only Groq key and
+  runs Groq-only.
+  *Observable difference:* none on `dev`. On `test`, model-backed requests
+  succeed once the function's settings and role are in place.
+- **A smoke test after every deploy to `test`.** `tools/smoke_check.py` sends
+  each sample in `tests/smoke/` to the test function and fails the run on a
+  server error or a missing field. Contributors add their own samples.
+  *Observable difference:* the deploy run on `test` lists one line per sample
+  with its status, time and a preview of the response.
+- **A "Sync dev into test" pull request after every merge into `dev`**, and
+  `CONTRIBUTING.md`, which writes down the `test`-then-`dev` flow and what
+  `test` does not check.
+
 ### Emergency Contacts: an oversized coordinate is ignored, not a 500 · [#146](https://github.com/saayam-for-all/ai/issues/146) · follow-up to PR [#229](https://github.com/saayam-for-all/ai/pull/229)
 
 **Fixed**
