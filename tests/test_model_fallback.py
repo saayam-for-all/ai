@@ -16,14 +16,36 @@ No test in this file calls a live provider.
 
 from __future__ import annotations
 
+import json
 import logging
 
+import httpx
 import pytest
-from groq import GroqError
+from google.genai import errors as google_errors
+from groq import (
+    APIConnectionError,
+    APITimeoutError,
+    AuthenticationError,
+    GroqError,
+    InternalServerError,
+    NotFoundError,
+    PermissionDeniedError,
+    RateLimitError,
+)
+from langchain_google_genai.chat_models import (
+    GoogleAPIError,
+    GoogleAuthenticationError,
+    GoogleModelNotFoundError,
+    GooglePermissionDeniedError,
+    GoogleRateLimitError,
+)
 
 from utils.model_fallback import (
     ModelChainExhausted,
+    ModelRoutingConfigError,
     ModelTarget,
+    _load_model_chain,
+    classify_provider_error,
     run_model_chain,
 )
 
@@ -69,7 +91,7 @@ def test_gpt_oss_targets_request_low_reasoning_effort():
 
 @pytest.fixture
 def fallback_api():
-    """Expose the small public API together to keep individual tests concise."""
+    """Expose the public API together to keep individual tests concise."""
     return ModelTarget, ModelChainExhausted, run_model_chain
 
 
@@ -183,7 +205,9 @@ def test_empty_or_invalid_result_advances_the_chain(fallback_api, targets):
     ]
 
 
-def test_every_target_is_attempted_once_in_configured_order(fallback_api, targets):
+def test_every_target_is_attempted_once_in_configured_order(
+    fallback_api, targets
+):
     _, ModelChainExhausted, run_model_chain = fallback_api
     attempts = []
     outcomes = {
@@ -200,7 +224,8 @@ def test_every_target_is_attempted_once_in_configured_order(fallback_api, target
         )
 
     assert attempts == [(target.provider, target.model) for target in targets]
-    assert len(attempts) == len(set(attempts)), "a model was attempted more than once"
+    assert len(attempts) == len(
+        set(attempts)), "a model was attempted more than once"
 
 
 def test_total_failure_raises_a_clear_error(fallback_api, targets):
@@ -244,23 +269,21 @@ def test_warning_names_the_failed_model_and_reason(
 
     assert "groq-primary" in caplog.text
     assert "model_not_found" in caplog.text
+    assert "reason=" in caplog.text
+    assert "error_class=" in caplog.text
 
 
 # ---------------------------------------------------------------------------
 # The routing configuration is validated before any request is served
 # ---------------------------------------------------------------------------
-
-import json  # noqa: E402
-
-from utils.model_fallback import ModelRoutingConfigError, _load_model_chain  # noqa: E402
-
 _GROQ = {"provider": "groq", "model": "g1"}
 _GEMINI = {"provider": "gemini", "model": "m1"}
 
 
 def _routing_file(tmp_path, payload):
     path = tmp_path / "model_routing.json"
-    path.write_text(payload if isinstance(payload, str) else json.dumps(payload), encoding="utf-8")
+    path.write_text(payload if isinstance(payload, str)
+                    else json.dumps(payload), encoding="utf-8")
     return path
 
 
@@ -269,27 +292,88 @@ def _routing_file(tmp_path, payload):
     [
         ("{not json", "not valid JSON"),
         ([], "configuration must be an object"),
-        ({"schema_version": 2, "model_chain": [_GEMINI]}, "schema_version"),
-        ({"schema_version": 1, "model_chain": []}, "non-empty list"),
-        ({"schema_version": 1, "model_chain": ["groq"]}, r"model_chain\[0\] must be an object"),
-        ({"schema_version": 1, "model_chain": [{"provider": " ", "model": "m"}]},
-         r"provider must be a non-empty string"),
-        ({"schema_version": 1, "model_chain": [{"provider": "openai", "model": "m"}]},
-         "provider is unsupported"),
-        ({"schema_version": 1, "model_chain": [{**_GROQ, "reasoning_effort": "max"}, _GEMINI]},
-         "reasoning_effort is unsupported"),
-        ({"schema_version": 1, "model_chain": [{**_GEMINI, "reasoning_effort": "low"}]},
-         "only valid for Groq"),
-        ({"schema_version": 1, "model_chain": [_GROQ, _GROQ, _GEMINI]}, "duplicate target"),
-        ({"schema_version": 1, "model_chain": [_GROQ]}, "final model_chain target must be Gemini"),
-        ({"schema_version": 1, "model_chain": [_GEMINI, {**_GEMINI, "model": "m2"}]},
-         "before the final Gemini fallback must be Groq"),
+        (
+            {"schema_version": 2, "model_chain": [_GEMINI]},
+            "schema_version",
+        ),
+        (
+            {"schema_version": 1, "model_chain": []},
+            "non-empty list",
+        ),
+        (
+            {"schema_version": 1, "model_chain": ["groq"]},
+            r"model_chain\[0\] must be an object",
+        ),
+        (
+            {
+                "schema_version": 1,
+                "model_chain": [{"provider": " ", "model": "m"}],
+            },
+            r"provider must be a non-empty string",
+        ),
+        (
+            {
+                "schema_version": 1,
+                "model_chain": [{"provider": "openai", "model": "m"}],
+            },
+            "provider is unsupported",
+        ),
+        (
+            {
+                "schema_version": 1,
+                "model_chain": [
+                    {**_GROQ, "reasoning_effort": "max"},
+                    _GEMINI,
+                ],
+            },
+            "reasoning_effort is unsupported",
+        ),
+        (
+            {
+                "schema_version": 1,
+                "model_chain": [
+                    {**_GEMINI, "reasoning_effort": "low"}
+                ],
+            },
+            "only valid for Groq",
+        ),
+        (
+            {"schema_version": 1, "model_chain": [_GROQ, _GROQ, _GEMINI]},
+            "duplicate target",
+        ),
+        (
+            {"schema_version": 1, "model_chain": [_GROQ]},
+            "final model_chain target must be Gemini",
+        ),
+        (
+            {
+                "schema_version": 1,
+                "model_chain": [
+                    _GEMINI,
+                    {**_GEMINI, "model": "m2"},
+                ],
+            },
+            "before the final Gemini fallback must be Groq",
+        ),
     ],
-    ids=["not-json", "not-object", "schema-version", "empty-chain", "entry-not-object",
-         "blank-provider", "unknown-provider", "unknown-effort", "effort-on-gemini",
-         "duplicate", "gemini-not-last", "gemini-before-last"],
+    ids=[
+        "not-json",
+        "not-object",
+        "schema-version",
+        "empty-chain",
+        "entry-not-object",
+        "blank-provider",
+        "unknown-provider",
+        "unknown-effort",
+        "effort-on-gemini",
+        "duplicate",
+        "gemini-not-last",
+        "gemini-before-last",
+    ],
 )
-def test_an_invalid_routing_configuration_is_refused(tmp_path, payload, message):
+def test_an_invalid_routing_configuration_is_refused(
+    tmp_path, payload, message
+):
     """A bad model_routing.json fails the cold start, not a request later.
 
     The chain is loaded once at import, so each of these would otherwise
@@ -340,3 +424,187 @@ def test_a_validator_that_raises_advances_the_chain(caplog):
 
     assert result == "answer"
     assert "result_validation_failed" in caplog.text
+
+
+@pytest.mark.parametrize(
+    "error_type, status, expected",
+    [
+        (NotFoundError, 404, "model_not_found"),
+        (AuthenticationError, 401, "auth_or_entitlement"),
+        (PermissionDeniedError, 403, "auth_or_entitlement"),
+        (RateLimitError, 429, "rate_limited"),
+        (InternalServerError, 503, "timeout_or_unavailable"),
+    ],
+)
+def test_groq_error_classification(error_type, status, expected):
+    request = httpx.Request("POST", "https://api.groq.com")
+    response = httpx.Response(status, request=request)
+
+    error = error_type(
+        "Simulated provider error",
+        response=response,
+        body={},
+    )
+
+    assert classify_provider_error(error) == expected
+
+
+@pytest.mark.parametrize(
+    "error_type",
+    [APITimeoutError, APIConnectionError],
+)
+def test_groq_connection_errors(error_type):
+    request = httpx.Request("POST", "https://api.groq.com")
+
+    error = error_type(request=request)
+
+    assert classify_provider_error(error) == "timeout_or_unavailable"
+
+
+@pytest.mark.parametrize(
+    "status, expected",
+    [
+        (404, "model_not_found"),
+        (401, "auth_or_entitlement"),
+        (403, "auth_or_entitlement"),
+        (429, "rate_limited"),
+        (400, "other"),
+    ],
+)
+def test_google_client_error_classification(status, expected):
+    error = google_errors.ClientError(
+        status,
+        {"message": "Simulated Google error"},
+    )
+
+    assert classify_provider_error(error) == expected
+
+
+@pytest.mark.parametrize("status", [500, 503, 504])
+def test_google_server_error_classification(status):
+    error = google_errors.ServerError(
+        status,
+        {"message": "Simulated server error"},
+    )
+
+    assert classify_provider_error(error) == "timeout_or_unavailable"
+
+
+@pytest.mark.parametrize(
+    "error_type, expected",
+    [
+        (GoogleModelNotFoundError, "model_not_found"),
+        (GoogleAuthenticationError, "auth_or_entitlement"),
+        (GooglePermissionDeniedError, "auth_or_entitlement"),
+        (GoogleRateLimitError, "rate_limited"),
+    ],
+)
+def test_langchain_google_error_classification(error_type, expected):
+    error = error_type("Simulated LangChain Gemini error")
+
+    assert classify_provider_error(error) == expected
+
+
+def test_langchain_google_server_error_classification():
+    error = GoogleAPIError(
+        503,
+        {"message": "Simulated Gemini server error"},
+    )
+
+    assert classify_provider_error(error) == "timeout_or_unavailable"
+
+
+def test_langchain_wrapped_error():
+    original = google_errors.ClientError(
+        429,
+        {"message": "Rate limit exceeded"},
+    )
+
+    wrapped = RuntimeError("LangChain call failed")
+    wrapped.__cause__ = original
+
+    assert classify_provider_error(wrapped) == "rate_limited"
+
+
+def test_unknown_error():
+    assert classify_provider_error(ValueError("Invalid JSON")) == "other"
+
+
+def test_model_failover_warning_has_correct_error_class(caplog):
+    target = ModelTarget(provider="groq", model="test-model")
+
+    request = httpx.Request("POST", "https://api.groq.com")
+    response = httpx.Response(404, request=request)
+
+    error = NotFoundError(
+        "Model not found",
+        response=response,
+        body={},
+    )
+
+    def invoke(_target):
+        raise error
+
+    with caplog.at_level(logging.WARNING):
+        with pytest.raises(ModelChainExhausted):
+            run_model_chain(
+                targets=[target],
+                invoke=invoke,
+                is_valid=bool,
+                operation="predict_category",
+            )
+
+    assert "MODEL_FAILOVER" in caplog.text
+    assert "model=test-model" in caplog.text
+    assert "reason=" in caplog.text
+    assert "error_class=model_not_found" in caplog.text
+    warning = next(
+        record.getMessage()
+        for record in caplog.records
+        if "MODEL_FAILOVER" in record.getMessage()
+    )
+
+    assert warning.index("error_class=") < warning.index("reason=")
+
+
+@pytest.mark.parametrize(
+    "scenario",
+    ["duplicate", "invalid_result", "validation_error"],
+)
+def test_all_failover_warnings_have_error_class(scenario, caplog):
+    target = ModelTarget(provider="groq", model="test-model")
+
+    targets = [target, target] if scenario == "duplicate" else [target]
+
+    def invoke(_target):
+        if scenario == "duplicate":
+            raise ValueError("Simulated failure")
+        return None
+
+    def is_valid(_result):
+        if scenario == "validation_error":
+            raise ValueError("Invalid result")
+        return False
+
+    with caplog.at_level(logging.WARNING):
+        with pytest.raises(ModelChainExhausted):
+            run_model_chain(
+                targets=targets,
+                invoke=invoke,
+                is_valid=is_valid,
+                operation="test_all_warnings",
+            )
+
+    warnings = [
+        record.getMessage()
+        for record in caplog.records
+        if "MODEL_FAILOVER" in record.getMessage()
+    ]
+
+    assert warnings
+    assert all("reason=" in warning for warning in warnings)
+    assert all("error_class=other" in warning for warning in warnings)
+    assert all(
+        warning.index("error_class=") < warning.index("reason=")
+        for warning in warnings
+    )

@@ -6,13 +6,15 @@ and the runner that tries configured models in order.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
-from dataclasses import dataclass
 import json
 import logging
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 import re
 from typing import Any, TypeVar
+
+import httpx
 
 
 logger = logging.getLogger(__name__)
@@ -67,9 +69,11 @@ def _load_model_chain(
         ) from exc
 
     if not isinstance(raw, dict):
-        raise ModelRoutingConfigError("Model routing configuration must be an object")
+        raise ModelRoutingConfigError(
+            "Model routing configuration must be an object")
     if raw.get("schema_version") != 1:
-        raise ModelRoutingConfigError("Unsupported model routing schema_version")
+        raise ModelRoutingConfigError(
+            "Unsupported model routing schema_version")
 
     configured = raw.get("model_chain")
     if not isinstance(configured, list) or not configured:
@@ -82,7 +86,8 @@ def _load_model_chain(
                 f"model_chain[{index}] must be an object"
             )
 
-        provider = _non_empty_string(entry.get("provider"), "provider", index).lower()
+        provider = _non_empty_string(
+            entry.get("provider"), "provider", index).lower()
         model = _non_empty_string(entry.get("model"), "model", index)
         if provider not in _SUPPORTED_PROVIDERS:
             raise ModelRoutingConfigError(
@@ -114,15 +119,110 @@ def _load_model_chain(
 
     identities = [(target.provider, target.model) for target in targets]
     if len(identities) != len(set(identities)):
-        raise ModelRoutingConfigError("model_chain contains a duplicate target")
+        raise ModelRoutingConfigError(
+            "model_chain contains a duplicate target")
     if targets[-1].provider != "gemini":
-        raise ModelRoutingConfigError("the final model_chain target must be Gemini")
+        raise ModelRoutingConfigError(
+            "the final model_chain target must be Gemini")
     if any(target.provider != "groq" for target in targets[:-1]):
         raise ModelRoutingConfigError(
-            "all model_chain targets before the final Gemini fallback must be Groq"
+            "all model_chain targets before the final Gemini "
+            "fallback must be Groq"
         )
 
     return tuple(targets)
+
+
+def _error_class_from_status(status: int) -> str:
+    """Convert an HTTP status code into an error category."""
+
+    if status == 404:
+        return "model_not_found"
+
+    if status in (401, 403):
+        return "auth_or_entitlement"
+
+    if status == 429:
+        return "rate_limited"
+
+    if 500 <= status <= 599:
+        return "timeout_or_unavailable"
+
+    return "other"
+
+
+def classify_provider_error(error: Exception) -> str:
+    """
+    Classify Groq and Google Gemini provider errors.
+
+    Supports:
+    - Groq SDK
+    - google-genai SDK
+    - LangChain Google exceptions
+    - Wrapped exceptions
+    """
+
+    seen = set()
+    current = error
+
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+
+        # Find which exception class was raised.
+        class_name = type(current).__name__
+        module_name = type(current).__module__
+
+        # Some failures have no HTTP status code.
+        if isinstance(
+            current,
+            (
+                TimeoutError,
+                ConnectionError,
+                httpx.TimeoutException,
+                httpx.NetworkError,
+            ),
+        ):
+            return "timeout_or_unavailable"
+
+        # Groq connection and timeout errors.
+        if module_name.startswith("groq") and class_name in (
+            "APITimeoutError",
+            "APIConnectionError",
+        ):
+            return "timeout_or_unavailable"
+
+        # Newer LangChain Google errors.
+        if module_name.startswith("langchain_google_genai"):
+
+            if class_name == "GoogleModelNotFoundError":
+                return "model_not_found"
+
+            if class_name in (
+                "GoogleAuthenticationError",
+                "GooglePermissionDeniedError",
+            ):
+                return "auth_or_entitlement"
+
+            if class_name == "GoogleRateLimitError":
+                return "rate_limited"
+
+            if class_name == "GoogleAPIError":
+                return "timeout_or_unavailable"
+
+        # Groq uses status_code.
+        # Google SDKs typically use code.
+        status = getattr(current, "status_code", None)
+
+        if status is None:
+            status = getattr(current, "code", None)
+
+        if isinstance(status, int) and not isinstance(status, bool):
+            return _error_class_from_status(status)
+
+        # Check underlying error if an SDK wrapped it.
+        current = current.__cause__ or current.__context__
+
+    return "other"
 
 
 class ModelResponseError(ValueError):
@@ -136,10 +236,10 @@ class ModelResponseError(ValueError):
     """
 
 
-# Provider error codes worth keeping when an SDK reports them only inside its
-# message text. The rest of that text is not logged: the Groq SDK puts the whole
-# HTTP response body in the message, and for ``json_validate_failed`` the body
-# carries ``failed_generation``, the model's output, which can quote the user.
+# Provider error codes worth keeping when an SDK reports them in message text.
+# The rest is not logged because the Groq SDK may include the full HTTP
+# response body. For ``json_validate_failed``, it can contain
+# ``failed_generation``, which might quote the user's input.
 _KNOWN_ERROR_CODES = (
     "context_length_exceeded",
     "invalid_api_key",
@@ -155,7 +255,8 @@ _KNOWN_ERROR_CODE = re.compile(r"\b(" + "|".join(_KNOWN_ERROR_CODES) + r")\b")
 
 def _error_status(error: Exception) -> int | None:
     """The HTTP status a provider SDK attached to its exception, if any."""
-    # Groq and OpenAI-style SDKs use ``status_code``; google-genai uses ``code``.
+    # Groq and OpenAI-style SDKs use ``status_code``; google-genai uses
+    # ``code``.
     for attribute in ("status_code", "code"):
         value = getattr(error, attribute, None)
         if isinstance(value, int) and not isinstance(value, bool):
@@ -174,7 +275,8 @@ def _error_code(error: Exception) -> str | None:
         code = detail.get("code") if isinstance(detail, dict) else None
         if isinstance(code, str) and code.isidentifier():
             return code
-    for attribute in ("code", "status"):  # google-genai: status="RESOURCE_EXHAUSTED"
+        # google-genai may use status="RESOURCE_EXHAUSTED".
+    for attribute in ("code", "status"):
         value = getattr(error, attribute, None)
         if isinstance(value, str) and value.isidentifier():
             return value
@@ -205,7 +307,6 @@ def describe_model_error(error: Exception) -> str:
 
 
 def _failure_reason(error: Exception) -> str:
-    """Return a compact single-line reason suitable for a warning log."""
     return describe_model_error(error)
 
 
@@ -224,7 +325,8 @@ def run_model_chain(
     and organization list do not share the same definition of valid.
 
     Provider errors and invalid results are fallback signals.  Every failed
-    attempt emits one warning naming the operation, provider, model, and reason.
+    attempt emits one warning naming the operation, provider, model,
+    and reason.
     If no target succeeds, ``ModelChainExhausted`` makes the outage explicit to
     the calling service instead of returning an empty success.
     """
@@ -239,7 +341,7 @@ def run_model_chain(
             # bounded guarantee for a caller that supplies a custom test chain.
             logger.warning(
                 "MODEL_FAILOVER operation=%s provider=%s model=%s "
-                "reason=duplicate_target_skipped",
+                "error_class=other reason=duplicate_target_skipped",
                 operation,
                 target.provider,
                 target.model,
@@ -251,10 +353,12 @@ def run_model_chain(
             result = invoke(target)
         except Exception as error:
             logger.warning(
-                "MODEL_FAILOVER operation=%s provider=%s model=%s reason=%s",
+                "MODEL_FAILOVER operation=%s provider=%s model=%s "
+                "error_class=%s reason=%s",
                 operation,
                 target.provider,
                 target.model,
+                classify_provider_error(error),
                 _failure_reason(error),
             )
             continue
@@ -264,10 +368,11 @@ def run_model_chain(
         except Exception as error:
             logger.warning(
                 "MODEL_FAILOVER operation=%s provider=%s model=%s "
-                "reason=result_validation_failed: %s",
+                "error_class=%s reason=result_validation_failed: %s",
                 operation,
                 target.provider,
                 target.model,
+                classify_provider_error(error),
                 _failure_reason(error),
             )
             continue
@@ -277,7 +382,7 @@ def run_model_chain(
 
         logger.warning(
             "MODEL_FAILOVER operation=%s provider=%s model=%s "
-            "reason=invalid_or_empty_result",
+            "error_class=other reason=invalid_or_empty_result",
             operation,
             target.provider,
             target.model,
@@ -290,6 +395,7 @@ def run_model_chain(
 
 
 # Load and validate the checked-in configuration once, after every type and
-# function has been defined.  Lambda cold starts fail early on a bad deployment;
+# function has been defined.  Lambda cold starts fail early on a bad
+# deployment;
 # individual requests reuse this immutable tuple without reopening the JSON.
 _DEFAULT_MODEL_CHAIN = _load_model_chain()
