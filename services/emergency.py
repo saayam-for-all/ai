@@ -18,6 +18,7 @@ import logging
 import os
 import socket
 import time
+import threading
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -31,7 +32,40 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_FILE = os.path.join(BASE_DIR, "emergency_numbers.json")
 
 # Module-level cache: reused across Lambda invocations in the same warm container.
+
 _emergency_numbers_cache = None
+
+# Short-lived location lookup caches, reused by warm Lambda instances.
+_LOCATION_CACHE_TTLS = {
+    "nominatim": 86400,  # 24 hours
+    "ipinfo": 900,       # 15 minutes
+}
+_LOCATION_CACHE = {}
+_LOCATION_CACHE_LOCK = threading.Lock()
+
+
+def _location_cache_get(key):
+    with _LOCATION_CACHE_LOCK:
+        entry = _LOCATION_CACHE.get(key)
+        if entry is None:
+            return None
+        expires_at, value = entry
+        if time.monotonic() >= expires_at:
+            del _LOCATION_CACHE[key]
+            return None
+        return value
+
+
+def _location_cache_set(key, value, ttl):
+    with _LOCATION_CACHE_LOCK:
+        now = time.monotonic()
+        expired = [k for k, (expiry, _) in _LOCATION_CACHE.items()
+                   if expiry <= now]
+        for k in expired:
+            del _LOCATION_CACHE[k]
+        if len(_LOCATION_CACHE) >= 512:
+            _LOCATION_CACHE.pop(next(iter(_LOCATION_CACHE)))
+        _LOCATION_CACHE[key] = (now + ttl, value)
 
 logger = logging.getLogger(__name__)
 
@@ -453,6 +487,12 @@ class LocationResolver:
         self.display_hint = {}
 
     def _get_location_from_ip(self, ip):
+        cache_key = ("ipinfo", str(ip).strip())
+        cached = _location_cache_get(cache_key)
+        if cached is not None:
+            logger.info("ipinfo cache hit for ip=%s", _mask_ip(ip))
+            return cached.copy()
+
         # The IP arrives from a request header and is interpolated into a URL,
         # so it is parsed as an address first: an unvalidated value could
         # rewrite the path and point the lookup somewhere else entirely.
@@ -489,6 +529,8 @@ class LocationResolver:
                 "ipinfo lookup for ip=%s returned no country (%d ms)",
                 _mask_ip(ip), _elapsed_ms(started),
             )
+        if location.get("country"):
+            _location_cache_set(cache_key, location.copy(), _LOCATION_CACHE_TTLS["ipinfo"])
         return location
 
     def _reverse_geocode(self, lat, lng):
@@ -503,6 +545,14 @@ class LocationResolver:
         if not (-90 <= lat <= 90 and -180 <= lng <= 180):
             logger.warning("GPS coordinates ignored: lat/lng out of range")
             return None
+        cache_key = ("nominatim_reverse", round(lat, 3), round(lng, 3))
+        cached = _location_cache_get(cache_key)
+        if cached is not None:
+            self.display_hint = cached["display_hint"].copy()
+            logger.info("Nominatim reverse cache hit: lat~%s lng~%s",
+                        _coarse(lat), _coarse(lng))
+            return cached["location"].copy()
+
         started = time.monotonic()
         try:
             # English names: the site is in English, and without this Nominatim
@@ -551,6 +601,12 @@ class LocationResolver:
             logger.warning(
                 "Nominatim reverse lookup for lat~%s lng~%s returned no country (%d ms)",
                 _coarse(lat), _coarse(lng), _elapsed_ms(started),
+            )
+        if location.get("country"):
+            _location_cache_set(
+                cache_key,
+                {"location": location.copy(), "display_hint": self.display_hint.copy()},
+                _LOCATION_CACHE_TTLS["nominatim"],
             )
         return location
 
