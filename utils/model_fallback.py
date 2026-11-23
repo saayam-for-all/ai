@@ -236,11 +236,10 @@ class ModelResponseError(ValueError):
     """
 
 
-# Provider error codes worth keeping when an SDK reports them only inside its
-# message text. The rest is not logged because the Groq SDK puts
-# the entire HTTP response body in the error message.
-# HTTP response body in the message, and for ``json_validate_failed`` the body
-# carries ``failed_generation``, the model's output, which can quote the user.
+# Provider error codes worth keeping when an SDK reports them in message text.
+# The rest is not logged because the Groq SDK may include the full HTTP
+# response body. For ``json_validate_failed``, it can contain
+# ``failed_generation``, which might quote the user's input.
 _KNOWN_ERROR_CODES = (
     "context_length_exceeded",
     "invalid_api_key",
