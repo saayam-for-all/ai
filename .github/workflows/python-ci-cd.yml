@@ -365,7 +365,26 @@
                 --function-name "$LAMBDA_FUNCTION_NAME"
             fi
 
-    # To activate testing in the future, uncomment the lines below:         
+        # --- POST-DEPLOYMENT: smoke test on `test` (#252) ---
+        # One sample request per service, from tests/smoke/, sent straight to the
+        # test function. A server error or a missing field fails the run, and
+        # every response is printed so contributors can read their results.
+        # `dev` is not smoke tested here: its function cannot read the keys.
+        - name: Set up Python for the smoke test
+          if: steps.upload-to-s3.outputs.env_path == 'test'
+          uses: actions/setup-python@v5
+          with:
+            python-version: "3.11"
+
+        - name: Smoke test the test function
+          if: steps.upload-to-s3.outputs.env_path == 'test'
+          run: |
+            FUNCTION="${{ steps.upload-to-s3.outputs.lambda_function_name }}"
+            aws lambda wait function-updated --function-name "$FUNCTION"
+            python -m pip install --quiet boto3
+            python tools/smoke_check.py --function "$FUNCTION" --fixtures tests/smoke
+
+    # To activate testing in the future, uncomment the lines below:
     #    --- POST-DEPLOYMENT: Playwright E2E tests ---
         # - name: Set up Node.js
         #   uses: actions/setup-node@v4

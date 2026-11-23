@@ -1,0 +1,13 @@
+{
+  "name": "Predict Category: a help request",
+  "service": "predict_category",
+  "body": {
+    "description": "I need help with gardening and yard maintenance"
+  },
+  "expect": {
+    "status": 200,
+    "body_keys": [
+      "categories"
+    ]
+  }
+}
