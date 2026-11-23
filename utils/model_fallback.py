@@ -237,7 +237,8 @@ class ModelResponseError(ValueError):
 
 
 # Provider error codes worth keeping when an SDK reports them only inside its
-# message text. The rest of that text is not logged: the Groq SDK puts the whole
+# message text. The rest is not logged because the Groq SDK puts
+# the entire HTTP response body in the error message.
 # HTTP response body in the message, and for ``json_validate_failed`` the body
 # carries ``failed_generation``, the model's output, which can quote the user.
 _KNOWN_ERROR_CODES = (
@@ -255,7 +256,8 @@ _KNOWN_ERROR_CODE = re.compile(r"\b(" + "|".join(_KNOWN_ERROR_CODES) + r")\b")
 
 def _error_status(error: Exception) -> int | None:
     """The HTTP status a provider SDK attached to its exception, if any."""
-    # Groq and OpenAI-style SDKs use ``status_code``; google-genai uses ``code``.
+    # Groq and OpenAI-style SDKs use ``status_code``; google-genai uses
+    # ``code``.
     for attribute in ("status_code", "code"):
         value = getattr(error, attribute, None)
         if isinstance(value, int) and not isinstance(value, bool):
@@ -274,7 +276,8 @@ def _error_code(error: Exception) -> str | None:
         code = detail.get("code") if isinstance(detail, dict) else None
         if isinstance(code, str) and code.isidentifier():
             return code
-    for attribute in ("code", "status"):  # google-genai: status="RESOURCE_EXHAUSTED"
+        # google-genai may use status="RESOURCE_EXHAUSTED".
+    for attribute in ("code", "status"):
         value = getattr(error, attribute, None)
         if isinstance(value, str) and value.isidentifier():
             return value
@@ -305,16 +308,7 @@ def describe_model_error(error: Exception) -> str:
 
 
 def _failure_reason(error: Exception) -> str:
-    """Return a compact single-line reason suitable for a warning log."""
-<<<<<<< HEAD
     return describe_model_error(error)
-=======
-    detail = " ".join(str(error).split())
-    if detail:
-        return f"{type(error).__name__}: {detail}"
-
-    return type(error).__name__
->>>>>>> f0024db (Address PR review feedback for provider error classification)
 
 
 def run_model_chain(
