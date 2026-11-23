@@ -1,0 +1,111 @@
+{
+  "schema_version": 1,
+  "issue": "#216",
+  "about": [
+    "The ten volunteer descriptions from section B of issue #216, with the expected skills the issue's table gives.",
+    "The descriptions are the abridged forms the issue publishes; the originals were not kept.",
+    "These are the inputs the volunteer prompt was designed against, so they are NOT part of the scored set (tests/test_skill_eval_dataset.py keeps them out of it). They are reported separately as a sanity check: they are the cases leadership saw, and today's help-request classifier finds 9 of their 19 skills.",
+    "Where the issue's later discussion accepts two answers (nurse: 5.1.1 or 5.1.11; driving people to appointments: 6.6 or 6.5), both are accepted."
+  ],
+  "cases": [
+    {
+      "id": "V1",
+      "description": "retired math teacher, algebra + SAT prep",
+      "language": "en",
+      "traits": ["issue_216"],
+      "expected": [
+        {"skill": "math tutoring", "accept": ["4.3.1"]},
+        {"skill": "SAT prep", "accept": ["4.3.5"]}
+      ]
+    },
+    {
+      "id": "V2",
+      "description": "licensed electrician, also plumbing",
+      "language": "en",
+      "traits": ["issue_216"],
+      "expected": [
+        {"skill": "electrician", "accept": ["3.3.3"]},
+        {"skill": "plumbing", "accept": ["3.3.1"]}
+      ]
+    },
+    {
+      "id": "V3",
+      "description": "nurse; cooks for large events; drives people to appointments",
+      "language": "en",
+      "traits": ["issue_216"],
+      "expected": [
+        {"skill": "nursing", "accept": ["5.1.1", "5.1.11"]},
+        {"skill": "cooking for large events", "accept": ["1.3.2"]},
+        {"skill": "driving to appointments", "accept": ["6.6", "6.5"]}
+      ]
+    },
+    {
+      "id": "V4",
+      "description": "helps older people set up video calls",
+      "language": "en",
+      "traits": ["issue_216"],
+      "expected": [
+        {"skill": "digital support for seniors", "accept": ["6.2"]}
+      ]
+    },
+    {
+      "id": "V5",
+      "description": "sewing/alterations; resumes + interview practice",
+      "language": "en",
+      "traits": ["issue_216"],
+      "expected": [
+        {"skill": "tailoring", "accept": ["2.4"]},
+        {"skill": "career guidance", "accept": ["4.6"]}
+      ]
+    },
+    {
+      "id": "V6",
+      "description": "teaches kids coding; reviews college essays",
+      "language": "en",
+      "traits": ["issue_216"],
+      "expected": [
+        {"skill": "coding", "accept": ["4.3.4"]},
+        {"skill": "essay review", "accept": ["4.2"]},
+        {"skill": "college applications", "accept": ["4.1"]}
+      ]
+    },
+    {
+      "id": "V7",
+      "description": "pickup truck, helps people move",
+      "language": "en",
+      "traits": ["issue_216"],
+      "expected": [
+        {"skill": "moving help", "accept": ["3.7"]}
+      ]
+    },
+    {
+      "id": "V8",
+      "description": "licensed counsellor, emotional support",
+      "language": "en",
+      "traits": ["issue_216"],
+      "expected": [
+        {"skill": "counselling", "accept": ["5.3"]}
+      ]
+    },
+    {
+      "id": "V9",
+      "description": "i'm a dentist.",
+      "language": "en",
+      "traits": ["issue_216"],
+      "expected": [
+        {"skill": "dentistry", "accept": ["5.1.3"]}
+      ]
+    },
+    {
+      "id": "V10",
+      "description": "gardening, painting, handyman",
+      "language": "en",
+      "traits": ["issue_216"],
+      "expected": [
+        {"skill": "gardening", "accept": ["3.3.5"]},
+        {"skill": "painting", "accept": ["3.3.9"]},
+        {"skill": "handyman", "accept": ["3.3.2"]}
+      ]
+    }
+  ]
+}

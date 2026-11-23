@@ -26,11 +26,14 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | File | Kind | Issue | Covers | Tests |
 | --- | --- | --- | --- | ---: |
 | [`tests/test_answer_conversation.py`](../../tests/test_answer_conversation.py) | Unit | #183 | `utils/__init__.py prompt assembly` | 24 |
+| [`tests/test_classification_privacy.py`](../../tests/test_classification_privacy.py) | Unit | #216 | `utils/model_fallback.py failover reasons, predict_category 500` | 11 |
 | [`tests/test_classification_resilience.py`](../../tests/test_classification_resilience.py) | Unit | - | `services/classification_service.py` | 10 |
 | [`tests/test_client_factory.py`](../../tests/test_client_factory.py) | Unit | #193 | `utils/client.py create_chat_model` | 9 |
 | [`tests/test_client_imports.py`](../../tests/test_client_imports.py) | Integration | #154 | `utils/client.py` | 2 |
 | [`tests/test_emergency_dataset.py`](../../tests/test_emergency_dataset.py) | Dataset | #146 | `services/emergency_numbers.json` | 17 |
 | [`tests/test_emergency_locale.py`](../../tests/test_emergency_locale.py) | Unit | #146 | `services/emergency.py` | 67 |
+| [`tests/test_emergency_location_fields.py`](../../tests/test_emergency_location_fields.py) | Contract | #146, webapp#1959 | `location_source, display_location` | 59 |
+| [`tests/test_emergency_logging.py`](../../tests/test_emergency_logging.py) | Unit | #146 | `services/emergency.py logging` | 94 |
 | [`tests/test_emergency_s3_reader.py`](../../tests/test_emergency_s3_reader.py) | Unit | #334 | `services/emergency.py S3 reader` | 23 |
 | [`tests/test_generate_answer.py`](../../tests/test_generate_answer.py) | Contract | #169 | `generate_answer_handler` | 50 |
 | [`tests/test_import_blast_radius.py`](../../tests/test_import_blast_radius.py) | Integration | #169, #171 | `module-scope imports` | 4 |
@@ -39,9 +42,12 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_request_db_schema.py`](../../tests/test_request_db_schema.py) | Unit | #169 | `utils/request_db.py` | 54 |
 | [`tests/test_response_contract.py`](../../tests/test_response_contract.py) | Contract | #146, #169, #170 | `response envelopes` | 10 |
 | [`tests/test_router.py`](../../tests/test_router.py) | Integration | #171 | `lambda_function.lambda_handler` | 34 |
+| [`tests/test_skill_eval_dataset.py`](../../tests/test_skill_eval_dataset.py) | Dataset | #216 | `docs/metrics/volunteer_skills_eval_set.json` | 28 |
+| [`tests/test_skill_eval_scoring.py`](../../tests/test_skill_eval_scoring.py) | Unit | #216 | `tools/skill_eval_scoring.py` | 36 |
+| [`tests/test_skill_suggestion.py`](../../tests/test_skill_suggestion.py) | Unit | #216 | `services/skill_suggestion_service.py` | 76 |
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
 | [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 57 |
-| | | | **Total** | **422** |
+| | | | **Total** | **726** |
 
 ## Every test
 
@@ -75,6 +81,24 @@ What the model is actually asked, turn by turn - issue #183.
 | `test_location_gender_and_age_still_reach_the_system_prompt` | Location gender and age still reach the system prompt. |
 
 > 20 test functions expand to 24 cases through parametrisation.
+
+### `test_classification_privacy.py`
+
+*Unit · issue #216 · 11 tests*
+
+Help-request and volunteer text stays out of logs and error bodies (issue #216).
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_model_failure_does_not_log_private_text` | Model failure does not log private text. |
+| `test_prediction_error_does_not_expose_private_text` | Prediction error does not expose private text. |
+| `test_model_not_found_error_logs_safe_reason` | Model not found error logs safe reason. |
+| `test_a_provider_error_keeps_status_and_code_but_not_text` | A 429 or a timeout must still show in CloudWatch; the text must not. |
+| `test_our_own_response_errors_are_logged_verbatim` | A ModelResponseError is written by our code, so its message is kept. |
+| `test_a_free_text_error_with_no_code_logs_only_its_type` | A free text error with no code logs only its type. |
+| `test_classification_failover_never_logs_the_description` | Classification failover never logs the description. |
+
+> 7 test functions expand to 11 cases through parametrisation.
 
 ### `test_classification_resilience.py`
 
@@ -195,6 +219,87 @@ Behaviour tests for issue #146 - Emergency Contacts must never show a user a num
 | `test_place_search_with_nothing_to_search_makes_no_request` | Place search with nothing to search makes no request. |
 
 > 39 test functions expand to 67 cases through parametrisation.
+
+### `test_emergency_location_fields.py`
+
+*Contract · issue #146, webapp#1959 · 59 tests*
+
+location_source and display_location in the Emergency Contacts response.
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_a_resolved_gps_position_is_reported_as_gps` | A resolved gps position is reported as gps. |
+| `test_gps_that_did_not_resolve_is_reported_as_an_ip_estimate` | The Prague report: the browser sent a position, the answer came from the IP. |
+| `test_a_position_with_no_country_falls_back_to_the_ip` | A point at sea: Nominatim answers, but with no country. |
+| `test_an_ip_answer_replaces_everything_the_gps_answer_left` | Nothing from a GPS answer without a country survives into the IP's result: not its region (a name mixing two sources), not its empty keys. |
+| `test_a_request_without_gps_is_reported_as_an_ip_estimate` | A request without gps is reported as an ip estimate. |
+| `test_a_country_parameter_alone_is_reported_as_country_param` | A country parameter alone is reported as country param. |
+| `test_a_country_parameter_that_confirms_the_gps_result_keeps_gps` | A country parameter that confirms the gps result keeps gps. |
+| `test_a_country_parameter_that_overrides_the_gps_result_is_reported_as_country_param` | A country parameter that overrides the gps result is reported as country param. |
+| `test_a_place_search_is_reported_as_place` | A place search is reported as place. |
+| `test_a_city_found_only_in_the_directory_is_reported_as_city_directory` | A city found only in the directory is reported as city directory. |
+| `test_a_404_body_is_unchanged` | A 404 body is unchanged. |
+| `test_a_position_that_found_no_country_is_logged_with_source_none` | A position that found no country is logged with source none. |
+| `test_a_city_state_reads_without_null` | Vienna has no separate state; the old page printed "Wien, null (AT)". |
+| `test_a_prefecture_given_as_province_is_used_for_the_name_only` | A prefecture given as province is used for the name only. |
+| `test_a_region_given_under_another_key_is_used_for_the_name` | A region given under another key is used for the name. |
+| `test_a_municipality_is_used_when_there_is_no_city_town_or_village` | A municipality is used when there is no city town or village. |
+| `test_a_real_state_and_city_win_over_the_other_keys` | The other keys only fill a gap: a district or municipality never replaces a state or city Nominatim did give. |
+| `test_a_resolver_used_twice_does_not_carry_names_over` | One resolver per request in production; this keeps resolve() self-contained anyway. |
+| `test_both_nominatim_lookups_ask_for_english_names` | Both nominatim lookups ask for english names. |
+| `test_display_location_uses_only_the_parts_that_exist` | Display location uses only the parts that exist. |
+| `test_a_json_value_that_is_not_text_is_treated_as_not_sent` | Only a JSON body can carry these types. A list or object used to raise (city.title(), or a list as a dict key) and turn the lookup into a 500. |
+| `test_a_number_where_text_belongs_is_read_as_text` | A number where text belongs is read as text. |
+| `test_the_response_only_adds_the_two_fields` | Every field the page already reads keeps its name and shape. |
+| `test_the_lambda_handler_returns_both_fields_through_api_gateway` | The lambda handler returns both fields through api gateway. |
+
+> 24 test functions expand to 59 cases through parametrisation.
+
+### `test_emergency_logging.py`
+
+*Unit · issue #146 · 94 tests*
+
+Logging for the Emergency Contacts Lambda (follow-up to issue #146).
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_gps_request_logs_what_was_sent_how_it_was_found_and_what_came_back` | Gps request logs what was sent how it was found and what came back. |
+| `test_exact_coordinates_and_full_ip_never_reach_the_log` | Exact coordinates and full ip never reach the log. |
+| `test_gps_that_does_not_resolve_says_the_ip_was_used_instead` | The Prague report: a position was sent, but the answer came from the IP. |
+| `test_a_rate_limited_lookup_is_named_as_one` | A rate limited lookup is named as one. |
+| `test_ip_only_request_is_logged_with_the_ip_as_its_source` | Ip only request is logged with the ip as its source. |
+| `test_country_parameter_is_logged_as_the_source_without_any_lookup` | Country parameter is logged as the source without any lookup. |
+| `test_place_search_without_a_match_is_logged` | Place search without a match is logged. |
+| `test_failed_place_search_is_logged_with_the_reason` | Failed place search is logged with the reason. |
+| `test_ipinfo_answer_without_a_country_is_a_warning` | Ipinfo answer without a country is a warning. |
+| `test_a_position_with_no_country_is_a_warning` | A point at sea: Nominatim answers, but with no country in it. |
+| `test_every_parameter_name_is_logged_but_not_its_value` | A client sending "latitude" instead of "lat" is visible as the reason GPS was ignored. |
+| `test_parameter_names_are_capped_in_length_and_number` | A JSON body can carry any number of keys, of any length. |
+| `test_a_postcode_is_logged_cut_to_its_region` | A full UK postcode or a US ZIP+4 can point to a handful of addresses. |
+| `test_caller_text_cannot_start_a_log_line_of_its_own` | A value made to look like one of our lines stays escaped inside its own field. |
+| `test_a_404_reason_escapes_the_service_it_names` | With a valid country the 404 reason quotes the service as sent. |
+| `test_names_from_the_geocoder_are_escaped_too` | Names from the geocoder are escaped too. |
+| `test_a_long_value_is_cut_short` | A long value is cut short. |
+| `test_the_response_line_names_the_services_filled_with_the_general_number` | The response line names the services filled with the general number. |
+| `test_the_response_line_leaves_the_fallback_part_out_when_nothing_fell_back` | The response line leaves the fallback part out when nothing fell back. |
+| `test_a_city_in_several_countries_is_logged_as_not_guessed` | A city in several countries is logged as not guessed. |
+| `test_a_handler_failure_logs_its_traceback_as_one_record` | Logged, not printed: Lambda splits printed output into one event per line, while a logged record, traceback included, stays one event with the request ID. |
+| `test_an_invalid_caller_ip_is_logged_without_the_value` | An invalid caller ip is logged without the value. |
+| `test_unusable_coordinates_are_logged` | Unusable coordinates are logged. |
+| `test_a_404_logs_why` | A 404 logs why. |
+| `test_an_unexpected_error_is_logged_with_its_traceback` | An unexpected error is logged with its traceback. |
+| `test_the_handler_never_logs_the_login_token` | The handler never logs the login token. |
+| `test_logging_does_not_change_the_fields_the_web_client_reads` | Logging adds nothing to the body; location_source and display_location are pinned in test_emergency_location_fields.py. |
+| `test_info_lines_are_emitted_even_though_the_root_logger_is_at_warning` | The Lambda runtime leaves root at WARNING; the module's own level must let INFO through. |
+| `test_log_level_comes_from_the_environment_and_a_typo_falls_back_to_info` | Log level comes from the environment and a typo falls back to info. |
+| `test_ip_addresses_are_masked` | Ip addresses are masked. |
+| `test_lookup_failures_are_described_in_a_few_words` | Lookup failures are described in a few words. |
+| `test_a_zip_keeps_only_its_first_three_characters` | A zip keeps only its first three characters. |
+| `test_clean_escapes_what_is_not_printable_and_caps_the_length` | Clean escapes what is not printable and caps the length. |
+| `test_a_refused_connection_is_a_network_error` | A refused connection is a network error. |
+| `test_location_description_skips_empty_parts` | Location description skips empty parts. |
+
+> 35 test functions expand to 94 cases through parametrisation.
 
 ### `test_emergency_s3_reader.py`
 
@@ -450,6 +555,143 @@ Router-level regression tests - issue #171.
 | `test_routed_emergency_can_still_ask_for_one_service` | Routing in the query string leaves the body free to name the service. |
 
 > 16 test functions expand to 34 cases through parametrisation.
+
+### `test_skill_eval_dataset.py`
+
+*Dataset · issue #216 · 28 tests*
+
+The volunteer evaluation set itself (issue #216).
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_every_accepted_id_is_a_selectable_leaf` | The same guarantee the service makes about its own output. |
+| `test_no_label_is_general_or_a_parent` | No label is general or a parent. |
+| `test_accept_sets_are_non_empty_and_free_of_duplicates` | Accept sets are non empty and free of duplicates. |
+| `test_a_skill_name_is_not_reused_within_a_case` | Two skills with the same name would be indistinguishable in the report. |
+| `test_the_set_meets_the_minimum_size` | The set meets the minimum size. |
+| `test_case_ids_are_unique` | Case ids are unique. |
+| `test_each_required_trait_is_represented` | Each required trait is represented. |
+| `test_at_least_two_non_english_languages_appear` | At least two non english languages appear. |
+| `test_every_case_declares_a_language` | Every case declares a language. |
+| `test_short_cases_are_actually_short` | Short cases are actually short. |
+| `test_long_cases_are_actually_long` | Long cases are actually long. |
+| `test_retired_cases_actually_say_retired_or_senior` | Retired cases actually say retired or senior. |
+| `test_multi_area_cases_span_at_least_two_top_level_branches` | Three skills inside one branch is not the case volunteer mode exists for. |
+| `test_no_match_cases_label_no_skills` | No match cases label no skills. |
+| `test_unmatched_skill_cases_say_what_should_land_there` | Unmatched skill cases say what should land there. |
+| `test_no_case_reuses_a_description_from_issue_216` | Paraphrasing the situations is fine; reusing the text is not. |
+| `test_descriptions_fit_within_the_services_own_cap` | Over 2,000 characters the service truncates, and a label at the end of a longer description would be unreachable rather than missed. |
+| `test_descriptions_are_unique` | Descriptions are unique. |
+| `test_the_issue_cases_file_is_the_ten_cases_the_issue_publishes` | Same texts as ISSUE_216_CASES, and the 19 skills the issue's table counts. |
+| `test_the_issue_cases_label_only_selectable_leaves` | The issue cases label only selectable leaves. |
+
+> 20 test functions expand to 28 cases through parametrisation.
+
+### `test_skill_eval_scoring.py`
+
+*Unit · issue #216 · 36 tests*
+
+How volunteer skill suggestions are scored (issue #216).
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_an_exact_single_match_is_one_true_positive` | An exact single match is one true positive. |
+| `test_an_acceptable_alternative_counts_as_found` | 5.1.11 Other Medical Concern stands in for 5.1.1 General Consultation. |
+| `test_one_prediction_cannot_satisfy_two_skills` | Otherwise a single 5.1.1 would score both labelled medical skills. |
+| `test_pairing_does_not_depend_on_the_order_the_labels_were_written` | The case a greedy walk gets wrong. |
+| `test_an_ambiguous_pairing_credits_the_confident_prediction` | Totals do not depend on this, but the report should be deterministic. |
+| `test_leftover_predictions_are_false_positives` | Leftover predictions are false positives. |
+| `test_unfound_skills_are_false_negatives` | Unfound skills are false negatives. |
+| `test_predicting_nothing_on_a_labelled_case_is_all_misses` | Predicting nothing on a labelled case is all misses. |
+| `test_a_no_match_case_with_suggestions_is_all_false_positives` | A no match case with suggestions is all false positives. |
+| `test_a_correctly_empty_no_match_case_counts_nowhere` | A correctly empty no match case counts nowhere. |
+| `test_false_suggestion_rate_isolates_the_invented_skills` | Recall cannot see this, and precision dilutes it across every case. |
+| `test_a_provider_error_scores_every_labelled_skill_as_missed` | A run full of 429s must not read as perfect precision. |
+| `test_errors_are_counted_in_the_aggregate` | Errors are counted in the aggregate. |
+| `test_totals_are_micro_averaged_across_cases` | Worked by hand: 3 TP, 1 FP, 2 FN. |
+| `test_a_run_that_answered_nothing_reports_undefined_not_zero` | 0% reads as "always wrong"; the model was never asked a question it answered. |
+| `test_aggregating_no_cases_does_not_divide_by_zero` | Aggregating no cases does not divide by zero. |
+| `test_trait_buckets_are_scored_independently` | Trait buckets are scored independently. |
+| `test_expected_skills_are_read_from_the_eval_set_shape` | Expected skills are read from the eval set shape. |
+| `test_predictions_are_read_from_the_service_response_shape` | Predictions are read from the service response shape. |
+| `test_empty_inputs_read_as_empty_lists` | Empty inputs read as empty lists. |
+| `test_a_missing_confidence_does_not_break_reading_a_prediction` | A missing confidence does not break reading a prediction. |
+| `test_percentile_is_nearest_rank` | Percentile is nearest rank. |
+| `test_percentile_of_nothing_is_none_not_zero` | Percentile of nothing is none not zero. |
+| `test_percentile_rejects_a_fraction_outside_zero_to_one` | Percentile rejects a fraction outside zero to one. |
+| `test_run_statistics_reports_mean_tokens_split_and_total` | Run statistics reports mean tokens split and total. |
+| `test_run_statistics_counts_reliability_separately_from_accuracy` | Run statistics counts reliability separately from accuracy. |
+| `test_without_a_primary_model_no_case_is_called_a_fallback` | Without a primary model no case is called a fallback. |
+| `test_run_statistics_reports_explanation_shares_and_medical_drops` | Run statistics reports explanation shares and medical drops. |
+| `test_run_statistics_of_rows_from_the_older_harness_does_not_guess` | Rows from before the token split have only `tokens` and `seconds`. |
+
+> 29 test functions expand to 36 cases through parametrisation.
+
+### `test_skill_suggestion.py`
+
+*Unit · issue #216 · 76 tests*
+
+Volunteer skill suggestions: predict_category_api with mode "volunteer_skills" (issue #216).
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_leaf_set_is_exactly_the_selectable_categories` | Every leaf, and nothing else: no General, no parent. |
+| `test_prompt_offers_every_leaf_and_no_parent_or_general` | Prompt offers every leaf and no parent or general. |
+| `test_category_list_is_a_fixed_system_message` | The category list never changes between requests, so it can be cached; only the user message carries the volunteer's text. |
+| `test_skills_from_several_areas_are_all_returned` | The case the help-request walk cannot serve: one volunteer, three areas. |
+| `test_general_parents_and_unknown_ids_are_dropped` | General parents and unknown ids are dropped. |
+| `test_a_category_name_is_mapped_to_its_leaf_id` | A category name is mapped to its leaf id. |
+| `test_duplicates_keep_the_highest_confidence` | Duplicates keep the highest confidence. |
+| `test_confidence_is_clamped_and_unparseable_values_are_dropped` | Confidence is clamped and unparseable values are dropped. |
+| `test_nan_confidence_is_treated_as_zero` | Nan confidence is treated as zero. |
+| `test_threshold_is_inclusive_at_the_default` | Threshold is inclusive at the default. |
+| `test_results_are_capped_at_six_highest_first` | Results are capped at six highest first. |
+| `test_threshold_and_cap_are_configurable` | Threshold and cap are configurable. |
+| `test_bad_configuration_falls_back_to_the_defaults` | Bad configuration falls back to the defaults. |
+| `test_unmatched_skills_are_cleaned` | Unmatched skills are cleaned. |
+| `test_missing_unmatched_skills_is_an_empty_list` | Missing unmatched skills is an empty list. |
+| `test_description_is_capped_before_it_reaches_the_model` | Description is capped before it reaches the model. |
+| `test_retired_volunteer_is_not_routed_to_elderly_care` | Retired volunteer is not routed to elderly care. |
+| `test_no_match_is_a_valid_answer_and_does_not_fail_over` | No match is a valid answer and does not fail over. |
+| `test_only_filtered_out_results_is_still_a_valid_answer` | General-only output is filtered to nothing; that is 'no match', not an outage. |
+| `test_errors_and_malformed_output_fail_over_to_the_next_model` | Errors and malformed output fail over to the next model. |
+| `test_all_groq_failures_reach_gemini_with_the_same_instructions` | All groq failures reach gemini with the same instructions. |
+| `test_total_outage_is_a_502_through_the_handler` | Total outage is a 502 through the handler. |
+| `test_volunteer_mode_response_envelope` | Volunteer mode response envelope. |
+| `test_mode_value_is_matched_leniently` | Mode value is matched leniently. |
+| `test_volunteer_mode_requires_a_description` | Volunteer mode requires a description. |
+| `test_unknown_mode_is_rejected_rather_than_guessed` | Unknown mode is rejected rather than guessed. |
+| `test_handler_trims_and_caps_the_description` | Handler trims and caps the description. |
+| `test_unexpected_failure_is_a_generic_500` | Unexpected failure is a generic 500. |
+| `test_router_reaches_suggest_skills_by_service_name` | Router reaches suggest skills by service name. |
+| `test_suggest_skills_handler_rejects_a_malformed_body` | Suggest skills handler rejects a malformed body. |
+| `test_request_without_mode_returns_exactly_what_it_did_before` | Create Help Request must not notice that volunteer mode exists. |
+| `test_request_without_mode_still_reports_its_own_errors` | Request without mode still reports its own errors. |
+| `test_description_and_evidence_are_not_logged_on_success` | Description and evidence are not logged on success. |
+| `test_description_is_not_logged_when_models_fail` | Failover warnings quote the exception; ours must not quote the text. |
+| `test_provider_error_text_quoting_the_output_is_not_logged` | Groq's json_validate_failed error carries the model's partial output. |
+| `test_session_text_is_not_logged` | The session carries earlier descriptions; they are no more loggable. |
+| `test_hints_name_only_selectable_leaves` | Hints name only selectable leaves. |
+| `test_prompt_stays_within_its_size_budget` | The category list is most of every call's tokens, on every call. |
+| `test_shared_paths_are_written_once_per_group` | Shared paths are written once per group. |
+| `test_each_suggestion_says_what_was_written_what_matched_and_why` | Each suggestion says what was written what matched and why. |
+| `test_a_quote_the_volunteer_did_not_write_is_not_shown` | A quote the volunteer did not write is not shown. |
+| `test_quotes_match_across_case_spacing_and_punctuation` | Quotes match across case spacing and punctuation. |
+| `test_medical_skill_is_suggested_with_its_quote` | Medical skill is suggested with its quote. |
+| `test_medical_skill_without_a_real_quote_is_not_suggested` | Medical skill without a real quote is not suggested. |
+| `test_wellbeing_skills_outside_medical_consultation_need_no_quote` | Wellbeing skills outside medical consultation need no quote. |
+| `test_first_call_starts_a_session_holding_the_text` | First call starts a session holding the text. |
+| `test_repeating_a_description_costs_no_tokens` | Repeating a description costs no tokens. |
+| `test_only_the_new_text_is_sent_and_results_are_merged` | Only the new text is sent and results are merged. |
+| `test_a_skill_named_twice_keeps_its_most_confident_suggestion` | A skill named twice keeps its most confident suggestion. |
+| `test_a_session_from_the_client_is_revalidated_not_trusted` | A session from the client is revalidated not trusted. |
+| `test_a_missing_or_malformed_session_is_a_fresh_one` | A missing or malformed session is a fresh one. |
+| `test_a_session_remembers_its_latest_entries_only` | A session remembers its laentries only. |
+| `test_merged_results_are_capped` | Merged results are capped. |
+| `test_handler_round_trips_the_session` | Handler round trips the session. |
+| `test_describe_add_more_then_repeat_the_first` | One volunteer's session: describe, add more, then repeat the first text. |
+
+> 55 test functions expand to 76 cases through parametrisation.
 
 ### `test_subject_generator.py`
 
