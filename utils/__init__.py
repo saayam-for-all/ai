@@ -31,14 +31,27 @@ class ChatMessage(TypedDict):
 
 #: Most recent turns of the client transcript that are forwarded to the model.
 #: The More Information modal caps a person at five questions, so ten messages
-#: covers a full session and leaves room for a client that counts differently.
-#: Nothing enforces that cap on our side, and a transcript we do not bound is a
-#: prompt we do not bound.
-MAX_HISTORY_MESSAGES = 20
+#: covers a full session; two more leave room for a client that counts
+#: differently. Nothing enforces that cap on our side, and a transcript we do
+#: not bound is a prompt we do not bound. (Was 20 before #244 Task D.)
+MAX_HISTORY_MESSAGES = 12
 
 #: Longest single message forwarded. The modal enforces 250 characters in the
 #: browser, which is a UI convenience and not a limit anyone else is held to.
-MAX_MESSAGE_CHARS = 4000
+#: Answers are prompted to stay under 60 words, so 2,000 characters is still
+#: several times what a real turn uses. (Was 4,000 before #244 Task D.)
+MAX_MESSAGE_CHARS = 2000
+
+#: Total characters of history forwarded, across every kept turn (#244 Task D).
+#: The per-message and message-count caps alone allowed 20 x 4,000 = 80,000
+#: characters, roughly 20,000 prompt tokens of English, against Groq's 8,000
+#: tokens-per-minute base limit for the gpt-oss models. A request that large is
+#: refused by every Groq target and only Gemini can answer it. A full session
+#: from the modal (five 250-character questions plus four short answers) is
+#: under 4,000 characters, so this budget only ever trims a transcript the
+#: modal could not have produced. Oldest turns go first; the newest message,
+#: which is the question being asked, is always kept.
+MAX_HISTORY_CHARS = 6000
 
 #: Appended to the system prompt when the person has asked a follow-up. It
 #: carries the request they are asking about without putting it in the position
@@ -53,6 +66,22 @@ Description: {description}
 Use it as background for what they ask next. Answer the question in the final
 message; do not restate or re-answer the request itself unless they ask you to.
 """
+
+
+def _fit_history_budget(messages: list[BaseMessage]) -> list[BaseMessage]:
+    """Drop the oldest turns until the history fits MAX_HISTORY_CHARS.
+
+    The newest message is never dropped: on a follow-up it is the question
+    being asked, and each message is already capped at MAX_MESSAGE_CHARS, which
+    is well under the budget, so it always fits on its own.
+    """
+    total = sum(len(m.content) for m in messages)
+    start = 0
+    while total > MAX_HISTORY_CHARS and start < len(messages) - 1:
+        total -= len(messages[start].content)
+        start += 1
+    return messages[start:]
+
 
 class AnswerGenerationServiceInterface(ABC):
     """Abstract interface for answer generation services."""
@@ -95,9 +124,10 @@ class GroqAnswerGenerationService(AnswerGenerationServiceInterface):
         guaranteed: entries that are not objects, roles we do not accept, and
         missing or blank content are dropped rather than passed to the model.
 
-        Only the most recent MAX_HISTORY_MESSAGES turns are kept. An unbounded
-        transcript from a client is an unbounded prompt and an unbounded bill,
-        and the oldest turns are the least useful ones to spend that on.
+        Only the most recent MAX_HISTORY_MESSAGES turns are kept, and only as
+        many of those as fit in MAX_HISTORY_CHARS. An unbounded transcript from
+        a client is an unbounded prompt and an unbounded bill, and the oldest
+        turns are the least useful ones to spend that on.
         """
         # A sequence, or nothing. The handler already drops a non-list, but
         # this is a public service method and the aggregator invokes the
@@ -118,7 +148,7 @@ class GroqAnswerGenerationService(AnswerGenerationServiceInterface):
                 out.append(HumanMessage(content=content))
             elif role == "assistant":
                 out.append(AIMessage(content=content))
-        return out[-MAX_HISTORY_MESSAGES:]
+        return _fit_history_budget(out[-MAX_HISTORY_MESSAGES:])
 
     @staticmethod
     def _split_trailing_question(
