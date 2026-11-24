@@ -191,3 +191,48 @@ def test_shared_groq_model_is_built_with_low_reasoning_effort(monkeypatch):
         importlib.reload(client_module)
 
 
+
+
+# Per-call time limits (#191 part 5 review, #263). Optional: callers that do
+# not ask for them get exactly the arguments pinned above.
+
+def test_groq_factory_passes_a_requested_time_limit_and_retry_count(monkeypatch):
+    calls = []
+    monkeypatch.setattr(client_module, "GROQ_API_KEY", "test-groq-key")
+    monkeypatch.setattr(client_module, "ChatGroq", _recording_constructor(calls, object()))
+
+    client_module.create_chat_model(
+        ModelTarget(provider="groq", model="groq-primary"),
+        temperature=0, timeout=8, max_retries=1,
+    )
+
+    assert calls[0]["request_timeout"] == 8
+    assert calls[0]["max_retries"] == 1
+
+
+def test_gemini_factory_passes_a_requested_time_limit_and_retry_count(monkeypatch):
+    calls = []
+    monkeypatch.setattr(client_module, "GEMINI_API_KEY", "test-gemini-key")
+    monkeypatch.setattr(client_module, "ChatGoogleGenerativeAI", _recording_constructor(calls, object()))
+
+    client_module.create_chat_model(
+        ModelTarget(provider="gemini", model="gemini-final"),
+        temperature=0, timeout=8, max_retries=1,
+    )
+
+    assert calls[0]["timeout"] == 8
+    assert calls[0]["max_retries"] == 1
+
+
+def test_zero_retries_is_passed_not_dropped(monkeypatch):
+    """0 is a real choice, not "unset"."""
+    calls = []
+    monkeypatch.setattr(client_module, "GEMINI_API_KEY", "test-gemini-key")
+    monkeypatch.setattr(client_module, "ChatGoogleGenerativeAI", _recording_constructor(calls, object()))
+
+    client_module.create_chat_model(
+        ModelTarget(provider="gemini", model="gemini-final"), temperature=0, max_retries=0,
+    )
+
+    assert calls[0]["max_retries"] == 0
+    assert "timeout" not in calls[0]

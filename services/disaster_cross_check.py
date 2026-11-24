@@ -32,6 +32,7 @@ Rules this module enforces, each one from the issue's verification policy:
 """
 import json
 import re
+import time
 from datetime import datetime, timezone
 
 from utils import token_usage
@@ -41,6 +42,20 @@ from utils import token_usage
 # are the ones that matter. A cap keeps a busy region from costing a call per
 # aftershock.
 MAX_CROSS_CHECKS = 3
+
+# Time limits (review of #254, and #263). The news path already waits on the
+# feeds, and API Gateway gives up at 29 s, so the cross-check must be bounded.
+# Each model call gets at most CALL_TIMEOUT_SECONDS per attempt and
+# CALL_MAX_RETRIES retries. On top of that, the whole cross-check for one
+# answer has TIME_BUDGET_SECONDS: no new call starts once less than
+# MIN_CALL_SECONDS is left, and a call never gets more time per attempt than
+# the budget has left. Without the budget, Gemini then Groq, each with a
+# retry, could take 4 x 8 s per event. With it, the cross-check stays within
+# about 12 s plus connection overhead, whatever the providers do.
+CALL_TIMEOUT_SECONDS = 8
+CALL_MAX_RETRIES = 1
+TIME_BUDGET_SECONDS = 12
+MIN_CALL_SECONDS = 2
 
 # Model text that reaches the response is bounded and labelled as the model's.
 MAX_NOTES_CHARS = 300
@@ -98,11 +113,22 @@ def _default_targets():
     return targets
 
 
-def _default_llm(target, prompt):
-    """Ask one model. Returns the raw LangChain message."""
+def _default_llm(target, prompt, timeout=CALL_TIMEOUT_SECONDS):
+    """Ask one model, within a time limit. Returns the raw LangChain message.
+
+    ``timeout`` is per attempt; with CALL_MAX_RETRIES retries a call can take
+    (retries + 1) x timeout, which _attempt_timeout allows for.
+    """
     from utils.client import create_chat_model
 
-    return create_chat_model(target, temperature=0).invoke(prompt)
+    model = create_chat_model(target, temperature=0, timeout=timeout,
+                              max_retries=CALL_MAX_RETRIES)
+    return model.invoke(prompt)
+
+
+def _attempt_timeout(remaining):
+    """Seconds per attempt for a call that must finish within ``remaining``."""
+    return min(CALL_TIMEOUT_SECONDS, remaining / (CALL_MAX_RETRIES + 1))
 
 
 def _content(message):
@@ -166,15 +192,22 @@ def build_prompt(claim, event):
     )
 
 
-def cross_check(claim, event, *, llm=None, targets=None, usage=None, now=None):
+def cross_check(claim, event, *, llm=None, targets=None, usage=None, now=None,
+                deadline=None, clock=time.monotonic):
     """The ``llm_cross_check`` block for one event. Never raises.
 
-    llm      callable(target, prompt) -> message or str. Defaults to the real
-             providers; tests pass a fake.
-    targets  ModelTargets to try in order. Defaults to Gemini, then Groq.
+    llm       callable(target, prompt, timeout=seconds) -> message or str.
+              Defaults to the real providers; tests pass a fake.
+    targets   ModelTargets to try in order. Defaults to Gemini, then Groq.
+    deadline  clock() value after which no new model call starts. Defaults to
+              TIME_BUDGET_SECONDS from now; cross_check_news_result shares one
+              deadline across every event in an answer.
     """
     llm = llm or _default_llm
     checked_at = _iso(now or datetime.now(timezone.utc))
+    if deadline is None:
+        deadline = clock() + TIME_BUDGET_SECONDS
+    out_of_time = False
     try:
         targets = list(targets) if targets is not None else _default_targets()
         prompt = build_prompt(claim, event)
@@ -183,8 +216,14 @@ def cross_check(claim, event, *, llm=None, targets=None, usage=None, now=None):
         targets, prompt = [], None
 
     for target in targets:
+        remaining = deadline - clock()
+        if remaining < MIN_CALL_SECONDS:
+            out_of_time = True
+            print(f"WARNING: disaster cross-check time limit reached before "
+                  f"{target.provider}/{target.model}")
+            break
         try:
-            message = llm(target, prompt)
+            message = llm(target, prompt, timeout=_attempt_timeout(remaining))
             if usage is not None:
                 token_usage.record(usage, message, provider=target.provider,
                                    model=target.model, branch="cross_check")
@@ -215,7 +254,9 @@ def cross_check(claim, event, *, llm=None, targets=None, usage=None, now=None):
         "model": None,
         "verdict": None,
         "agrees": None,
-        "notes": "No model could be reached; the authoritative feed's grade stands.",
+        "notes": ("The time limit for the cross-check was reached; the authoritative "
+                  "feed's grade stands." if out_of_time else
+                  "No model could be reached; the authoritative feed's grade stands."),
         "checked_at": checked_at,
     }
 
@@ -250,12 +291,13 @@ def grade(feed_confidence, check):
 
 # ------------------------------------------------------------------ entry point
 
-def cross_check_news_result(result, news_snippet, *, llm=None, targets=None, now=None):
+def cross_check_news_result(result, news_snippet, *, llm=None, targets=None, now=None,
+                            clock=time.monotonic):
     """Add the cross-check to part 4's answer. Returns a new dict; never raises.
 
     ``result`` is what ``services.disaster_news.check_news`` returned. Only a
     ``matched`` answer with events is cross-checked; anything else is returned
-    unchanged, without a model call.
+    unchanged, without a model call. Every event shares one time budget.
     """
     result = dict(result or {})
     events = [dict(e) for e in result.get("events") or []]
@@ -264,11 +306,13 @@ def cross_check_news_result(result, news_snippet, *, llm=None, targets=None, now
         return result
 
     claim = {**(result.get("extracted") or {}), "news_snippet": news_snippet}
+    deadline = clock() + TIME_BUDGET_SECONDS
     usage = token_usage.new_accumulator()
     try:
         for index, event in enumerate(events):
             if index < MAX_CROSS_CHECKS:
-                check = cross_check(claim, event, llm=llm, targets=targets, usage=usage, now=now)
+                check = cross_check(claim, event, llm=llm, targets=targets, usage=usage,
+                                    now=now, deadline=deadline, clock=clock)
             else:
                 check = not_checked(now)
             event["llm_cross_check"] = check

@@ -606,6 +606,11 @@ Reading the fields:
   only `disaster_detected` would never see the `stale` beside it. Floods and
   wildfires both come from GDACS, as two feeds, so two rows name `GDACS`;
   they are told apart by `event_types`.
+- **`cross_check_summary`** is an addition to the issue's contract, on the
+  news-snippet path only. It counts the events that were cross-checked,
+  agreed, disagreed or could not be checked. With one event per answer today
+  it repeats `events[0].llm_cross_check`; it earns its place once part 8
+  brings a second source per event type.
 
 #### Status codes
 
@@ -868,8 +873,8 @@ tracked there. Each part is its own pull request.
 
 | Part | What | Notes |
 | ---: | --- | --- |
-| 4 | The news-snippet query | A first draft for earthquakes is open in #238 |
-| 5 | The LLM cross-check, and `unverified` | |
+| 4 | The news-snippet query | A first draft for earthquakes is open in #238. Follow-up: model-assisted extraction and geocoding (the issue's step (a)) for reports the fixed patterns cannot read; today those come back `unresolved` |
+| 5 | The LLM cross-check, and `unverified` | In review in #254. Wiring into `disaster_check_handler`, with a contract test through `lambda_handler` for a matched and an unresolved snippet, goes in with whichever of #238 and #254 merges second |
 | 7 | Deployment: the API Gateway route and the Gemini key | Needs AWS access. Includes **caller rate limiting, as an API Gateway usage plan**; a shared cache, so that a cold start does not wait on every feed; and an overall deadline per request, so that a slow feed gives `502` rather than the gateway's `504` |
 | 8 | Polygons and corroboration | Simplifying large published areas; merging the same event reported twice; if GDACS is ever seen listing a fire's update before its burned area, letting the previous update's area back a detection (raised in the review of part 3) |
 | 9 | Hand-off to Geospatial | Volunteer and victim searches use `impact_zone` when `boundary_source` is `authoritative`, never the fallback circle |
@@ -972,13 +977,24 @@ extracted from it, and the record, and asked one question: do they describe
 the same event? Its only output is a verdict, `same`, `different` or
 `unsure`, with a one-line note. It cannot add, remove or edit an event.
 
+**How many calls, and how long.** At most the first three events are
+cross-checked, and each can try Gemini and then Groq, so the ceiling is two
+calls per event and six per answer. Part 4 returns one event, so in practice
+it is at most two. Each call gets 8 s per attempt and one retry, and the
+whole cross-check for an answer has a 12 s budget: no new call starts once
+less than 2 s is left, so it stays within about 12 s whatever the providers
+do. Running out of time is reported like an outage, and the feed's grade
+stands. The values are `CALL_TIMEOUT_SECONDS`, `CALL_MAX_RETRIES`,
+`TIME_BUDGET_SECONDS` and `MIN_CALL_SECONDS` in
+`services/disaster_cross_check.py`.
+
 | Part 4 answer | Model | Result |
 |---|---|---|
 | `unresolved` (no record, several records, unreadable report) | not asked | returned unchanged: `confidence: "unverified"`, `disaster_detected: null`, no model call |
 | `matched` | `same` | the feed's grade stands, `agrees: true` |
 | `matched` | `different` | the event stays, the grade drops one step (`high` to `medium`, `medium` to `low`), `agrees: false` |
 | `matched` | `unsure` | the feed's grade stands, `agrees: null` |
-| `matched` | every model down or unreadable | the feed's grade stands, `status: "unavailable"`, `agrees: null` |
+| `matched` | every model down or unreadable, or the time limit reached | the feed's grade stands, `status: "unavailable"`, `agrees: null` |
 
 So the model can lower a grade but never raise one, and a snippet that
 tries to instruct the model can at most cost confidence. When nothing was
@@ -998,11 +1014,14 @@ matched it is not even read.
 }
 ```
 
-`status` is `checked`, `unavailable` (no model answered) or `not_checked`
-(past the first three events). A cross-checked answer also carries
-`cross_check_summary`: how many events were checked, agreed, disagreed or
-could not be checked. Like `sources_checked`, it is an addition to the
-issue's contract and awaits review.
+`status` is `checked`, `unavailable` (no model answered in time) or
+`not_checked` (past the first three events). A cross-checked answer also
+carries `cross_check_summary`: how many events were checked, agreed,
+disagreed or could not be checked.
+
+**Show `notes` as plain text, never as HTML.** It is written by a model that
+was shown untrusted input. It is bounded to 300 characters and labelled as the
+model's, but a client must still escape it like any other user content.
 
 #### Regression tests covering this service
 
@@ -1010,7 +1029,7 @@ issue's contract and awaits review.
 | --- | --- |
 | `test_disaster_check_contract.py` | Against responses recorded from USGS and GDACS: a location inside a known earthquake, flood or wildfire is detected with the feed's record in `verified_by`; Chennai, 265 km from the centre of the recorded India flood, is in it, while Kochi, 74 km from any of its water, is not; Santa Monica, inside the circle around the recorded 2025 Palisades fire but 3.9 km from burned ground, is in it at a 5 km radius but not at 3 km; a quiet location is a `false` from one call per feed, including a request made as midnight passed; any feed outage with nothing found is `502` `DISASTER_CHECK_UNAVAILABLE` with no `disaster_detected` field, and so is a quiet location while a GDACS list is only stale; a `news_snippet` is a `501`; the body is an object on every path. |
 | `test_disaster_check.py` | An epicentre beyond the caller's radius is still found when its zone reaches them; a feed that did not answer, or answered only with a stale answer, is never a `false`, while a stale answer's events are still reported; an event a feed returns that cannot be used fails that feed, named in the log; two feeds from one source are told apart in the log; `confidence` is that of the most severe event; the zone is a closed counterclockwise ring that covers the modelled circle, including across the antimeridian and at a pole; query validation. |
-| `test_disaster_cross_check.py` | Against part 4's answer shape: an `unresolved` report is returned unchanged, still `unverified`, and costs no model call; agreement keeps the feed's grade; disagreement drops it one step and is reported; `unsure` is not disagreement; the model cannot raise a grade or add, remove or edit an event; a snippet cannot close its own data block or reach the model without a feed record; Gemini failing falls back to Groq; an unusable reply is a failed attempt; every model down keeps the detection; provider error text never reaches the response; only the first three events cost a model call; one run over a recorded USGS answer through `check_location`. |
+| `test_disaster_cross_check.py` | Against part 4's answer shape: an `unresolved` report is returned unchanged, still `unverified`, and costs no model call; agreement keeps the feed's grade; disagreement drops it one step and is reported; `unsure` is not disagreement; the model cannot raise a grade or add, remove or edit an event; a snippet cannot close its own data block or reach the model without a feed record; Gemini failing falls back to Groq; an unusable reply is a failed attempt; every model down keeps the detection; provider error text never reaches the response; only the first three events cost a model call; each call has a per-attempt time limit and the answer one shared time budget, after which no new call starts and the feed's grade stands; one run over a recorded USGS answer through `check_location`. |
 | `test_usgs_earthquakes.py` | The worldwide query sent to USGS; the recorded payload becomes events with latitude and longitude the right way round; events before the window are left out; one answer is shared for a minute and never stands in once USGS is down; an unreachable feed, an unreadable answer, or an event with a NaN or out-of-range magnitude or position raises rather than returning an empty list. |
 | `test_gdacs_floods.py` | The queries sent to GDACS; the recorded India flood becomes an event with its affected area; `204` means no floods; a full page, a geometry answered for another event, a missing affected area, or an unreadable flood raises rather than returning an empty list. |
 | `test_gdacs_wildfires.py` | The queries sent to GDACS, with `polygontype=area` for the burned area; the recorded Los Angeles fires become events with their burned areas, holes filled; a fire counts while GDACS marks it as burning, and until the end of its last day; a burning fire that eased to Green is still reported at its own level, and a stopped one is not; `204` means no fires; a full page, a flood listed as a fire, geometry for another fire or update, a missing burned area, a later ring that is not inside the first, or an unreadable fire raises rather than returning an empty list; the point-in-ring test agrees with `geometry.distance_to_area_km` across the recorded outlines; errors name the fire and the request that failed; a new update of a fire never reuses the older update's area; a request made as midnight passed asks for the list once. |

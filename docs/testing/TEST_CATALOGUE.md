@@ -27,11 +27,11 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | --- | --- | --- | --- | ---: |
 | [`tests/test_answer_conversation.py`](../../tests/test_answer_conversation.py) | Unit | #183 | `utils/__init__.py prompt assembly` | 21 |
 | [`tests/test_classification_resilience.py`](../../tests/test_classification_resilience.py) | Unit | - | `services/classification_service.py` | 10 |
-| [`tests/test_client_factory.py`](../../tests/test_client_factory.py) | Unit | #193 | `utils/client.py create_chat_model` | 9 |
+| [`tests/test_client_factory.py`](../../tests/test_client_factory.py) | Unit | #193 | `utils/client.py create_chat_model` | 12 |
 | [`tests/test_client_imports.py`](../../tests/test_client_imports.py) | Integration | #154 | `utils/client.py` | 2 |
 | [`tests/test_disaster_check.py`](../../tests/test_disaster_check.py) | Unit | #191 | `services/disaster_check.py` | 71 |
 | [`tests/test_disaster_check_contract.py`](../../tests/test_disaster_check_contract.py) | Contract | #191 | `disaster_check_handler` | 62 |
-| [`tests/test_disaster_cross_check.py`](../../tests/test_disaster_cross_check.py) | Unit | #191 | `services/disaster_cross_check.py` | 56 |
+| [`tests/test_disaster_cross_check.py`](../../tests/test_disaster_cross_check.py) | Unit | #191 | `services/disaster_cross_check.py` | 64 |
 | [`tests/test_emergency_dataset.py`](../../tests/test_emergency_dataset.py) | Dataset | #146 | `services/emergency_numbers.json` | 17 |
 | [`tests/test_emergency_locale.py`](../../tests/test_emergency_locale.py) | Unit | #146 | `services/emergency.py` | 67 |
 | [`tests/test_emergency_s3_reader.py`](../../tests/test_emergency_s3_reader.py) | Unit | #334 | `services/emergency.py S3 reader` | 23 |
@@ -49,7 +49,7 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
 | [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 57 |
 | [`tests/test_usgs_earthquakes.py`](../../tests/test_usgs_earthquakes.py) | Unit | #191 | `services/usgs_earthquakes.py` | 71 |
-| | | | **Total** | **939** |
+| | | | **Total** | **950** |
 
 ## Every test
 
@@ -103,7 +103,7 @@ Guards the two failure modes behind "every request lands in General".
 
 ### `test_client_factory.py`
 
-*Unit · issue #193 · 9 tests*
+*Unit · issue #193 · 12 tests*
 
 Unit tests for target-aware LangChain client construction.
 
@@ -117,8 +117,11 @@ Unit tests for target-aware LangChain client construction.
 | `test_constructor_failure_can_fall_through_to_another_provider` | Constructor failure can fall through to another provider. |
 | `test_legacy_groq_defaults_include_low_reasoning_effort` | Legacy groq defaults include low reasoning effort. |
 | `test_shared_groq_model_is_built_with_low_reasoning_effort` | groq_llm serves subject and answer generation; it must request low effort. |
+| `test_groq_factory_passes_a_requested_time_limit_and_retry_count` | Groq factory passes a requested time limit and retry count. |
+| `test_gemini_factory_passes_a_requested_time_limit_and_retry_count` | Gemini factory passes a requested time limit and retry count. |
+| `test_zero_retries_is_passed_not_dropped` | 0 is a real choice, not "unset". |
 
-> 8 test functions expand to 9 cases through parametrisation.
+> 11 test functions expand to 12 cases through parametrisation.
 
 ### `test_client_imports.py`
 
@@ -241,7 +244,7 @@ The disaster_check contract: the Lambda event in, the envelope out - issue #191.
 
 ### `test_disaster_cross_check.py`
 
-*Unit · issue #191 · 56 tests*
+*Unit · issue #191 · 64 tests*
 
 Disaster check part 5: the LLM cross-check - issue #191.
 
@@ -278,12 +281,20 @@ Disaster check part 5: the LLM cross-check - issue #191.
 | `test_grade` | Grade. |
 | `test_cross_check_over_a_recorded_usgs_answer` | Gaziantep on 6 February 2023, through check_location, then part 5. |
 | `test_the_default_chain_is_gemini_then_groq` | The default chain is gemini then groq. |
-| `test_the_default_model_call_uses_the_shared_factory_at_temperature_zero` | The default model call uses the shared factory at temperature zero. |
+| `test_the_default_model_call_uses_the_shared_factory_with_a_time_limit` | Review of #254: library defaults are no timeout and six retries for Gemini. |
+| `test_the_default_model_call_passes_a_shorter_limit_through` | The default model call passes a shorter limit through. |
+| `test_the_limits_keep_the_cross_check_well_inside_api_gateways_29_s` | The limits keep the cross check well inside api gateways 29 s. |
+| `test_each_call_is_given_a_per_attempt_limit_that_fits_the_budget` | Each call is given a per attempt limit that fits the budget. |
+| `test_a_slow_gemini_leaves_groq_only_the_time_that_is_left` | A slow gemini leaves groq only the time that is left. |
+| `test_no_new_call_starts_once_the_budget_is_spent` | No new call starts once the budget is spent. |
+| `test_running_out_of_time_keeps_the_detection_and_the_feed_grade` | Running out of time keeps the detection and the feed grade. |
+| `test_every_event_in_an_answer_shares_one_budget` | Every event in an answer shares one budget. |
+| `test_a_cross_check_on_its_own_gets_a_budget_of_its_own` | A cross check on its own gets a budget of its own. |
 | `test_without_keys_the_default_path_reports_unavailable_not_an_error` | Locally, and in CI, there are no provider keys: the factory refuses. |
 | `test_parse_verdict_rejects_anything_but_a_known_verdict_object` | Parse verdict rejects anything but a known verdict object. |
 | `test_parse_verdict_normalises_case_and_whitespace` | Parse verdict normalises case and whitespace. |
 
-> 35 test functions expand to 56 cases through parametrisation.
+> 43 test functions expand to 64 cases through parametrisation.
 
 ### `test_emergency_dataset.py`
 

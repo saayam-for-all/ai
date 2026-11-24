@@ -27,12 +27,23 @@ GROQ_API_KEY = None
 GEMINI_API_KEY = None
 
 
-def create_chat_model(target: ModelTarget, *, temperature: float):
+def create_chat_model(
+    target: ModelTarget,
+    *,
+    temperature: float,
+    timeout: float | None = None,
+    max_retries: int | None = None,
+):
     """Construct a LangChain chat model for one configured target.
 
     Model selection and fallback order belong to ``model_routing.json`` and
     ``run_model_chain``.  This factory only turns the selected target into the
     matching provider client using the credentials loaded by this module.
+
+    ``timeout`` (seconds per attempt) and ``max_retries`` are passed to the
+    provider client only when given. Left out, the library defaults apply, as
+    before; for Gemini those are no timeout and six retries, so a caller that
+    sits behind API Gateway's 29 s limit should set both.
     """
     if target.provider == "groq":
         if not GROQ_API_KEY:
@@ -45,17 +56,26 @@ def create_chat_model(target: ModelTarget, *, temperature: float):
         }
         if target.reasoning_effort:
             kwargs["reasoning_effort"] = target.reasoning_effort
+        if timeout is not None:
+            kwargs["request_timeout"] = timeout
+        if max_retries is not None:
+            kwargs["max_retries"] = max_retries
         return ChatGroq(**kwargs)
 
     if target.provider == "gemini":
         if not GEMINI_API_KEY:
             raise ValueError("Gemini API key is not configured")
 
-        return ChatGoogleGenerativeAI(
-            google_api_key=GEMINI_API_KEY,
-            model=target.model,
-            temperature=temperature,
-        )
+        kwargs = {
+            "google_api_key": GEMINI_API_KEY,
+            "model": target.model,
+            "temperature": temperature,
+        }
+        if timeout is not None:
+            kwargs["timeout"] = timeout
+        if max_retries is not None:
+            kwargs["max_retries"] = max_retries
+        return ChatGoogleGenerativeAI(**kwargs)
 
     raise ValueError(f"Unsupported model provider: {target.provider}")
 

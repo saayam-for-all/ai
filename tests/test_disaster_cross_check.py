@@ -92,14 +92,16 @@ def _replies(*replies):
     calls = []
     queue = list(replies)
 
-    def llm(target, prompt):
+    def llm(target, prompt, timeout=None):
         calls.append((target, prompt))
+        llm.timeouts.append(timeout)
         reply = queue.pop(0)
         if isinstance(reply, BaseException):
             raise reply
         return reply
 
     llm.calls = calls
+    llm.timeouts = []
     return llm
 
 
@@ -424,13 +426,114 @@ def test_the_default_chain_is_gemini_then_groq():
     assert [t.provider for t in targets] == ["gemini", "groq"]
 
 
-def test_the_default_model_call_uses_the_shared_factory_at_temperature_zero():
+def test_the_default_model_call_uses_the_shared_factory_with_a_time_limit():
+    """Review of #254: library defaults are no timeout and six retries for Gemini."""
     model = mock.Mock()
     model.invoke.return_value = SAME
     with mock.patch("utils.client.create_chat_model", return_value=model) as factory:
         assert X._default_llm(GEMINI, "prompt") == SAME
-    factory.assert_called_once_with(GEMINI, temperature=0)
+    factory.assert_called_once_with(GEMINI, temperature=0, timeout=X.CALL_TIMEOUT_SECONDS,
+                                    max_retries=X.CALL_MAX_RETRIES)
     model.invoke.assert_called_once_with("prompt")
+
+
+def test_the_default_model_call_passes_a_shorter_limit_through():
+    model = mock.Mock()
+    model.invoke.return_value = SAME
+    with mock.patch("utils.client.create_chat_model", return_value=model) as factory:
+        X._default_llm(GROQ, "prompt", timeout=3)
+    assert factory.call_args.kwargs["timeout"] == 3
+
+
+def test_the_limits_keep_the_cross_check_well_inside_api_gateways_29_s():
+    assert X.CALL_TIMEOUT_SECONDS > 0 and X.CALL_MAX_RETRIES >= 0
+    assert X.TIME_BUDGET_SECONDS + X.CALL_TIMEOUT_SECONDS * (X.CALL_MAX_RETRIES + 1) < 29
+
+
+# -------------------------------------------------------------------------
+# The time budget
+# -------------------------------------------------------------------------
+
+class FakeClock:
+    """A monotonic clock that the fake model can move forward."""
+
+    def __init__(self):
+        self.t = 1000.0
+
+    def __call__(self):
+        return self.t
+
+
+def _slow(clock, seconds, *replies):
+    """A fake model where each call takes ``seconds`` of clock time."""
+    inner = _replies(*replies)
+
+    def llm(target, prompt, timeout=None):
+        clock.t += seconds
+        return inner(target, prompt, timeout=timeout)
+
+    llm.calls = inner.calls
+    llm.timeouts = inner.timeouts
+    return llm
+
+
+def test_each_call_is_given_a_per_attempt_limit_that_fits_the_budget():
+    llm = _replies(SAME)
+    X.cross_check_news_result(_result(_event()), SNIPPET, llm=llm, targets=TARGETS,
+                              now=NOW, clock=FakeClock())
+    per_attempt = llm.timeouts[0]
+    assert 0 < per_attempt <= X.CALL_TIMEOUT_SECONDS
+    assert per_attempt * (X.CALL_MAX_RETRIES + 1) <= X.TIME_BUDGET_SECONDS
+
+
+def test_a_slow_gemini_leaves_groq_only_the_time_that_is_left():
+    clock = FakeClock()
+    llm = _slow(clock, 7, TimeoutError("gemini slow"), SAME)
+    out = X.cross_check_news_result(_result(_event()), SNIPPET, llm=llm, targets=TARGETS,
+                                    now=NOW, clock=clock)
+    assert out["events"][0]["llm_cross_check"]["provider"] == "groq"
+    remaining = X.TIME_BUDGET_SECONDS - 7
+    assert llm.timeouts[1] == pytest.approx(min(X.CALL_TIMEOUT_SECONDS,
+                                                remaining / (X.CALL_MAX_RETRIES + 1)))
+
+
+def test_no_new_call_starts_once_the_budget_is_spent():
+    clock = FakeClock()
+    llm = _slow(clock, X.TIME_BUDGET_SECONDS, TimeoutError("gemini hung"), SAME)
+    out = X.cross_check_news_result(_result(_event()), SNIPPET, llm=llm, targets=TARGETS,
+                                    now=NOW, clock=clock)
+
+    assert [t.provider for t, _ in llm.calls] == ["gemini"], "Groq must not be started"
+    check = out["events"][0]["llm_cross_check"]
+    assert check["status"] == "unavailable"
+    assert "time limit" in check["notes"]
+
+
+def test_running_out_of_time_keeps_the_detection_and_the_feed_grade():
+    clock = FakeClock()
+    llm = _slow(clock, X.TIME_BUDGET_SECONDS, TimeoutError("gemini hung"))
+    out = X.cross_check_news_result(_result(_event()), SNIPPET, llm=llm, targets=TARGETS,
+                                    now=NOW, clock=clock)
+    assert out["disaster_detected"] is True
+    assert out["confidence"] == "high"
+
+
+def test_every_event_in_an_answer_shares_one_budget():
+    clock = FakeClock()
+    step = X.TIME_BUDGET_SECONDS / 2
+    llm = _slow(clock, step, SAME, SAME, SAME)
+    out = X.cross_check_news_result(_result(_event("a"), _event("b"), _event("c")), SNIPPET,
+                                    llm=llm, targets=TARGETS, now=NOW, clock=clock)
+    assert len(llm.calls) == 2
+    assert [e["llm_cross_check"]["status"] for e in out["events"]] == \
+           ["checked", "checked", "unavailable"]
+
+
+def test_a_cross_check_on_its_own_gets_a_budget_of_its_own():
+    clock = FakeClock()
+    llm = _slow(clock, X.TIME_BUDGET_SECONDS, TimeoutError("hung"), SAME)
+    check = X.cross_check(CLAIM, _event(), llm=llm, targets=TARGETS, now=NOW, clock=clock)
+    assert check["status"] == "unavailable" and len(llm.calls) == 1
 
 
 def test_without_keys_the_default_path_reports_unavailable_not_an_error():
