@@ -10,6 +10,35 @@ team works and reviews in.
 
 ## Unreleased
 
+### Answer prompts no longer name emergency numbers — [#258](https://github.com/saayam-for-all/ai/issues/258) (Task A)
+
+**Changed**
+
+- **Nine answer prompts in `utils/prompts.py` no longer give the model
+  emergency numbers as examples.** They used to say "911 for US, 112 for EU"
+  and, for mental health, "988 for US, Crisis Text Line 741741". A model
+  repeats examples, so a user outside the US or EU asking for urgent help
+  could be told to call 911. The emergency, emergency clothing, home repair,
+  healthcare, medical navigation, mental wellbeing, health education, elderly
+  support and senior medical prompts now tell the model never to state an
+  emergency or hotline number itself, and to point the user to local
+  emergency services and the Emergency Contacts page, which resolves the
+  right numbers for their country. This also stops those prompts
+  contradicting the base instruction they share ("Do NOT provide emergency
+  numbers or contact information"). A tester can observe:
+  - an urgent question on Generate Answer or the chat follow-up returns no
+    emergency phone number, for any location;
+  - the answer tells the user to contact local emergency services and to use
+    the Emergency Contacts page instead.
+
+**Added**
+
+- **`tests/test_prompt_emergency_numbers.py`.** Renders every category
+  prompt on both the one-shot and conversational paths for six locations and
+  fails if any contains a number from `services/emergency_numbers.json`, a
+  well-known hotline, or any other run of three or more digits. It also fails
+  if an urgent prompt stops pointing to Emergency Contacts.
+
 ### Volunteer skill suggestions — [#216](https://github.com/saayam-for-all/ai/issues/216)
 
 **Added**
