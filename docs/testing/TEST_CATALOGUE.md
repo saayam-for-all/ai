@@ -25,7 +25,7 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 
 | File | Kind | Issue | Covers | Tests |
 | --- | --- | --- | --- | ---: |
-| [`tests/test_answer_conversation.py`](../../tests/test_answer_conversation.py) | Unit | #183 | `utils/__init__.py prompt assembly` | 24 |
+| [`tests/test_answer_conversation.py`](../../tests/test_answer_conversation.py) | Unit | #183 | `utils/__init__.py prompt assembly` | 29 |
 | [`tests/test_classification_privacy.py`](../../tests/test_classification_privacy.py) | Unit | #216 | `utils/model_fallback.py failover reasons, predict_category 500` | 11 |
 | [`tests/test_classification_resilience.py`](../../tests/test_classification_resilience.py) | Unit | - | `services/classification_service.py` | 10 |
 | [`tests/test_client_factory.py`](../../tests/test_client_factory.py) | Unit | #193 | `utils/client.py create_chat_model` | 9 |
@@ -47,13 +47,13 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_skill_suggestion.py`](../../tests/test_skill_suggestion.py) | Unit | #216 | `services/skill_suggestion_service.py` | 76 |
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
 | [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 57 |
-| | | | **Total** | **726** |
+| | | | **Total** | **731** |
 
 ## Every test
 
 ### `test_answer_conversation.py`
 
-*Unit · issue #183 · 24 tests*
+*Unit · issue #183 · 29 tests*
 
 What the model is actually asked, turn by turn - issue #183.
 
@@ -72,6 +72,11 @@ What the model is actually asked, turn by turn - issue #183.
 | `test_only_the_most_recent_turns_are_forwarded` | An unbounded transcript is an unbounded prompt and an unbounded bill. |
 | `test_the_question_survives_the_cap` | Trimming the oldest turns must never trim the thing being asked. |
 | `test_an_oversized_message_is_truncated_rather_than_forwarded_whole` | The 250-character limit is enforced in the browser, which is not a limit. |
+| `test_a_transcript_of_maximum_length_turns_fits_the_history_budget` | The case the per-message and count caps never covered together. |
+| `test_the_question_survives_the_history_budget` | However long the turns before it, the question is what gets answered. |
+| `test_a_maximum_length_question_alone_always_fits` | The newest message is never dropped, so it must fit on its own. |
+| `test_the_budget_drops_the_oldest_turns_first` | What is kept is the most recent, contiguous end of the conversation. |
+| `test_a_full_session_from_the_modal_is_never_trimmed` | Five 250-character questions and four answers is what the modal can send. |
 | `test_a_follow_up_still_falls_back_to_gemini_when_groq_is_down` | Fallback works and every model receives the same conversation history. |
 | `test_primary_success_does_not_invoke_fallback` | A valid primary answer returns without trying another model. |
 | `test_empty_primary_answers_fall_back_to_gemini` | An empty primary answer should trigger fallback. |
@@ -80,7 +85,7 @@ What the model is actually asked, turn by turn - issue #183.
 | `test_the_answer_is_returned_stripped` | The answer is returned stripped. |
 | `test_location_gender_and_age_still_reach_the_system_prompt` | Location gender and age still reach the system prompt. |
 
-> 20 test functions expand to 24 cases through parametrisation.
+> 25 test functions expand to 29 cases through parametrisation.
 
 ### `test_classification_privacy.py`
 

@@ -10,6 +10,29 @@ team works and reviews in.
 
 ## Unreleased
 
+### Generate Answer — bound the conversation history (Task D) — [#244](https://github.com/saayam-for-all/ai/issues/244)
+
+**Changed**
+
+- **The history forwarded to the model now has a total budget,
+  `MAX_HISTORY_CHARS` (6,000 characters), on top of the existing caps.** The
+  caps were tightened to match what the More Information modal actually sends:
+  `MAX_HISTORY_MESSAGES` 20 → 12 and `MAX_MESSAGE_CHARS` 4,000 → 2,000. Before,
+  a single follow-up could forward 20 × 4,000 = 80,000 characters of history,
+  roughly 20,000 prompt tokens of English, against Groq's 8,000 tokens-per-minute
+  base limit for `gpt-oss-20b` and `gpt-oss-120b` (2,000 for
+  `gpt-oss-safeguard-20b`). Every Groq target would refuse that request and only
+  Gemini could answer it. The worst case is now about 1,500 tokens of English
+  history. A tester can observe:
+  - a full session from the modal (five 250-character questions and four
+    answers, under 4,000 characters) reaches the model whole;
+  - a longer transcript loses its **oldest** turns first, and what is kept is a
+    contiguous, most-recent run of the conversation;
+  - the newest message, the question being asked, is never dropped.
+- `tests/test_answer_conversation.py`: five tests for the budget, including the
+  previously untested case of a transcript made entirely of maximum-length
+  turns.
+
 ### Volunteer skill suggestions — [#216](https://github.com/saayam-for-all/ai/issues/216)
 
 **Added**

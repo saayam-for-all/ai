@@ -19,6 +19,7 @@ from utils.model_fallback import ModelChainExhausted
 
 import utils
 from utils import (
+    MAX_HISTORY_CHARS,
     MAX_HISTORY_MESSAGES,
     MAX_MESSAGE_CHARS,
     GroqAnswerGenerationService,
@@ -247,6 +248,86 @@ def test_an_oversized_message_is_truncated_rather_than_forwarded_whole(groq):
     _answer(_turns([("user", "x" * (MAX_MESSAGE_CHARS + 5_000))]))
 
     assert len(groq.messages[-1].content) == MAX_MESSAGE_CHARS
+
+
+# -------------------------------------------------------------------
+# Total history budget - issue #244 Task D
+# -------------------------------------------------------------------
+
+def _forwarded_history(recorder):
+    """Every message after the system prompt, the question included."""
+    return recorder.messages[1:]
+
+
+def test_a_transcript_of_maximum_length_turns_fits_the_history_budget(groq):
+    """The case the per-message and count caps never covered together.
+
+    Twenty 4,000-character turns used to reach the model whole: about 20,000
+    prompt tokens, past Groq's 8,000 tokens-per-minute limit for gpt-oss.
+    """
+    worst_case = _turns(
+        [("user" if i % 2 == 0 else "assistant", chr(65 + i % 26) * 10_000)
+         for i in range(MAX_HISTORY_MESSAGES * 3 + 1)]
+    )
+
+    _answer(worst_case)
+
+    forwarded = _forwarded_history(groq)
+    assert sum(len(m.content) for m in forwarded) <= MAX_HISTORY_CHARS
+    assert all(len(m.content) <= MAX_MESSAGE_CHARS for m in forwarded)
+
+
+def test_the_question_survives_the_history_budget(groq):
+    """However long the turns before it, the question is what gets answered."""
+    padding = _turns(
+        [("user" if i % 2 == 0 else "assistant", "y" * MAX_MESSAGE_CHARS)
+         for i in range(MAX_HISTORY_MESSAGES)]
+    )
+
+    _answer(padding + _turns([("user", QUESTION)]))
+
+    assert isinstance(groq.messages[-1], HumanMessage)
+    assert groq.messages[-1].content == QUESTION
+
+
+def test_a_maximum_length_question_alone_always_fits():
+    """The newest message is never dropped, so it must fit on its own."""
+    assert MAX_MESSAGE_CHARS < MAX_HISTORY_CHARS
+
+
+def test_the_budget_drops_the_oldest_turns_first(groq):
+    """What is kept is the most recent, contiguous end of the conversation."""
+    history = _turns(
+        [("user" if i % 2 == 0 else "assistant", f"{i:02d}" + "z" * 1_498)
+         for i in range(MAX_HISTORY_MESSAGES - 1)]
+    )
+
+    _answer(history)
+
+    kept = [m.content[:2] for m in _forwarded_history(groq)]
+    expected = [f"{i:02d}" for i in range(MAX_HISTORY_MESSAGES - 1)][-len(kept):]
+    assert kept == expected
+    assert len(kept) == MAX_HISTORY_CHARS // 1_500
+
+
+def test_a_full_session_from_the_modal_is_never_trimmed(groq):
+    """Five 250-character questions and four answers is what the modal can send.
+
+    The budget is there for transcripts the modal cannot produce; a real
+    session has to reach the model whole.
+    """
+    session = []
+    for i in range(5):
+        session.append(("user", f"Q{i} " + "q" * 246))
+        if i < 4:
+            session.append(("assistant", f"A{i} " + "a" * 596))
+
+    _answer(_turns(session))
+
+    forwarded = _forwarded_history(groq)
+    assert len(forwarded) == 9
+    assert forwarded[0].content.startswith("Q0 ")
+    assert forwarded[-1].content.startswith("Q4 ")
 
 
 # -------------------------------------------------------------------
