@@ -10,21 +10,27 @@ Nothing here calls a provider. The Groq client is replaced with a recorder, so
 these tests assert the exact message list that would have been sent - which is
 the only thing that was ever wrong.
 """
+
+import utils
 from types import SimpleNamespace
 from unittest import mock
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-from utils.model_fallback import ModelChainExhausted
 
-import utils
 from utils import (
     MAX_HISTORY_MESSAGES,
     MAX_MESSAGE_CHARS,
     GroqAnswerGenerationService,
 )
+from utils.model_fallback import ModelChainExhausted, _DEFAULT_MODEL_CHAIN
 
 pytestmark = pytest.mark.unit
+
+GROQ_TARGET_COUNT = sum(
+    target.provider == "groq" for target in _DEFAULT_MODEL_CHAIN
+)
+MODEL_CHAIN_LENGTH = len(_DEFAULT_MODEL_CHAIN)
 
 
 SUBJECT = "Need help with fixing wooden cabinet"
@@ -278,8 +284,8 @@ def test_a_follow_up_still_falls_back_to_gemini_when_groq_is_down(monkeypatch):
     answer = _answer(FOLLOW_UP)
 
     assert answer == "Bring photo ID."
-    assert len(groq_attempts) == 3
-    assert len(groq_messages) == 3
+    assert len(groq_attempts) == GROQ_TARGET_COUNT
+    assert len(groq_messages) == GROQ_TARGET_COUNT
     assert gemini.messages[-1].content == QUESTION
 
     # Every Groq attempt should receive the same complete message history
@@ -313,7 +319,7 @@ def test_empty_primary_answers_fall_back_to_gemini(monkeypatch):
     answer = _answer(FOLLOW_UP)
 
     assert answer == "A valid fallback answer."
-    assert len(groq.calls) == 3
+    assert len(groq.calls) == GROQ_TARGET_COUNT
     assert len(gemini.calls) == 1
 
 
@@ -332,7 +338,7 @@ def test_all_answer_models_failing_raises_model_chain_exhausted(monkeypatch):
     with pytest.raises(ModelChainExhausted):
         _answer(FOLLOW_UP)
 
-    assert len(attempted_targets) == 4
+    assert len(attempted_targets) == MODEL_CHAIN_LENGTH
 
 def test_a_missing_subject_or_description_does_not_break_the_context_block(groq):
     """The degraded path in #169 answers with neither, and must still work."""

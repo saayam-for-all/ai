@@ -9,6 +9,7 @@ import json
 import pytest
 
 from utils import token_usage
+from utils.model_fallback import _DEFAULT_MODEL_CHAIN
 
 
 # ---------------------------------------------------------------------------
@@ -430,7 +431,7 @@ def test_answer_generation_reports_its_usage(monkeypatch, capsys):
 
 
 @pytest.mark.integration
-def test_a_groq_failure_still_bills_the_gemini_retry(monkeypatch, capsys):
+def test_only_successful_model_responses_are_billed(monkeypatch, capsys):
     """Only successful model responses contribute recorded token usage."""
     import utils
 
@@ -462,6 +463,50 @@ def test_a_groq_failure_still_bills_the_gemini_retry(monkeypatch, capsys):
     (record,) = _usage_lines(capsys)
     assert record["total_tokens"] == 1100
     assert [c["provider"] for c in record["calls"]] == ["gemini"]
+
+
+@pytest.mark.integration
+def test_empty_model_responses_are_billed(monkeypatch, capsys):
+    """Empty model responses still contribute recorded token usage."""
+    import utils
+
+    class _Empty:
+        def invoke(self, _messages):
+            message = _LangChainMessage(usage_metadata={
+                "input_tokens": 100,
+                "output_tokens": 0,
+                "total_tokens": 100,
+            })
+            message.content = ""
+            return message
+
+    gemini = _FakeChatModel(
+        content="Fallback answer.",
+        input_tokens=200,
+        output_tokens=10,
+    )
+
+    def fake_create_chat_model(target, *, temperature):
+        if target.provider == "groq":
+            return _Empty()
+        if target.provider == "gemini":
+            return gemini
+        raise ValueError(f"Unexpected provider: {target.provider}")
+
+    monkeypatch.setattr(utils, "create_chat_model", fake_create_chat_model)
+
+    answer = utils.GroqAnswerGenerationService().generate_answer(
+        category="Housing",
+        subject="Rent",
+        description="I am behind on rent",
+    )
+
+    assert answer
+    (record,) = _usage_lines(capsys)
+    expected_providers = [target.provider for target in _DEFAULT_MODEL_CHAIN]
+    groq_count = expected_providers.count("groq")
+    assert [call["provider"] for call in record["calls"]] == expected_providers
+    assert record["total_tokens"] == (100 * groq_count) + 210
 
 
 @pytest.mark.integration
