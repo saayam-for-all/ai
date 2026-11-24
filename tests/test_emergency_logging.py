@@ -1,3 +1,4 @@
+
 """Logging for the Emergency Contacts Lambda (follow-up to issue #146).
 
 The Frankfurt, Prague and Vienna reports could only be diagnosed from Lambda
@@ -30,6 +31,9 @@ HOUSTON_IP = {"postal": "77001", "city": "Houston", "region": "Texas", "country"
 @pytest.fixture(autouse=True)
 def _shipped_data(monkeypatch):
     """Answer from the repository's file, never S3."""
+    with em._LOCATION_CACHE_LOCK:
+        em._LOCATION_CACHE.clear()
+
     with open(em.DATA_FILE, encoding="utf-8") as f:
         monkeypatch.setattr(em, "_emergency_numbers_cache", json.load(f))
 
@@ -64,6 +68,39 @@ def _lookup(params, ip=CALLER_IP, *responses):
 
 def _http_error(code):
     return urllib.error.HTTPError("https://example.invalid", code, "error", None, None)
+
+
+def test_nominatim_reverse_lookup_uses_cache():
+    params = {"lat": "50.0755", "lng": "14.4378"}
+
+    first = _lookup(params, CALLER_IP, PRAGUE)
+    second = _lookup(params, CALLER_IP)
+
+    assert first["status"] == 200
+    assert second["status"] == 200
+    assert second["body"]["country"] == "CZ"
+
+
+def test_ipinfo_lookup_uses_cache():
+    first = _lookup({}, CALLER_IP, HOUSTON_IP)
+    second = _lookup({}, CALLER_IP)
+
+    assert first["status"] == 200
+    assert second["status"] == 200
+    assert second["body"]["country"] == "US"
+
+
+def test_location_cache_expires_entries(monkeypatch):
+    current_time = [100.0]
+    monkeypatch.setattr(em.time, "monotonic", lambda: current_time[0])
+
+    em._location_cache_set(("test",), {"country": "IN"}, 10)
+
+    assert em._location_cache_get(("test",)) == {"country": "IN"}
+
+    current_time[0] = 111.0
+
+    assert em._location_cache_get(("test",)) is None
 
 
 # -------------------------------------------------------------------------
@@ -284,6 +321,20 @@ def test_a_404_logs_why(logs, params, ip, responses, reason):
     result = _lookup(params, ip, *responses)
     assert result["status"] == 404
     assert f"status=404 reason={reason}" in logs.text
+
+
+def test_both_location_lookups_fail_without_guessing_country():
+    result = _lookup(
+        {"lat": "50.0755", "lng": "14.4378"},
+        CALLER_IP,
+        socket.timeout("timed out"),
+        OSError("IP lookup failed"),
+    )
+
+    assert result == {
+        "status": 404,
+        "body": {"error": "Emergency services not found"},
+    }
 
 
 def test_an_unexpected_error_is_logged_with_its_traceback(logs):

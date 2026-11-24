@@ -17,9 +17,16 @@ pytestmark = pytest.mark.unit
 
 import services.emergency as em
 
+@pytest.fixture(autouse=True)
+def _clear_location_cache():
+    """Prevent cached location results from leaking between tests."""
+    with em._LOCATION_CACHE_LOCK:
+        em._LOCATION_CACHE.clear()
+
 # The shipped file, read directly. Going through _load_emergency_numbers()
 # would try S3 first, so on a machine with AWS credentials these tests would
 # silently run against whatever the bucket holds instead of this repository.
+
 with open(em.DATA_FILE, encoding="utf-8") as _f:
     DATA = json.load(_f)
 R = em.EmergencyServiceResolver()

@@ -34,11 +34,16 @@ BENGALURU = {"address": {"city": "Bengaluru", "state": "Karnataka", "postcode": 
 HOUSTON_IP = {"postal": "77001", "city": "Houston", "region": "Texas", "country": "US"}
 
 
+
 @pytest.fixture(autouse=True)
 def _shipped_data(monkeypatch):
     """Answer from the repository's file, never S3."""
+    with em._LOCATION_CACHE_LOCK:
+        em._LOCATION_CACHE.clear()
+
     with open(em.DATA_FILE, encoding="utf-8") as f:
         monkeypatch.setattr(em, "_emergency_numbers_cache", json.load(f))
+
 
 
 def _lookup(params, *responses, ip=CALLER_IP):
