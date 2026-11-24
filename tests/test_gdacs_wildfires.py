@@ -266,8 +266,8 @@ def test_a_red_fire_as_recorded(gdacs_answers, clock):
     assert fire["severity"] == "extreme"
     assert fire["headline"] == "Red wildfire alert: Forest fires in France"
     assert [len(polygon) for polygon in fire["area"]["coordinates"]] == [1, 1]
-    # 23.92 km to the farthest burned position, a little more to the zone's.
-    assert fire["radius_km"] == pytest.approx(24.05, abs=0.01)
+    # 23.92 km to the farthest burned position, which the zone keeps.
+    assert fire["radius_km"] == pytest.approx(23.92, abs=0.01)
 
 
 def test_a_fire_that_has_stopped_with_its_latest_grade_green_is_not_reported(gdacs_answers):

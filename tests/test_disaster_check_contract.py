@@ -436,11 +436,11 @@ def test_a_wildfire_zone_is_the_burned_area_gdacs_publishes(feeds, during_the_lo
     # surrounded by the fire.
     # Sent as a smaller copy that covers it: 131 positions as published.
     ((outline,),) = fire["impact_zone"]["coordinates"]
-    assert len(outline) == 62
+    assert len(outline) == 86
     # Centred where GDACS puts the fire, and wide enough to cover all of it.
     assert fire["impact_zone_fallback"] == {"center": [34.0804, -118.5698], "radius_km": 10.7}
     assert "affected area published by GDACS" in fire["advisory"]
-    assert "at most 1 km beyond it" in fire["advisory"]
+    assert "at most 0.5 km beyond it" in fire["advisory"]
 
 
 def test_every_wildfire_detection_is_backed_by_its_gdacs_report(feeds, during_the_los_angeles_fires):

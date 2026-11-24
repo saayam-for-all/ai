@@ -92,7 +92,7 @@ Smaller copies of published areas - issue #191, part 8.
 | `test_everyone_in_a_recorded_area_is_in_its_zone` | Everyone in a recorded area is in its zone. |
 | `test_a_zone_reaches_no_more_than_the_tolerance_beyond_its_area` | Its own positions, and points along its edges. |
 | `test_a_zone_meets_itself_nowhere_its_area_did_not` | A zone meets itself nowhere its area did not. |
-| `test_the_india_flood_zone_is_a_quarter_of_the_size` | The india flood zone is a quarter of the size. |
+| `test_the_india_flood_zone_is_a_third_of_the_size` | The india flood zone is a third of the size. |
 | `test_a_zone_keeps_every_polygon_ring_and_direction` | A zone keeps every polygon ring and direction. |
 | `test_a_round_outline_is_covered_from_outside_whichever_way_it_is_drawn` | A convex outline can only be shortened by corners outside it. |
 | `test_a_hole_only_ever_shrinks` | Dry ground in a flood is outside it. The copy may take some of it in, never put flooded ground into the hole. |
@@ -107,7 +107,7 @@ Smaller copies of published areas - issue #191, part 8.
 | `test_a_ring_pinched_into_two_large_loops_running_opposite_ways_is_kept_whole` | Too large a loop to keep apart from the rest, so the whole ring is kept. |
 | `test_a_ring_that_crosses_itself_between_large_loops_is_kept_whole` | A bow tie with 30 positions to a side: its two halves run opposite ways. |
 | `test_a_figure_eight_with_no_area_is_kept_whole_however_small_its_loops` | Its two loops are mirror images running opposite ways, so it has no area and no direction to say which side is inside, even though each loop is small enough to keep on its own and has positions in line. Positions are in 64ths of a degree, so its area adds up to exactly 0. |
-| `test_no_edge_the_zone_adds_is_longer_than_the_limit` | A square of about 220 km a side whose sides zigzag 50 m: each side could be one straight edge, but is drawn in edges of 20 km or less. |
+| `test_no_edge_the_zone_adds_is_longer_than_the_limit` | A square on the equator about 111 km a side, with a position every 1.1 km exactly on its straight sides. With no limit each side would be drawn as one edge of 111 km; with one, it is drawn in edges of 20 km or less, and still covers the square. |
 | `test_a_spike_across_the_first_position_is_kept` | The ring runs out to a point and back just before it closes, so the loop to keep wraps round past its first position. |
 | `test_a_hole_drawn_along_its_outline_is_kept_as_it_is` | With every position on the outline, it cannot be told to be inside. |
 | `test_a_hole_outside_its_outline_is_kept_as_it_is` | A hole outside its outline is kept as it is. |
@@ -204,7 +204,7 @@ Which events reach a location, and the zone drawn around each - issue #191.
 | `test_an_event_with_a_published_area_is_judged_by_the_area` | An event with a published area is judged by the area. |
 | `test_a_published_area_is_rendered_as_it_was_published` | A published area is rendered as it was published. |
 | `test_a_published_area_is_sent_as_its_smaller_copy_when_there_is_one` | A published area is sent as its smaller copy when there is one. |
-| `test_the_area_not_its_copy_decides_who_an_event_reaches` | The copy can reach up to 1 km beyond the area. Someone in that margin, here 500 m south of the strip, is not in the flood. |
+| `test_the_area_not_its_copy_decides_who_an_event_reaches` | The copy can reach up to 0.5 km beyond the area. Someone in that margin, here 330 m south of the strip, is not in the flood. |
 | `test_an_area_the_check_cannot_read_takes_down_only_its_own_feed` | An area the check cannot read takes down only its own feed. |
 | `test_earthquakes_and_floods_are_ranked_together` | Earthquakes and floods are ranked together. |
 | `test_the_rendered_event_carries_its_evidence_and_its_zone` | The rendered event carries its evidence and its zone. |

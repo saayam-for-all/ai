@@ -578,7 +578,7 @@ Reading the fields:
   `boundary_source` is `modelled`. For a flood it is the affected area GDACS
   publishes, and for a wildfire the area GDACS reports burned; for both,
   `boundary_source` is `authoritative`. Both are sent as a smaller copy that
-  covers the whole published area and reaches at most 1 km beyond it (see
+  covers the whole published area and reaches at most 0.5 km beyond it (see
   Smaller zones below).
   **`impact_zone_fallback.center` is `[latitude, longitude]`**, as in the
   issue's contract. The two orders differ.
@@ -588,9 +588,9 @@ Reading the fields:
   places outside it, and is for display only. Alerting everyone inside it
   would be a false alert: the recorded India flood's circle reaches 384.3 km
   and takes in Kochi, which is 74 km from any of the flood's water.
-- **A response with a flood in it is still the largest**, at about a quarter
+- **A response with a flood in it is still the largest**, at about a third
   of the size of the area GDACS publishes: the recorded India area has 11,568
-  positions as published and 2,706 as sent, about 50 KB of JSON. An
+  positions as published and 3,677 as sent, about 66 KB of JSON. An
   earthquake's zone is a few KB.
 - **`expires_at`** is `null` for a flood or wildfire GDACS still marks as
   running.
@@ -817,25 +817,25 @@ on every recorded area:
 - **It covers the whole published area.** Nobody in the flood or fire is
   outside `impact_zone`. Positions are only removed where the shape grows,
   never where it would cut into the area, and holes only ever shrink.
-- **It reaches at most 1 km beyond the area.** That margin is the price of
-  the smaller size: someone up to 1 km outside the published area can be
-  inside `impact_zone`.
+- **It reaches at most 0.5 km beyond the area.** That margin is the price
+  of the smaller size: someone up to 0.5 km outside the published area can
+  be inside `impact_zone`.
 - **It is still a valid area.** A change that would make an edge cross or
   touch another, or close a ring over another ring, is not made.
 
 **Who an event reaches is still decided on the full published area**, so
 `disaster_detected` is the same as before. The advisory says when the zone
-is a copy: "drawn with fewer points, and reaches at most 1 km beyond it".
+is a copy: "drawn with fewer points, and reaches at most 0.5 km beyond it".
 The fallback circle is sized to cover the copy, so it can come out slightly
 larger than before: 384.3 km rather than 384.2 km for the recorded India
 flood.
 
 Measured on 101 live and recorded flood and burned areas in November 2026,
-the copies came to 0.78 MB against 3.26 MB, written as compact JSON. The
-recorded India area goes from 11,568 positions and 202 KB to 2,706 positions
-and 49 KB. Every
-position and edge midpoint of every one of those areas, 357,878 points, is
-inside its copy. Making a copy took at most 0.8 s, on an area of 16,050
+the copies came to 1.07 MB against 3.26 MB, written as compact JSON. The
+recorded India area goes from 11,568 positions and 202 KB to 3,677 positions
+and 66 KB. Every position and edge midpoint of every one of those areas,
+357,878 points, is inside its copy, at 0.5, 1 and 2 km alike. Making a copy
+took at most 0.7 s, on an area of 16,050
 positions; it is made once per flood or fire update, when its area is first
 fetched.
 
@@ -866,10 +866,17 @@ published, so a bug in it never costs a detection.
 
 | Constant | Value | Where |
 | --- | --- | --- |
-| How far beyond a published area the copy may reach | 1 km | `services/area_simplification.py` `TOLERANCE_KM` |
+| How far beyond a published area the copy may reach | 0.5 km | `services/area_simplification.py` `TOLERANCE_KM` |
 | The longest edge the copy may add | 20 km | `services/area_simplification.py` `_MAX_EDGE_KM` |
 
-These are first-pass values **awaiting review**, like the others.
+**Why 0.5 km.** Clients are told to decide who is affected from
+`impact_zone`, and for this API a false alert is worse than none (#191,
+Risks 1), so the margin a copy adds is kept small. 1 km was first proposed;
+0.5 km was chosen in the review of #256. It costs some size: the 101 areas
+came to 1.07 MB at 0.5 km against 0.78 MB at 1 km, and the India area to
+66 KB against 49 KB, still under a third of the published 202 KB. Making a
+copy takes about as long at either. The 20 km edge limit costs about 1% in
+size.
 
 #### Caching: one answer per feed, shared by every caller
 
@@ -1030,7 +1037,7 @@ returns anything else, such as CAP's `Unknown`, is treated as unavailable.
 | `test_usgs_earthquakes.py` | The worldwide query sent to USGS; the recorded payload becomes events with latitude and longitude the right way round; events before the window are left out; one answer is shared for a minute and never stands in once USGS is down; an unreachable feed, an unreadable answer, or an event with a NaN or out-of-range magnitude or position raises rather than returning an empty list. |
 | `test_gdacs_floods.py` | The queries sent to GDACS; the recorded India flood becomes an event with its affected area; `204` means no floods; a full page, a geometry answered for another event, a missing affected area, or an unreadable flood raises rather than returning an empty list. |
 | `test_gdacs_wildfires.py` | The queries sent to GDACS, with `polygontype=area` for the burned area; the recorded Los Angeles fires become events with their burned areas, holes filled; a fire counts while GDACS marks it as burning, and until the end of its last day; a burning fire that eased to Green is still reported at its own level, and a stopped one is not; `204` means no fires; a full page, a flood listed as a fire, geometry for another fire or update, a missing burned area, a later ring that is not inside the first, or an unreadable fire raises rather than returning an empty list; the point-in-ring test agrees with `geometry.distance_to_area_km` across the recorded outlines; errors name the fire and the request that failed; a new update of a fire never reuses the older update's area; a request made as midnight passed asks for the list once. |
-| `test_area_simplification.py` | The smaller copy of a published area, on every recorded flood and burned area: every position and edge midpoint of the area is inside it, it reaches no more than 1 km beyond it, no edge it adds is longer than 20 km, and no edge of it crosses or touches another unless the area's did; it keeps every polygon, ring and ring direction; a convex outline is covered from outside, a hole only shrinks, a bay is not closed over an island in it, rings side by side are not drawn across each other; a ring that crosses itself, runs out and back, or has no area is kept as it is, or only its small loops are; a corner rounding would pull inside is not used; a failure to simplify sends the area as published. |
+| `test_area_simplification.py` | The smaller copy of a published area, on every recorded flood and burned area: every position and edge midpoint of the area is inside it, it reaches no more than 0.5 km beyond it, no edge it adds is longer than 20 km, and no edge of it crosses or touches another unless the area's did; it keeps every polygon, ring and ring direction; a convex outline is covered from outside, a hole only shrinks, a bay is not closed over an island in it, rings side by side are not drawn across each other; a ring that crosses itself, runs out and back, or has no area is kept as it is, or only its small loops are; a corner rounding would pull inside is not used; a failure to simplify sends the area as published. |
 | `test_geometry.py` | Distance to a published area: zero inside, to the nearest edge outside, holes counted as outside, the antimeridian measured the short way, checked against the 11,568 vertices of the recorded India flood. |
 | `test_feed_cache.py` | The cache: fresh answers reused, failed ones never stored, an earlier answer standing in only inside its limit and marked stale, the pause after a failure, the clock going backwards, the size limit, and that the suite empties every cache before each test. |
 

@@ -361,10 +361,10 @@ def test_a_published_area_is_rendered_as_it_was_published():
     assert event["advisory"].endswith("The impact zone is the affected area published by GDACS.")
 
 
-# The strip with a margin of 0.005 degrees, about 560 m, all round: what a
-# smaller copy of it reaching up to 1 km beyond it could look like.
+# The strip with a margin of 0.004 degrees, about 450 m, all round: what a
+# smaller copy of it reaching up to 0.5 km beyond it could look like.
 STRIP_COPY = {"type": "MultiPolygon", "coordinates": [[[
-    [-0.005, -0.005], [2.005, -0.005], [2.005, 0.105], [-0.005, 0.105], [-0.005, -0.005],
+    [-0.004, -0.004], [2.004, -0.004], [2.004, 0.104], [-0.004, 0.104], [-0.004, -0.004],
 ]]]}
 
 
@@ -374,14 +374,14 @@ def test_a_published_area_is_sent_as_its_smaller_copy_when_there_is_one():
     assert event["boundary_source"] == "authoritative"
     assert event["advisory"].endswith(
         "The impact zone covers the affected area published by GDACS, "
-        "drawn with fewer points, and reaches at most 1 km beyond it."
+        "drawn with fewer points, and reaches at most 0.5 km beyond it."
     )
 
 
 def test_the_area_not_its_copy_decides_who_an_event_reaches():
-    """The copy can reach up to 1 km beyond the area. Someone in that margin,
-    here 500 m south of the strip, is not in the flood."""
-    beside = _check(_Feed([_flood(zone=STRIP_COPY)]), latitude=-0.0045, longitude=1.0, radius_km=0.1)
+    """The copy can reach up to 0.5 km beyond the area. Someone in that
+    margin, here 330 m south of the strip, is not in the flood."""
+    beside = _check(_Feed([_flood(zone=STRIP_COPY)]), latitude=-0.003, longitude=1.0, radius_km=0.1)
     assert beside["disaster_detected"] is False
     inside = _check(_Feed([_flood(zone=STRIP_COPY)]), latitude=0.001, longitude=1.0, radius_km=0.1)
     assert inside["disaster_detected"] is True

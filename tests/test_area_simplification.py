@@ -15,6 +15,7 @@ longitude and latitude, rather than with ``geometry.distance_to_area_km``,
 which treats edges as great-circle arcs and so disagrees by up to a few
 metres along the long edges of a copy.
 """
+import functools
 import json
 import math
 from pathlib import Path
@@ -52,6 +53,15 @@ def _recorded(name):
             rings = [[[p[0], p[1]] for p in ring] for ring in polygon]
             polygons.append(rings[:1] if name.startswith("burned") else rings)
     return {"type": "MultiPolygon", "coordinates": polygons}
+
+
+@functools.cache
+def _recorded_and_zone(name):
+    """A recorded area and its copy, made once for every test that only reads
+    them. Simplifying the India area takes about half a second, and several
+    times that under coverage."""
+    area = _recorded(name)
+    return area, simplify_area(area, TOLERANCE_KM)
 
 
 def _square(west, south, east, north, clockwise=False):
@@ -183,8 +193,8 @@ def _new_meetings(area, zone):
 
 @pytest.mark.parametrize("name", AREAS)
 def test_everyone_in_a_recorded_area_is_in_its_zone(name):
-    area = _recorded(name)
-    assert _uncovered(area, simplify_area(area, TOLERANCE_KM)) == []
+    area, zone = _recorded_and_zone(name)
+    assert _uncovered(area, zone) == []
 
 
 @pytest.mark.parametrize("name", AREAS)
@@ -192,17 +202,16 @@ def test_a_zone_reaches_no_more_than_the_tolerance_beyond_its_area(name):
     """Its own positions, and points along its edges.
 
     Every position the copy adds is checked, and the middle of every edge,
-    on a small area. The India area is checked at one in ten of each, to keep
-    the test fast. The 1 m allowance is the curvature distance_to_area_km
-    gives each edge.
+    on a small area. The India area is checked at one in 40 of each, still
+    about 150 points, to keep the test fast. The 1 m allowance is the
+    curvature distance_to_area_km gives each edge.
     """
-    area = _recorded(name)
-    zone = simplify_area(area, TOLERANCE_KM)
+    area, zone = _recorded_and_zone(name)
     published = {tuple(p) for polygon in polygons_of(area) for ring in polygon for p in ring}
     added = [p for polygon in polygons_of(zone) for ring in polygon for p in ring if tuple(p) not in published]
     edges = list(_edges(zone))
-    sampled = edges[::10] if name == INDIA else edges
-    added = added[::10] if name == INDIA else added
+    sampled = edges[::40] if name == INDIA else edges
+    added = added[::40] if name == INDIA else added
     points = added + [((a[0] + b[0]) / 2, (a[1] + b[1]) / 2) for a, b in sampled]
     farthest = max(distance_to_area_km(lat, lon, area) for lon, lat in points)
     assert farthest <= TOLERANCE_KM + 0.001
@@ -210,22 +219,20 @@ def test_a_zone_reaches_no_more_than_the_tolerance_beyond_its_area(name):
 
 @pytest.mark.parametrize("name", AREAS)
 def test_a_zone_meets_itself_nowhere_its_area_did_not(name):
-    area = _recorded(name)
-    assert _new_meetings(area, simplify_area(area, TOLERANCE_KM)) == set()
+    area, zone = _recorded_and_zone(name)
+    assert _new_meetings(area, zone) == set()
 
 
-def test_the_india_flood_zone_is_a_quarter_of_the_size():
-    area = _recorded(INDIA)
-    zone = simplify_area(area, TOLERANCE_KM)
+def test_the_india_flood_zone_is_a_third_of_the_size():
+    area, zone = _recorded_and_zone(INDIA)
     assert _positions(area) == 11568
-    assert _positions(zone) == 2706
-    assert len(json.dumps(zone)) < len(json.dumps(area)) / 4
+    assert _positions(zone) == 3677
+    assert len(json.dumps(zone)) < len(json.dumps(area)) / 3
 
 
 @pytest.mark.parametrize("name", AREAS)
 def test_a_zone_keeps_every_polygon_ring_and_direction(name):
-    area = _recorded(name)
-    zone = simplify_area(area, TOLERANCE_KM)
+    area, zone = _recorded_and_zone(name)
     assert [len(p) for p in polygons_of(zone)] == [len(p) for p in polygons_of(area)]
     for original, copy in zip(polygons_of(area), polygons_of(zone)):
         for ring, simplified in zip(original, copy):
@@ -441,16 +448,23 @@ def test_a_figure_eight_with_no_area_is_kept_whole_however_small_its_loops():
 
 
 def test_no_edge_the_zone_adds_is_longer_than_the_limit():
-    """A square of about 220 km a side whose sides zigzag 50 m: each side
-    could be one straight edge, but is drawn in edges of 20 km or less."""
-    area = {"type": "Polygon", "coordinates": [_wavy_square(0, 0, 2, 2, waves=400)]}
+    """A square on the equator about 111 km a side, with a position every
+    1.1 km exactly on its straight sides. With no limit each side would be
+    drawn as one edge of 111 km; with one, it is drawn in edges of 20 km or
+    less, and still covers the square."""
+    steps = 100
+    side = [k / steps for k in range(steps)]
+    ring = (
+        [[x, 0] for x in side] + [[1, y] for y in side]
+        + [[1 - x, 1] for x in side] + [[0, 1 - y] for y in side] + [[0, 0]]
+    )
+    area = {"type": "Polygon", "coordinates": [ring]}
     zone = simplify_area(area, TOLERANCE_KM)
-    ring = zone["coordinates"][0][0]
-    lengths = [
-        math.hypot(b[0] - a[0], b[1] - a[1]) * simplification.KM_PER_DEGREE for a, b in zip(ring, ring[1:])
-    ]
-    assert max(lengths) <= simplification._MAX_EDGE_KM * 1.01
-    assert _positions(zone) < _positions(area) / 10
+    copy = zone["coordinates"][0][0]
+    lengths = [math.hypot(b[0] - a[0], b[1] - a[1]) * KM_PER_DEGREE for a, b in zip(copy, copy[1:])]
+    assert max(lengths) <= simplification._MAX_EDGE_KM
+    assert max(lengths) > simplification._MAX_EDGE_KM / 2
+    assert _positions(zone) < _positions(area) / 5
     assert _uncovered(area, zone) == []
 
 

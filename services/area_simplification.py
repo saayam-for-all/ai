@@ -37,12 +37,15 @@ from services.geometry import EARTH_RADIUS_KM, polygons_of
 
 KM_PER_DEGREE = math.pi * EARTH_RADIUS_KM / 180
 
-# How far beyond a published area the zone sent in its place may reach. At
-# 1 km the recorded India flood area, 11,568 positions and 202 KB as compact
-# JSON, comes out at 2,706 positions and 49 KB. Across 101 live and recorded
-# flood and burned areas, measured in November 2026, the copies came to
-# 0.78 MB against 3.26 MB. A first-pass value awaiting review - see the README.
-TOLERANCE_KM = 1.0
+# How far beyond a published area the zone sent in its place may reach.
+# Clients alert from impact_zone, and a false alert is worse than none, so
+# the margin is kept small: 0.5 km rather than the 1 km first proposed. At
+# 0.5 km the recorded India flood area, 11,568 positions and 202 KB as
+# compact JSON, comes out at 3,677 positions and 66 KB (2,706 and 49 KB at
+# 1 km). Across 101 live and recorded flood and burned areas, measured in
+# November 2026, the copies came to 1.07 MB against 3.26 MB (0.78 MB at
+# 1 km). Chosen in the review of #256 - see the README.
+TOLERANCE_KM = 0.5
 
 # New corners are written to 5 decimal places, about 1.1 m, and moved this
 # much farther out first, so that rounding them cannot bring the outer side
