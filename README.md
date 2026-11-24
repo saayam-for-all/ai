@@ -577,20 +577,21 @@ Reading the fields:
   outside the modelled circle, so it covers everyone the radius includes, and
   `boundary_source` is `modelled`. For a flood it is the affected area GDACS
   publishes, and for a wildfire the area GDACS reports burned; for both,
-  `boundary_source` is `authoritative`.
+  `boundary_source` is `authoritative`. Both are sent as a smaller copy that
+  covers the whole published area and reaches at most 0.5 km beyond it (see
+  Smaller zones below).
   **`impact_zone_fallback.center` is `[latitude, longitude]`**, as in the
   issue's contract. The two orders differ.
 - **When `boundary_source` is `authoritative`, decide who is affected from
   `impact_zone`, never from `impact_zone_fallback`.** Around a published
   area the fallback circle is drawn to cover all of it, so it also covers
   places outside it, and is for display only. Alerting everyone inside it
-  would be a false alert: the recorded India flood's circle reaches 384.2 km
+  would be a false alert: the recorded India flood's circle reaches 384.3 km
   and takes in Kochi, which is 74 km from any of the flood's water.
-- **A response with a flood in it is large**, because `impact_zone` is the
-  area as GDACS publishes it: about 200 to 350 KB per flood, against a few
-  KB for an earthquake. The recorded India area is 204,712 bytes on its own.
-  A burned area is smaller, 5 to 90 KB for the fires measured. Simplifying
-  the shape is planned for part 8.
+- **A response with a flood in it is still the largest**, at about a third
+  of the size of the area GDACS publishes: the recorded India area has 11,568
+  positions as published and 3,677 as sent, about 66 KB of JSON. An
+  earthquake's zone is a few KB.
 - **`expires_at`** is `null` for a flood or wildfire GDACS still marks as
   running.
 - **`llm_cross_check`** is `null`: no model runs on the coordinate path.
@@ -805,6 +806,78 @@ and latitude. Fires add three of their own:
 these differences. The GDACS code the two share can move to one module once
 both are merged.
 
+#### Smaller zones: a simplified copy of each published area
+
+GDACS publishes a flood's affected area at 200 to 350 KB of JSON, every
+river bend in it. `impact_zone` carries a copy with far fewer positions
+instead, made by `services/area_simplification.py` when the area is fetched,
+and cached with it. The copy keeps three promises, which its tests hold it to
+on every recorded area:
+
+- **It covers the whole published area.** Nobody in the flood or fire is
+  outside `impact_zone`. Positions are only removed where the shape grows,
+  never where it would cut into the area, and holes only ever shrink.
+- **It reaches at most 0.5 km beyond the area.** That margin is the price
+  of the smaller size: someone up to 0.5 km outside the published area can
+  be inside `impact_zone`.
+- **It is still a valid area.** A change that would make an edge cross or
+  touch another, or close a ring over another ring, is not made.
+
+**Who an event reaches is still decided on the full published area**, so
+`disaster_detected` is the same as before. The advisory says when the zone
+is a copy: "drawn with fewer points, and reaches at most 0.5 km beyond it".
+The fallback circle is sized to cover the copy, so it can come out slightly
+larger than before: 384.3 km rather than 384.2 km for the recorded India
+flood.
+
+Measured on 101 live and recorded flood and burned areas in November 2026,
+the copies came to 1.07 MB against 3.26 MB, written as compact JSON. The
+recorded India area goes from 11,568 positions and 202 KB to 3,677 positions
+and 66 KB. Every position and edge midpoint of every one of those areas,
+357,878 points, is inside its copy, at 0.5, 1 and 2 km alike. Making a copy
+took at most 0.7 s, on an area of 16,050
+positions; it is made once per flood or fire update, when its area is first
+fetched.
+
+Most positions in a copy are GDACS's own. Where the outline bulges outward,
+the copy adds two corners just outside the bulge instead, written to 5
+decimal places. No edge the copy adds is longer than 20 km: GeoJSON draws
+an edge straight in longitude and latitude, while a map or a distance
+along the globe follows a slightly different line, and on a long edge the
+two drift apart. With no limit, one live flood copy had an edge of 280 km
+whose line along the globe ran 112 m inside the area.
+
+Some published rings, or parts of them, are kept exactly as they are, and
+the copy keeps clear of them:
+
+- where a ring crosses or touches itself, or passes the same position
+  twice, it splits into two loops. Either loop that runs the opposite way
+  to the ring, or has no area, as in a spike out and back, is kept, and so
+  are the two edges that cross. GDACS areas have these: 36 of 332 live
+  rings had one, none of more than 32 positions, and the main ring of the
+  recorded India area has 7, of 2 to 5 positions each. The rest of each
+  ring is still simplified; a ring where such a loop has more than 50
+  positions is kept whole;
+- a ring with no area, or a hole that does not lie inside its outline;
+- an area that crosses the antimeridian, which is sent as published.
+
+If making the copy fails, the failure is logged and the area is sent as
+published, so a bug in it never costs a detection.
+
+| Constant | Value | Where |
+| --- | --- | --- |
+| How far beyond a published area the copy may reach | 0.5 km | `services/area_simplification.py` `TOLERANCE_KM` |
+| The longest edge the copy may add | 20 km | `services/area_simplification.py` `_MAX_EDGE_KM` |
+
+**Why 0.5 km.** Clients are told to decide who is affected from
+`impact_zone`, and for this API a false alert is worse than none (#191,
+Risks 1), so the margin a copy adds is kept small. 1 km was first proposed;
+0.5 km was chosen in the review of #256. It costs some size: the 101 areas
+came to 1.07 MB at 0.5 km against 0.78 MB at 1 km, and the India area to
+66 KB against 49 KB, still under a third of the published 202 KB. Making a
+copy takes about as long at either. The 20 km edge limit costs about 1% in
+size.
+
 #### Caching: one answer per feed, shared by every caller
 
 Every feed is asked for a worldwide answer reaching back seven days, the
@@ -844,9 +917,10 @@ twice.
   the caller's window. In that minute, callers get the stale answer if one is
   allowed, or a `502` at once, instead of each waiting out an 8-second
   timeout.
-- **Memory:** up to 8 affected areas are kept. The recorded India area takes
-  about 1.5 MB once read, so about 12 MB for 8 of that size. Up to 8 burned
-  areas are kept as well; they are small, 5 to 90 KB as JSON.
+- **Memory:** up to 8 affected areas are kept, each with its smaller copy.
+  The recorded India area takes about 1.5 MB once read, and its copy about a
+  quarter of that, so about 15 MB for 8 of that size. Up to 8 burned areas
+  are kept as well; they are small, 5 to 90 KB as JSON.
 - **A failed or unreadable answer is never cached.** A cache can make an
   answer older, never wrong.
 - **Each running Lambda keeps its own cache**, and loses it on a cold start.
@@ -870,7 +944,7 @@ tracked there. Each part is its own pull request.
 | 4 | The news-snippet query | A first draft for earthquakes is open in #238 |
 | 5 | The LLM cross-check, and `unverified` | |
 | 7 | Deployment: the API Gateway route and the Gemini key | Needs AWS access. Includes **caller rate limiting, as an API Gateway usage plan**; a shared cache, so that a cold start does not wait on every feed; and an overall deadline per request, so that a slow feed gives `502` rather than the gateway's `504` |
-| 8 | Polygons and corroboration | Simplifying large published areas; merging the same event reported twice; if GDACS is ever seen listing a fire's update before its burned area, letting the previous update's area back a detection (raised in the review of part 3) |
+| 8 | Polygons and corroboration | Simplifying published areas is done (see Smaller zones). Still open: merging the same event reported twice, which no feed was seen doing (no repeated ID in 196 live earthquakes, 13 Orange and Red floods or 58 fires in November 2026), so it waits for a second source per event type; and, if GDACS is ever seen listing a fire's update before its burned area, letting the previous update's area back a detection (raised in the review of part 3) |
 | 9 | Hand-off to Geospatial | Volunteer and victim searches use `impact_zone` when `boundary_source` is `authoritative`, never the fallback circle |
 | 10 | Monitoring | |
 
@@ -963,6 +1037,7 @@ returns anything else, such as CAP's `Unknown`, is treated as unavailable.
 | `test_usgs_earthquakes.py` | The worldwide query sent to USGS; the recorded payload becomes events with latitude and longitude the right way round; events before the window are left out; one answer is shared for a minute and never stands in once USGS is down; an unreachable feed, an unreadable answer, or an event with a NaN or out-of-range magnitude or position raises rather than returning an empty list. |
 | `test_gdacs_floods.py` | The queries sent to GDACS; the recorded India flood becomes an event with its affected area; `204` means no floods; a full page, a geometry answered for another event, a missing affected area, or an unreadable flood raises rather than returning an empty list. |
 | `test_gdacs_wildfires.py` | The queries sent to GDACS, with `polygontype=area` for the burned area; the recorded Los Angeles fires become events with their burned areas, holes filled; a fire counts while GDACS marks it as burning, and until the end of its last day; a burning fire that eased to Green is still reported at its own level, and a stopped one is not; `204` means no fires; a full page, a flood listed as a fire, geometry for another fire or update, a missing burned area, a later ring that is not inside the first, or an unreadable fire raises rather than returning an empty list; the point-in-ring test agrees with `geometry.distance_to_area_km` across the recorded outlines; errors name the fire and the request that failed; a new update of a fire never reuses the older update's area; a request made as midnight passed asks for the list once. |
+| `test_area_simplification.py` | The smaller copy of a published area, on every recorded flood and burned area: every position and edge midpoint of the area is inside it, it reaches no more than 0.5 km beyond it, no edge it adds is longer than 20 km, and no edge of it crosses or touches another unless the area's did; it keeps every polygon, ring and ring direction; a convex outline is covered from outside, a hole only shrinks, a bay is not closed over an island in it, rings side by side are not drawn across each other; a ring that crosses itself, runs out and back, or has no area is kept as it is, or only its small loops are; a corner rounding would pull inside is not used; a failure to simplify sends the area as published. |
 | `test_geometry.py` | Distance to a published area: zero inside, to the nearest edge outside, holes counted as outside, the antimeridian measured the short way, checked against the 11,568 vertices of the recorded India flood. |
 | `test_feed_cache.py` | The cache: fresh answers reused, failed ones never stored, an earlier answer standing in only inside its limit and marked stale, the pause after a failure, the clock going backwards, the size limit, and that the suite empties every cache before each test. |
 

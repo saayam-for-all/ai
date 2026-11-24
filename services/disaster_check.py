@@ -11,6 +11,7 @@ import math
 from datetime import timedelta, timezone
 
 from services import feed_cache, gdacs_floods, gdacs_wildfires, usgs_earthquakes
+from services.area_simplification import TOLERANCE_KM
 from services.geometry import circle_polygon, distance_km, distance_to_area_km
 
 # One adapter per authoritative feed. See services/usgs_earthquakes.py for the
@@ -189,7 +190,13 @@ def _render(event, source, retrieved_at):
     # Around a published area the fallback circle must cover all of it, so its
     # radius is rounded up rather than to the nearest 100 m.
     radius_km = math.ceil(event["radius_km"] * 10) / 10 if area else round(event["radius_km"], 1)
-    if area:
+    zone = event.get("zone")
+    if zone:
+        advisory = (
+            f"The impact zone covers the affected area published by {source}, "
+            f"drawn with fewer points, and reaches at most {TOLERANCE_KM:g} km beyond it."
+        )
+    elif area:
         advisory = f"The impact zone is the affected area published by {source}."
     else:
         advisory = (
@@ -203,7 +210,9 @@ def _render(event, source, retrieved_at):
         "headline": event["headline"],
         "started_at": _iso(event["started_at"]),
         "expires_at": _iso(event["expires_at"]) if event["expires_at"] else None,
-        "impact_zone": area or circle_polygon(event["latitude"], event["longitude"], event["radius_km"]),
+        # A published area is judged in full by _reaches, but sent as its
+        # smaller copy when there is one: it covers the whole area.
+        "impact_zone": zone or area or circle_polygon(event["latitude"], event["longitude"], event["radius_km"]),
         # [latitude, longitude], as in the issue's contract - the opposite
         # order to the GeoJSON positions in impact_zone. Around a published
         # area, the adapter sizes this circle to cover all of it.

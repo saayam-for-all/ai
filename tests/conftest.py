@@ -8,6 +8,7 @@ that individual test files stop re-declaring their own fakes, and so that the
 Anything that genuinely needs the network must be marked ``needs_network``,
 which ``pytest.ini`` excludes from the default run and from CI.
 """
+import copy
 import io
 import json
 import sys
@@ -21,7 +22,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 import lambda_function as LF  # noqa: E402
-from services import feed_cache  # noqa: E402
+from services import area_simplification, feed_cache  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -47,6 +48,35 @@ def _no_network(request):
         )
     with mock.patch("urllib.request.urlopen", side_effect=_blocked):
         yield
+
+
+_SIMPLIFIED = {}
+
+
+@pytest.fixture(autouse=True)
+def _simplify_each_area_once(request, monkeypatch):
+    """Make the smaller copy of each published area once per run.
+
+    The flood and wildfire adapters simplify every area they fetch, and a
+    test that starts with empty caches fetches the recorded India area
+    afresh: half a second each, several times that under coverage. The copy
+    depends only on the area and the tolerance, so it is kept for the run
+    and handed out as a fresh copy. The simplifier's own tests call it
+    directly and are left alone.
+    """
+    if request.module.__name__.endswith("test_area_simplification"):
+        yield
+        return
+    real = area_simplification.simplify_area
+
+    def once(area, tolerance_km):
+        key = (json.dumps(area, sort_keys=True), tolerance_km)
+        if key not in _SIMPLIFIED:
+            _SIMPLIFIED[key] = real(area, tolerance_km)
+        return copy.deepcopy(_SIMPLIFIED[key])
+
+    monkeypatch.setattr(area_simplification, "simplify_area", once)
+    yield
 
 
 @pytest.fixture(autouse=True)

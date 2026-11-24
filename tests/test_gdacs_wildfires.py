@@ -219,7 +219,9 @@ def test_a_recorded_fire_becomes_a_feed_neutral_event(gdacs_answers):
     # GeoJSON is [longitude, latitude]; the event must not have them swapped.
     assert (palisades["latitude"], palisades["longitude"]) == (34.0804, -118.5698)
     assert palisades["area"]["type"] == "MultiPolygon"
-    assert palisades["radius_km"] == pytest.approx(10.44, abs=0.01)
+    # Wide enough to cover the zone sent, which reaches a little beyond the
+    # burned area: 10.44 km to the farthest burned position.
+    assert palisades["radius_km"] == pytest.approx(10.68, abs=0.01)
     assert palisades["volunteer_band_km"] == 30
     assert palisades["confidence"] == "high"
     assert palisades["url"] == "https://www.gdacs.org/report.aspx?eventid=1023255&episodeid=13&eventtype=WF"
@@ -264,6 +266,7 @@ def test_a_red_fire_as_recorded(gdacs_answers, clock):
     assert fire["severity"] == "extreme"
     assert fire["headline"] == "Red wildfire alert: Forest fires in France"
     assert [len(polygon) for polygon in fire["area"]["coordinates"]] == [1, 1]
+    # 23.92 km to the farthest burned position, which the zone keeps.
     assert fire["radius_km"] == pytest.approx(23.92, abs=0.01)
 
 

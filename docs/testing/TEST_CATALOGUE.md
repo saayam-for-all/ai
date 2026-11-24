@@ -26,10 +26,11 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | File | Kind | Issue | Covers | Tests |
 | --- | --- | --- | --- | ---: |
 | [`tests/test_answer_conversation.py`](../../tests/test_answer_conversation.py) | Unit | #183 | `utils/__init__.py prompt assembly` | 21 |
+| [`tests/test_area_simplification.py`](../../tests/test_area_simplification.py) | Unit | #191 | `services/area_simplification.py` | 47 |
 | [`tests/test_classification_resilience.py`](../../tests/test_classification_resilience.py) | Unit | - | `services/classification_service.py` | 10 |
 | [`tests/test_client_factory.py`](../../tests/test_client_factory.py) | Unit | #193 | `utils/client.py create_chat_model` | 9 |
 | [`tests/test_client_imports.py`](../../tests/test_client_imports.py) | Integration | #154 | `utils/client.py` | 2 |
-| [`tests/test_disaster_check.py`](../../tests/test_disaster_check.py) | Unit | #191 | `services/disaster_check.py` | 71 |
+| [`tests/test_disaster_check.py`](../../tests/test_disaster_check.py) | Unit | #191 | `services/disaster_check.py` | 73 |
 | [`tests/test_disaster_check_contract.py`](../../tests/test_disaster_check_contract.py) | Contract | #191 | `disaster_check_handler` | 62 |
 | [`tests/test_emergency_dataset.py`](../../tests/test_emergency_dataset.py) | Dataset | #146 | `services/emergency_numbers.json` | 17 |
 | [`tests/test_emergency_locale.py`](../../tests/test_emergency_locale.py) | Unit | #146 | `services/emergency.py` | 67 |
@@ -48,7 +49,7 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
 | [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 57 |
 | [`tests/test_usgs_earthquakes.py`](../../tests/test_usgs_earthquakes.py) | Unit | #191 | `services/usgs_earthquakes.py` | 71 |
-| | | | **Total** | **883** |
+| | | | **Total** | **932** |
 
 ## Every test
 
@@ -79,6 +80,44 @@ What the model is actually asked, turn by turn - issue #183.
 | `test_location_gender_and_age_still_reach_the_system_prompt` | Location gender and age still reach the system prompt. |
 
 > 17 test functions expand to 21 cases through parametrisation.
+
+### `test_area_simplification.py`
+
+*Unit · issue #191 · 47 tests*
+
+Smaller copies of published areas - issue #191, part 8.
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_everyone_in_a_recorded_area_is_in_its_zone` | Everyone in a recorded area is in its zone. |
+| `test_a_zone_reaches_no_more_than_the_tolerance_beyond_its_area` | Its own positions, and points along its edges. |
+| `test_a_zone_meets_itself_nowhere_its_area_did_not` | A zone meets itself nowhere its area did not. |
+| `test_the_india_flood_zone_is_a_third_of_the_size` | The india flood zone is a third of the size. |
+| `test_a_zone_keeps_every_polygon_ring_and_direction` | A zone keeps every polygon ring and direction. |
+| `test_a_round_outline_is_covered_from_outside_whichever_way_it_is_drawn` | A convex outline can only be shortened by corners outside it. |
+| `test_a_hole_only_ever_shrinks` | Dry ground in a flood is outside it. The copy may take some of it in, never put flooded ground into the hole. |
+| `test_a_bay_with_an_island_in_it_is_not_closed_over_the_island` | The bay is 450 m wide and 1.3 km deep, shallow enough at a 2 km tolerance for its mouth to be closed, if not for the island. Closing it would put the island inside the outline, and the even-odd rule would then read the island as a hole. |
+| `test_the_same_bay_with_no_island_is_closed` | So the test above is about the island, not about a bay too deep to close. |
+| `test_two_rings_side_by_side_are_not_drawn_across_each_other` | Two jagged strips 200 m apart, each with bulges that a 1 km tolerance would otherwise push into the other. |
+| `test_a_ring_of_three_corners_is_kept_as_it_is` | A ring of three corners is kept as it is. |
+| `test_a_ring_whose_direction_cannot_say_where_the_area_is_is_kept_as_it_is` | Too small to have anything worth removing once its loops are kept. |
+| `test_a_ring_pinched_into_loops_that_agree_is_still_simplified` | A ring pinched into loops that agree is still simplified. |
+| `test_a_hole_that_runs_out_and_back_is_not_made_larger` | A hole that runs out and back is not made larger. |
+| `test_a_ring_with_a_small_loop_in_it_is_simplified_around_the_loop` | A twist of a few tens of metres, as in the recorded India area: the twist is kept, and the rest of the ring is simplified. |
+| `test_a_ring_pinched_into_two_large_loops_running_opposite_ways_is_kept_whole` | Too large a loop to keep apart from the rest, so the whole ring is kept. |
+| `test_a_ring_that_crosses_itself_between_large_loops_is_kept_whole` | A bow tie with 30 positions to a side: its two halves run opposite ways. |
+| `test_a_figure_eight_with_no_area_is_kept_whole_however_small_its_loops` | Its two loops are mirror images running opposite ways, so it has no area and no direction to say which side is inside, even though each loop is small enough to keep on its own and has positions in line. Positions are in 64ths of a degree, so its area adds up to exactly 0. |
+| `test_no_edge_the_zone_adds_is_longer_than_the_limit` | A square on the equator about 111 km a side, with a position every 1.1 km exactly on its straight sides. With no limit each side would be drawn as one edge of 111 km; with one, it is drawn in edges of 20 km or less, and still covers the square. |
+| `test_a_spike_across_the_first_position_is_kept` | The ring runs out to a point and back just before it closes, so the loop to keep wraps round past its first position. |
+| `test_a_hole_drawn_along_its_outline_is_kept_as_it_is` | With every position on the outline, it cannot be told to be inside. |
+| `test_a_hole_outside_its_outline_is_kept_as_it_is` | A hole outside its outline is kept as it is. |
+| `test_an_area_across_the_antimeridian_is_left_as_published` | An area across the antimeridian is left as published. |
+| `test_a_corner_that_rounding_would_pull_inside_is_never_used` | Corners are written to 5 decimal places, after being moved 2 m farther out to allow for it. With no allowance, rounding pulls some of them back across the stretch they replace; those are checked again, in degrees, and left out, so the zone still covers the whole area. |
+| `test_a_zone_is_valid_json_with_finite_numbers` | A zone is valid json with finite numbers. |
+| `test_with_zone_returns_the_area_and_its_copy` | With zone returns the area and its copy. |
+| `test_a_failure_to_simplify_sends_the_area_as_published` | Simplifying only makes the answer smaller. A bug in it must not cost a detection, so the adapter gets no zone and the area is sent instead. |
+
+> 27 test functions expand to 47 cases through parametrisation.
 
 ### `test_classification_resilience.py`
 
@@ -132,7 +171,7 @@ Guard against the utils/client.py import regression that broke dev.
 
 ### `test_disaster_check.py`
 
-*Unit · issue #191 · 71 tests*
+*Unit · issue #191 · 73 tests*
 
 Which events reach a location, and the zone drawn around each - issue #191.
 
@@ -164,6 +203,8 @@ Which events reach a location, and the zone drawn around each - issue #191.
 | `test_an_event_that_is_not_a_record_is_still_reported_as_unusable` | An event that is not a record is still reported as unusable. |
 | `test_an_event_with_a_published_area_is_judged_by_the_area` | An event with a published area is judged by the area. |
 | `test_a_published_area_is_rendered_as_it_was_published` | A published area is rendered as it was published. |
+| `test_a_published_area_is_sent_as_its_smaller_copy_when_there_is_one` | A published area is sent as its smaller copy when there is one. |
+| `test_the_area_not_its_copy_decides_who_an_event_reaches` | The copy can reach up to 0.5 km beyond the area. Someone in that margin, here 330 m south of the strip, is not in the flood. |
 | `test_an_area_the_check_cannot_read_takes_down_only_its_own_feed` | An area the check cannot read takes down only its own feed. |
 | `test_earthquakes_and_floods_are_ranked_together` | Earthquakes and floods are ranked together. |
 | `test_the_rendered_event_carries_its_evidence_and_its_zone` | The rendered event carries its evidence and its zone. |
@@ -177,7 +218,7 @@ Which events reach a location, and the zone drawn around each - issue #191.
 | `test_numeric_strings_and_zero_coordinates_are_accepted` | 0, 0 is a real place; a falsy check would reject it as missing. |
 | `test_an_unusable_query_is_refused_with_a_reason` | An unusable query is refused with a reason. |
 
-> 38 test functions expand to 71 cases through parametrisation.
+> 40 test functions expand to 73 cases through parametrisation.
 
 ### `test_disaster_check_contract.py`
 

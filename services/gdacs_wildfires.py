@@ -25,7 +25,7 @@ import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta, timezone
 
-from services import feed_cache
+from services import area_simplification, feed_cache
 from services.geometry import distance_km, farthest_km
 
 SOURCE = "GDACS"
@@ -123,7 +123,7 @@ def fetch_events(latitude, longitude, search_radius_km, since):
             # Each update of a fire has its own, larger, burned area. An
             # earlier update's area is never used for a later one: it could
             # leave out ground that has burned since.
-            area = _AREAS.get((fire["event_id"], fire["episode_id"]), lambda: _burned_area(fire))
+            area = _AREAS.get((fire["event_id"], fire["episode_id"]), lambda: area_simplification.with_zone(_burned_area(fire)))
         except (KeyError, TypeError, ValueError, OverflowError) as e:
             raise FeedError(
                 f"GDACS burned area of {_name(fire)} was not in the expected shape: {type(e).__name__}: {e}"
@@ -131,7 +131,7 @@ def fetch_events(latitude, longitude, search_radius_km, since):
         # The event carries the list's retrieved_at, not the time its area was
         # fetched. That is harmless: an area belongs to one update of one fire
         # and never changes, so an area cached for days is still current.
-        events.append(_event(fire, area.value))
+        events.append(_event(fire, *area.value))
     return feed_cache.FeedAnswer(events, retrieved_at, stale)
 
 
@@ -373,7 +373,7 @@ def _position(position):
     return [_real(position[0], -180, 180), _real(position[1], -90, 90)]
 
 
-def _event(fire, area):
+def _event(fire, area, zone):
     report = urllib.parse.urlencode({
         "eventid": fire["event_id"],
         "episodeid": fire["episode_id"],
@@ -390,9 +390,13 @@ def _event(fire, area):
         "expires_at": None if fire["running"] else fire["ended_at"],
         "latitude": fire["latitude"],
         "longitude": fire["longitude"],
+        # The area decides who the fire reaches. The zone is what is sent:
+        # a smaller copy that covers all of it - see area_simplification.
         "area": area,
-        # The centre-and-radius fallback has to cover the whole area.
-        "radius_km": farthest_km(fire["latitude"], fire["longitude"], area),
+        "zone": zone,
+        # The centre-and-radius fallback has to cover the whole zone, which
+        # can reach a little beyond the area.
+        "radius_km": farthest_km(fire["latitude"], fire["longitude"], zone or area),
         "volunteer_band_km": VOLUNTEER_BAND_KM,
         # The burned area is observed from satellites, and Orange and Red
         # levels are set with expert review.

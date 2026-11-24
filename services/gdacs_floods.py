@@ -21,7 +21,7 @@ import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta, timezone
 
-from services import feed_cache
+from services import area_simplification, feed_cache
 from services.geometry import distance_km, farthest_km
 
 SOURCE = "GDACS"
@@ -114,7 +114,7 @@ def fetch_events(latitude, longitude, search_radius_km, since):
         if distance_km(latitude, longitude, flood["latitude"], flood["longitude"]) > search_radius_km:
             continue
         try:
-            area = _AREAS.get((flood["event_id"], flood["episode_id"]), lambda: _affected_area(flood))
+            area = _AREAS.get((flood["event_id"], flood["episode_id"]), lambda: area_simplification.with_zone(_affected_area(flood)))
         except (KeyError, TypeError, ValueError, OverflowError) as e:
             raise FeedError(
                 f"GDACS affected area of {_name(flood)} was not in the expected shape: {type(e).__name__}: {e}"
@@ -122,7 +122,7 @@ def fetch_events(latitude, longitude, search_radius_km, since):
         # The event carries the list's retrieved_at, not the time its area was
         # fetched. That is harmless: an area belongs to one update of one
         # flood and never changes, so an area cached for days is still current.
-        events.append(_event(flood, area.value))
+        events.append(_event(flood, *area.value))
     return feed_cache.FeedAnswer(events, retrieved_at, stale)
 
 
@@ -306,7 +306,7 @@ def _position(position):
     return [_real(position[0], -180, 180), _real(position[1], -90, 90)]
 
 
-def _event(flood, area):
+def _event(flood, area, zone):
     report = urllib.parse.urlencode({
         "eventid": flood["event_id"],
         "episodeid": flood["episode_id"],
@@ -324,9 +324,13 @@ def _event(flood, area):
         "expires_at": None if flood["running"] else flood["ended_at"],
         "latitude": flood["latitude"],
         "longitude": flood["longitude"],
+        # The area decides who the flood reaches. The zone is what is sent:
+        # a smaller copy that covers all of it - see area_simplification.
         "area": area,
-        # The centre-and-radius fallback has to cover the whole area.
-        "radius_km": farthest_km(flood["latitude"], flood["longitude"], area),
+        "zone": zone,
+        # The centre-and-radius fallback has to cover the whole zone, which
+        # can reach a little beyond the area.
+        "radius_km": farthest_km(flood["latitude"], flood["longitude"], zone or area),
         "volunteer_band_km": VOLUNTEER_BAND_KM,
         # GDACS flood alerts are GloFAS forecasts, not observations.
         "confidence": "medium",

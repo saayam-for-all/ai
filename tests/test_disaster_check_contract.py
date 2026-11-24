@@ -311,8 +311,8 @@ def test_a_flood_zone_is_the_area_gdacs_publishes(feeds, during_the_india_flood)
     assert flood["impact_zone"]["type"] == "MultiPolygon"
     assert len(flood["impact_zone"]["coordinates"]) == 33
     # The fallback circle is centred where GDACS puts the flood and is wide
-    # enough to cover the whole affected area.
-    assert flood["impact_zone_fallback"] == {"center": [11.3324, 78.6099], "radius_km": 384.2}
+    # enough to cover the whole zone sent: 384.2 km covers the affected area.
+    assert flood["impact_zone_fallback"] == {"center": [11.3324, 78.6099], "radius_km": 384.3}
     assert "affected area published by GDACS" in flood["advisory"]
 
 
@@ -434,11 +434,13 @@ def test_a_wildfire_zone_is_the_burned_area_gdacs_publishes(feeds, during_the_lo
     assert fire["impact_zone"]["type"] == "MultiPolygon"
     # One polygon, its outline only: its three holes are unburned ground
     # surrounded by the fire.
+    # Sent as a smaller copy that covers it: 131 positions as published.
     ((outline,),) = fire["impact_zone"]["coordinates"]
-    assert len(outline) == 131
+    assert len(outline) == 86
     # Centred where GDACS puts the fire, and wide enough to cover all of it.
-    assert fire["impact_zone_fallback"] == {"center": [34.0804, -118.5698], "radius_km": 10.5}
+    assert fire["impact_zone_fallback"] == {"center": [34.0804, -118.5698], "radius_km": 10.7}
     assert "affected area published by GDACS" in fire["advisory"]
+    assert "at most 0.5 km beyond it" in fire["advisory"]
 
 
 def test_every_wildfire_detection_is_backed_by_its_gdacs_report(feeds, during_the_los_angeles_fires):

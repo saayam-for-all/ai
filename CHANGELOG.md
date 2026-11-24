@@ -10,6 +10,32 @@ team works and reviews in.
 
 ## Unreleased
 
+### Disaster Check — smaller flood and wildfire zones — [#191](https://github.com/saayam-for-all/ai/issues/191), part 8
+
+**Changed**
+
+- A flood's or wildfire's `impact_zone` is now a smaller copy of the area
+  GDACS publishes, made by the new `services/area_simplification.py`. It
+  covers the whole published area and reaches at most 0.5 km beyond it
+  (`TOLERANCE_KM`, chosen in review over the 1 km first proposed), and adds
+  no edge longer than 20 km.
+  *Observable difference:* a response with the recorded India flood in it is
+  about a third of the size: its `impact_zone` has 3,677 positions instead
+  of 11,568. A few positions in it are not GDACS's own: corners just outside an
+  outward bulge, written to 5 decimal places.
+  *Observable difference:* the advisory of such an event ends "drawn with
+  fewer points, and reaches at most 0.5 km beyond it".
+  *Observable difference:* `impact_zone_fallback.radius_km` is sized to cover
+  the copy, so it can be slightly larger: 384.3 km rather than 384.2 km for
+  the recorded India flood.
+- Whether a flood or fire reaches the caller is still decided on the full
+  published area.
+  *Observable difference:* none in `disaster_detected`. Someone up to 0.5 km
+  outside the published area can be inside `impact_zone`, but is not
+  reported as in the flood unless their own radius reaches the area.
+- If making the copy fails, the area is sent as published and a
+  `WARNING: area not simplified` line is logged.
+
 ### Disaster Check — wildfires from GDACS — [#191](https://github.com/saayam-for-all/ai/issues/191), part 3
 
 **Added**
