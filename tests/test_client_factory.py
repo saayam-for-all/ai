@@ -16,8 +16,18 @@ from langchain_groq import ChatGroq
 import utils.client as client_module
 from utils.model_fallback import ModelTarget, _load_model_chain, run_model_chain
 
+try:
+    import httpx2
+except ImportError:  # pragma: no cover - httpx2 is pinned in requirements.txt
+    httpx2 = None
+
 
 pytestmark = pytest.mark.unit
+
+# google-genai may raise through httpx or httpx2 depending on the installed stack.
+_GEMINI_TIMEOUT_ERRORS = (httpx.TimeoutException,) + (
+    (httpx2.TimeoutException,) if httpx2 is not None else ()
+)
 
 
 @pytest.fixture(autouse=True)
@@ -351,7 +361,7 @@ def test_create_chat_model_gemini_gives_up_on_a_silent_server(monkeypatch):
             max_retries=0,
         )
         started = time.perf_counter()
-        with pytest.raises(httpx.TimeoutException):
+        with pytest.raises(_GEMINI_TIMEOUT_ERRORS):
             _call_with_deadline(lambda: model.invoke("ping"), deadline_s=3.0)
         elapsed = time.perf_counter() - started
         assert elapsed >= timeout_s
