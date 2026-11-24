@@ -1,12 +1,15 @@
 """Unit tests for target-aware LangChain client construction."""
 
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
 from contextlib import contextmanager
 from types import SimpleNamespace
 import socket
 import threading
 import time
 
+import httpx
 import pytest
+from groq import APITimeoutError, Groq
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_groq import ChatGroq
 
@@ -65,6 +68,18 @@ def _silent_http_server():
             except OSError:
                 pass
         thread.join(timeout=1)
+
+
+def _call_with_deadline(fn, *, deadline_s=3.0):
+    """Run ``fn`` in a worker so a missing timeout fails CI instead of hanging."""
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(fn)
+        try:
+            return future.result(timeout=deadline_s)
+        except FuturesTimeout as exc:
+            raise AssertionError(
+                f"call did not finish within {deadline_s}s — timeout likely unset"
+            ) from exc
 
 
 def test_groq_factory_uses_the_target_model_temperature_and_credentials(monkeypatch):
@@ -287,6 +302,7 @@ def test_different_timeout_limits_produce_different_cached_clients(monkeypatch):
 
 def test_create_chat_model_groq_gives_up_on_a_silent_server(monkeypatch):
     """request_timeout from create_chat_model must make a hung Groq call raise."""
+    timeout_s = 0.5
     with _silent_http_server() as base_url:
         RealChatGroq = ChatGroq
 
@@ -301,17 +317,20 @@ def test_create_chat_model_groq_gives_up_on_a_silent_server(monkeypatch):
         model = client_module.create_chat_model(
             ModelTarget(provider="groq", model="groq-hang"),
             temperature=0.1,
-            timeout=0.5,
+            timeout=timeout_s,
             max_retries=0,
         )
         started = time.perf_counter()
-        with pytest.raises(Exception):
-            model.invoke("ping")
-        assert time.perf_counter() - started < 3
+        with pytest.raises(APITimeoutError):
+            _call_with_deadline(lambda: model.invoke("ping"), deadline_s=3.0)
+        elapsed = time.perf_counter() - started
+        assert elapsed >= timeout_s
+        assert elapsed < 3
 
 
 def test_create_chat_model_gemini_gives_up_on_a_silent_server(monkeypatch):
     """timeout from create_chat_model must make a hung Gemini call raise."""
+    timeout_s = 0.5
     with _silent_http_server() as base_url:
         RealGemini = ChatGoogleGenerativeAI
 
@@ -328,13 +347,81 @@ def test_create_chat_model_gemini_gives_up_on_a_silent_server(monkeypatch):
         model = client_module.create_chat_model(
             ModelTarget(provider="gemini", model="gemini-hang"),
             temperature=0.1,
-            timeout=0.5,
+            timeout=timeout_s,
             max_retries=0,
         )
         started = time.perf_counter()
-        with pytest.raises(Exception):
-            model.invoke("ping")
-        assert time.perf_counter() - started < 3
+        with pytest.raises(httpx.TimeoutException):
+            _call_with_deadline(lambda: model.invoke("ping"), deadline_s=3.0)
+        elapsed = time.perf_counter() - started
+        assert elapsed >= timeout_s
+        assert elapsed < 3
+
+
+def test_raw_groq_client_gives_up_on_a_silent_server():
+    """Predict Category's raw Groq client must honour the shared timeout."""
+    timeout_s = 0.5
+    with _silent_http_server() as base_url:
+        raw = Groq(
+            api_key="test-groq-key",
+            base_url=base_url,
+            timeout=timeout_s,
+            max_retries=client_module.DEFAULT_MODEL_MAX_RETRIES,
+        )
+        started = time.perf_counter()
+        with pytest.raises(APITimeoutError):
+            _call_with_deadline(
+                lambda: raw.chat.completions.create(
+                    model="m",
+                    messages=[{"role": "user", "content": "ping"}],
+                ),
+                deadline_s=3.0,
+            )
+        elapsed = time.perf_counter() - started
+        assert elapsed >= timeout_s
+        assert elapsed < 3
+
+
+def test_raw_sdk_clients_are_built_with_shared_limits(monkeypatch):
+    """Predict Category / volunteer skills share the LangChain timeout budget."""
+    import importlib
+
+    import boto3
+    import google.genai
+    import groq
+    import langchain_google_genai
+    import langchain_groq
+
+    groq_kwargs = []
+    gemini_kwargs = []
+
+    class _RecordingGroq:
+        def __init__(self, **kwargs):
+            groq_kwargs.append(kwargs)
+
+    class _RecordingGeminiClient:
+        def __init__(self, **kwargs):
+            gemini_kwargs.append(kwargs)
+
+    monkeypatch.setattr(boto3, "client", lambda *a, **k: _FakeSSM())
+    monkeypatch.setattr(groq, "Groq", _RecordingGroq)
+    monkeypatch.setattr(google.genai, "Client", _RecordingGeminiClient)
+    monkeypatch.setattr(langchain_groq, "ChatGroq", lambda **k: object())
+    monkeypatch.setattr(
+        langchain_google_genai, "ChatGoogleGenerativeAI", lambda **k: object()
+    )
+    try:
+        importlib.reload(client_module)
+        assert groq_kwargs[0]["timeout"] == (
+            client_module.DEFAULT_MODEL_REQUEST_TIMEOUT_SECONDS
+        )
+        assert groq_kwargs[0]["max_retries"] == client_module.DEFAULT_MODEL_MAX_RETRIES
+        assert gemini_kwargs[0]["http_options"]["timeout"] == int(
+            client_module.DEFAULT_MODEL_REQUEST_TIMEOUT_SECONDS * 1000
+        )
+    finally:
+        monkeypatch.undo()
+        importlib.reload(client_module)
 
 
 def test_timed_out_invoke_falls_through_to_the_next_target(monkeypatch):
@@ -374,16 +461,20 @@ def test_timed_out_invoke_falls_through_to_the_next_target(monkeypatch):
             return model
 
         started = time.perf_counter()
-        result = run_model_chain(
-            targets=targets,
-            invoke=invoke,
-            is_valid=bool,
-            operation="timeout-failover",
+        result = _call_with_deadline(
+            lambda: run_model_chain(
+                targets=targets,
+                invoke=invoke,
+                is_valid=bool,
+                operation="timeout-failover",
+            ),
+            deadline_s=3.0,
         )
         elapsed = time.perf_counter() - started
 
     assert result is gemini_model
     assert attempts == ["groq", "gemini"]
+    assert elapsed >= 0.5
     assert elapsed < 3.0
 
 

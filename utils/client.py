@@ -25,13 +25,16 @@ GROQ_REASONING_EFFORT = "low"
 GEMINI_MODEL = "gemini-2.5-flash"
 GEMINI_TEMPERATURE = 0.3
 
-# Per-call limits for LangChain models built by create_chat_model (#263).
+# Per-call limits for LangChain models and the raw SDK clients (#263).
 # API Gateway's integration timeout is 29 s. model_routing.json has four
 # targets (3 Groq + 1 Gemini). With max_retries=0, each target makes one
 # attempt. Timed-out calls also burn ~0.6–1.2 s of connection/client
 # overhead beyond the configured limit, so 4 × 5 s ≈ 20 s of wait plus
 # ~5 s of overhead ≈ 25 s wall — under the gateway limit, leaving a few
-# seconds for SSM, DB, and response building.
+# seconds for SSM, DB, and response building. The same limits apply to
+# the raw Groq / Gemini clients used by Predict Category and volunteer
+# skills, so a 429 retry-after or hung provider cannot burn past the
+# caller's budget (Groq's SDK default was 2 retries and a 60 s timeout).
 DEFAULT_MODEL_REQUEST_TIMEOUT_SECONDS = 5.0
 DEFAULT_MODEL_MAX_RETRIES = 0
 
@@ -129,7 +132,11 @@ _use_gemini = False
 
 if GROQ_API_KEY:
     try:
-        client = Groq(api_key=GROQ_API_KEY)
+        client = Groq(
+            api_key=GROQ_API_KEY,
+            timeout=DEFAULT_MODEL_REQUEST_TIMEOUT_SECONDS,
+            max_retries=DEFAULT_MODEL_MAX_RETRIES,
+        )
         groq_llm = create_chat_model(
             ModelTarget(
                 provider="groq",
@@ -150,7 +157,13 @@ else:
 
 if GEMINI_API_KEY:
     try:
-        _gemini_client = genai.Client(api_key=GEMINI_API_KEY)
+        # google-genai HttpOptions.timeout is milliseconds.
+        _gemini_client = genai.Client(
+            api_key=GEMINI_API_KEY,
+            http_options={
+                "timeout": int(DEFAULT_MODEL_REQUEST_TIMEOUT_SECONDS * 1000),
+            },
+        )
         gemini_llm = create_chat_model(
             ModelTarget(provider="gemini", model=GEMINI_MODEL),
             temperature=GEMINI_TEMPERATURE,
