@@ -10,6 +10,22 @@ team works and reviews in.
 
 ## Unreleased
 
+### Model request timeouts — [#263](https://github.com/saayam-for-all/ai/issues/263) · PR [#264](https://github.com/saayam-for-all/ai/pull/264)
+
+**Fixed**
+
+- **LangChain and raw SDK model clients now share a 5 s / 0-retry limit.** A
+  hung or rate-limited provider used to hold the request until API Gateway
+  answered `504` at 29 s, so the fallback chain never ran. `create_chat_model`
+  now passes `request_timeout` / `timeout` and `max_retries` into ChatGroq and
+  ChatGoogleGenerativeAI; the raw `Groq` and `google.genai.Client` used by
+  Predict Category and volunteer skills get the same budget. Org search builds
+  its Groq model through the factory, so it is covered too.
+  *Observable difference:* a silent or 429-stuck provider fails within about
+  5–7 s per target and the chain moves on (or returns an explicit error)
+  instead of a gateway `504`. Worst case across the four configured targets
+  stays under the 29 s API Gateway limit.
+
 ### Volunteer skill suggestions — [#216](https://github.com/saayam-for-all/ai/issues/216)
 
 **Added**
