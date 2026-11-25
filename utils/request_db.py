@@ -184,6 +184,8 @@ def _load_db_config() -> dict[str, Any]:
         "sslmode": payload.get("SSL"),
     }
 
+DB_CONNECT_TIMEOUT_SECONDS = 3
+
 
 def get_connection():
     db = _load_db_config()
@@ -194,6 +196,7 @@ def get_connection():
         user=db["user"] or os.getenv("DB_USER"),
         password=db["password"] or os.getenv("DB_PASSWORD"),
         sslmode=db["sslmode"] or os.getenv("DB_SSLMODE"),
+        connect_timeout=DB_CONNECT_TIMEOUT_SECONDS,
     )
 
 

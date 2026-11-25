@@ -865,5 +865,12 @@ def test_connection_fills_missing_settings_from_db_environment_variables(monkeyp
     monkeypatch.setattr(request_db.psycopg2, "connect", lambda **kw: captured.update(kw) or "connection")
 
     assert request_db.get_connection() == "connection"
-    assert captured == {"host": "env-host", "port": "5432", "dbname": "saayam",
-                        "user": "genai", "password": "env-password", "sslmode": "require"}
+    assert captured == {
+        "host": "env-host",
+        "port": "5432",
+        "dbname": "saayam",
+        "user": "genai",
+        "password": "env-password",
+        "sslmode": "require",
+        "connect_timeout": 3,
+    }

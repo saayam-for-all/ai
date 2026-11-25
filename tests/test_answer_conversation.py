@@ -254,8 +254,9 @@ def test_an_oversized_message_is_truncated_rather_than_forwarded_whole(groq):
 # -------------------------------------------------------------------
 
 def test_a_follow_up_still_falls_back_to_gemini_when_groq_is_down(monkeypatch):
-    """Fallback works and every model receives the same conversation history."""
+    """Fallback works and records timing for every model attempt."""
 
+    timings = {}
     groq_attempts = []
     groq_messages = []
     gemini = _Recorder(reply="Bring photo ID.")
@@ -275,26 +276,45 @@ def test_a_follow_up_still_falls_back_to_gemini_when_groq_is_down(monkeypatch):
 
     monkeypatch.setattr(utils, "create_chat_model", fake_create_chat_model)
 
-    answer = _answer(FOLLOW_UP)
+    answer = _answer(FOLLOW_UP, timings=timings)
 
     assert answer == "Bring photo ID."
     assert len(groq_attempts) == 3
     assert len(groq_messages) == 3
     assert gemini.messages[-1].content == QUESTION
-
-    # Every Groq attempt should receive the same complete message history
-    # that Gemini receives.
     assert all(messages == gemini.messages for messages in groq_messages)
 
+    attempts = timings["model_attempts"]
+
+    assert len(attempts) == 4
+    assert [a["provider"] for a in attempts] == [
+        "groq", "groq", "groq", "gemini"
+    ]
+    assert [a["outcome"] for a in attempts] == [
+        "failed", "failed", "failed", "success"
+    ]
+    assert all(a["duration_ms"] >= 0 for a in attempts)
+    assert timings["model_ms"] >= 0
+    assert timings["history_ms"] >= 0
 
 def test_primary_success_does_not_invoke_fallback(groq):
-    """A valid primary answer returns without trying another model."""
-    answer = _answer(FOLLOW_UP)
+    """A valid primary answer succeeds and records its timing."""
+
+    timings = {}
+    answer = _answer(FOLLOW_UP, timings=timings)
 
     assert answer == "Bring photo ID and a utility bill."
     assert len(groq.calls) == 1
 
+    attempts = timings["model_attempts"]
 
+    assert len(attempts) == 1
+    assert attempts[0]["provider"] == "groq"
+    assert attempts[0]["model"]
+    assert attempts[0]["outcome"] == "success"
+    assert attempts[0]["duration_ms"] >= 0
+    assert timings["model_ms"] >= 0
+    assert timings["history_ms"] >= 0
 
 def test_empty_primary_answers_fall_back_to_gemini(monkeypatch):
     """An empty primary answer should trigger fallback."""
@@ -343,9 +363,9 @@ def test_a_missing_subject_or_description_does_not_break_the_context_block(groq)
 
 
 def test_the_answer_is_returned_stripped(groq):
-    groq.reply = "  Bring photo ID.  "
+    groq.reply = "  Bring Photo ID.  "
 
-    assert _answer(FOLLOW_UP) == "Bring photo ID."
+    assert _answer(FOLLOW_UP) == "Bring Photo ID."
 
 
 def test_location_gender_and_age_still_reach_the_system_prompt(groq):

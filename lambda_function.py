@@ -1,5 +1,6 @@
 import json
 import logging
+import time
 from utils.subject_generator import generate_subject_from_description
 from services.classification_service import predict_categories
 from utils.categories import help_categories
@@ -321,7 +322,7 @@ def emergency_contacts_handler(event, context):
 
 
 # 4. Generate Answer
-def generate_answer_handler(event, context):
+def _generate_answer_handler(event, context, timings):
     """AWS Lambda entry point for generate_answer service.
 
     The database is a source of the request text, not a precondition. A caller
@@ -362,7 +363,14 @@ def generate_answer_handler(event, context):
         # nothing else, so this is what they are actually waiting on an answer
         # to. It is also the one piece of context that survives a request store
         # that cannot be read.
+
+        history_started = time.perf_counter()
+
         follow_up = _last_user_question(conversation_history)
+
+        timings["history_ms"] = round(
+            (time.perf_counter() - history_started) * 1000, 2
+        )
 
         source = "request"
         degraded_from = None
@@ -380,7 +388,20 @@ def generate_answer_handler(event, context):
                     },
                 )
 
-            data = _lookup_request(str(user_id), str(req_id))
+            lookup_started = time.perf_counter()
+            try:
+                data = _lookup_request(str(user_id), str(req_id))
+            except Exception:
+                timings["lookup_status"] = "failed"
+                raise
+            else:
+                timings["lookup_status"] = (
+                    "failed" if data.get("error") else "success"
+                )
+            finally:
+                timings["lookup_ms"] = round(
+                    (time.perf_counter() - lookup_started) * 1000, 2
+                )
             if err := data.get("error"):
                 if data.get("error_kind") == "not_found":
                     return _response(
@@ -476,6 +497,7 @@ def generate_answer_handler(event, context):
                 gender=body.get("gender"),
                 age=body.get("age"),
                 conversation_history=conversation_history,
+                timings=timings,
             )
         except Exception as e:
             # Reporting a model failure as a 200 whose answer is the string
@@ -510,6 +532,28 @@ def generate_answer_handler(event, context):
         print(f"ERROR: generate_answer failed: {type(e).__name__}: {e}")
         return _response(500, {"error": "Answer generation failed"})
 
+def generate_answer_handler(event, context):
+    """Measure the complete Generate Answer Lambda invocation."""
+    timings = {
+        "lookup_ms": None,
+        "lookup_status": "skipped",
+        "history_ms": None,
+        "model_ms": None,
+        "model_attempts": [],
+    }
+
+    started = time.perf_counter()
+
+    try:
+        return _generate_answer_handler(event, context, timings)
+    finally:
+        timings["total_ms"] = round(
+            (time.perf_counter() - started) * 1000, 2
+        )
+        print(
+            "ANSWER_TIMING "
+            + json.dumps(timings, separators=(",", ":"), sort_keys=True)
+        )
 
 # 5. Generate Subject
 def generate_subject_handler(event, context):

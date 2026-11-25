@@ -2,9 +2,9 @@
 Service module with abstraction layer for easy provider switching.
 Python 3.14+ compatible.
 """
-
 from __future__ import annotations
 
+import time
 from abc import ABC, abstractmethod
 from typing import Literal, TypedDict
 
@@ -67,6 +67,7 @@ class AnswerGenerationServiceInterface(ABC):
         gender: str | None = None,
         age: str | None = None,
         conversation_history: list[dict[str, str]] | None = None,
+        timings: dict | None = None,
     ) -> str:
         """Generate an answer string."""
         raise NotImplementedError
@@ -173,7 +174,9 @@ class GroqAnswerGenerationService(AnswerGenerationServiceInterface):
         gender: str | None = None,
         age: str | None = None,
         conversation_history: list[dict[str, str]] | None = None,
+        timings: dict | None = None,
     ) -> str:
+        history_started = time.perf_counter()
         system_prompt = get_conversational_prompt(
             category=category,
             subject=subject,
@@ -214,19 +217,68 @@ class GroqAnswerGenerationService(AnswerGenerationServiceInterface):
                 question,
             ]
 
+        if timings is not None:
+            history_elapsed = (time.perf_counter() - history_started) * 1000
+            timings["history_ms"] = round(
+                (timings.get("history_ms") or 0.0) + history_elapsed, 2
+            )
+
         usage = token_usage.new_accumulator()
+        attempt_timings = (
+            timings.setdefault("model_attempts", [])
+            if timings is not None
+            else None
+        )
+
+        def invoke_with_timing(target):
+            attempt_started = time.perf_counter()
+
+            try:
+                answer = self._invoke_answer_target(
+                    target, messages, usage
+                )
+            except Exception as error:
+                if attempt_timings is not None:
+                    attempt_timings.append({
+                        "provider": target.provider,
+                        "model": target.model,
+                        "duration_ms": round(
+                            (time.perf_counter() - attempt_started) * 1000, 2
+                        ),
+                        "outcome": "failed",
+                        "error_type": type(error).__name__,
+                    })
+                raise
+
+            if attempt_timings is not None:
+                attempt_timings.append({
+                    "provider": target.provider,
+                    "model": target.model,
+                    "duration_ms": round(
+                        (time.perf_counter() - attempt_started) * 1000, 2
+                    ),
+                    "outcome": "success",
+                })
+
+            return answer
+
+        model_started = time.perf_counter()
+
         try:
             return run_model_chain(
-                invoke=lambda target: self._invoke_answer_target(
-                    target, messages, usage
-                ),
+                invoke=invoke_with_timing,
                 is_valid=lambda answer: bool(answer and answer.strip()),
                 operation="generate_answer",
             )
         finally:
+            if timings is not None:
+                timings["model_ms"] = round(
+                    (time.perf_counter() - model_started) * 1000, 2
+                )
+
             token_usage.log_usage(
                 "generate_answer",
                 usage,
                 category=category,
                 history_turns=len(prior) + (1 if question else 0),
-    )
+            )

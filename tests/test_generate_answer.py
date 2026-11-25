@@ -350,6 +350,45 @@ def test_logging_records_the_shape_but_never_the_description(capsys):
     assert secret not in out, "the description content must never be logged"
 
 
+def test_answer_timing_log_is_structured_and_excludes_request_content(capsys):
+    secret_subject = "Private housing assistance request"
+    secret_description = "Sensitive personal financial information"
+
+    with _generation():
+        response = LF.generate_answer_handler(
+            _event({
+                "subject": secret_subject,
+                "description": secret_description,
+            }),
+            None,
+        )
+
+    assert response["statusCode"] == 200
+
+    output = capsys.readouterr().out
+    timing_lines = [
+        line for line in output.splitlines()
+        if line.startswith("ANSWER_TIMING ")
+    ]
+
+    assert len(timing_lines) == 1
+
+    timing = json.loads(timing_lines[0].removeprefix("ANSWER_TIMING "))
+
+    assert "lookup_ms" in timing
+    assert "lookup_status" in timing
+    assert "history_ms" in timing
+    assert "model_ms" in timing
+    assert "model_attempts" in timing
+    assert "total_ms" in timing
+
+    assert timing["lookup_status"] == "skipped"
+    assert timing["lookup_ms"] is None
+    assert isinstance(timing["model_attempts"], list)
+    assert timing["total_ms"] >= 0
+
+    assert secret_subject not in output
+    assert secret_description not in output
 # -------------------------------------------------------------------
 # Blast radius: the psycopg2 import must not be at module scope
 # -------------------------------------------------------------------
