@@ -29,8 +29,8 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_answer_memory.py`](../../tests/test_answer_memory.py) | Unit | #197 | `utils/__init__.py memory_context` | 4 |
 | [`tests/test_classification_privacy.py`](../../tests/test_classification_privacy.py) | Unit | #216 | `utils/model_fallback.py failover reasons, predict_category 500` | 11 |
 | [`tests/test_classification_resilience.py`](../../tests/test_classification_resilience.py) | Unit | - | `services/classification_service.py` | 10 |
-| [`tests/test_client_factory.py`](../../tests/test_client_factory.py) | Unit | #193 | `utils/client.py create_chat_model` | 11 |
-| [`tests/test_client_imports.py`](../../tests/test_client_imports.py) | Integration | #154 | `utils/client.py` | 2 |
+| [`tests/test_client_factory.py`](../../tests/test_client_factory.py) | Unit | #193 | `utils/client.py create_chat_model` | 12 |
+| [`tests/test_client_imports.py`](../../tests/test_client_imports.py) | Integration | #154 | `utils/client.py` | 3 |
 | [`tests/test_emergency_dataset.py`](../../tests/test_emergency_dataset.py) | Dataset | #146 | `services/emergency_numbers.json` | 17 |
 | [`tests/test_emergency_locale.py`](../../tests/test_emergency_locale.py) | Unit | #146 | `services/emergency.py` | 67 |
 | [`tests/test_emergency_location_fields.py`](../../tests/test_emergency_location_fields.py) | Contract | #146, webapp#1959 | `location_source, display_location` | 59 |
@@ -40,12 +40,13 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_generate_answer.py`](../../tests/test_generate_answer.py) | Contract | #169 | `generate_answer_handler` | 50 |
 | [`tests/test_import_blast_radius.py`](../../tests/test_import_blast_radius.py) | Integration | #169, #171 | `module-scope imports` | 4 |
 | [`tests/test_lambda_session_memory.py`](../../tests/test_lambda_session_memory.py) | Integration | #197 | `generate_answer_handler session memory` | 11 |
+| [`tests/test_lazy_provider_keys.py`](../../tests/test_lazy_provider_keys.py) | Unit | #237 | `utils/client.py key loading` | 24 |
 | [`tests/test_memory_controls.py`](../../tests/test_memory_controls.py) | Integration | #197 | `local_memory_controls_handler` | 5 |
 | [`tests/test_memory_integration.py`](../../tests/test_memory_integration.py) | Integration | #197 | `session_memory + SQLite store` | 1 |
 | [`tests/test_memory_summarizer.py`](../../tests/test_memory_summarizer.py) | Unit | #197 | `services/memory_summarizer.py` | 5 |
 | [`tests/test_memory_validation.py`](../../tests/test_memory_validation.py) | Unit | #197 | `services/memory_validation.py` | 13 |
 | [`tests/test_model_fallback.py`](../../tests/test_model_fallback.py) | Unit | #193 | `utils/model_fallback.py` | 24 |
-| [`tests/test_org_search_contract.py`](../../tests/test_org_search_contract.py) | Contract | #170 | `utils/search_orgs.py` | 24 |
+| [`tests/test_org_search_contract.py`](../../tests/test_org_search_contract.py) | Contract | #170 | `utils/search_orgs.py` | 25 |
 | [`tests/test_provider_key_settings.py`](../../tests/test_provider_key_settings.py) | Unit | #252 | `utils/client.py key names` | 3 |
 | [`tests/test_request_db_schema.py`](../../tests/test_request_db_schema.py) | Unit | #169 | `utils/request_db.py` | 54 |
 | [`tests/test_response_contract.py`](../../tests/test_response_contract.py) | Contract | #146, #169, #170 | `response envelopes` | 10 |
@@ -59,7 +60,7 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_smoke_tool.py`](../../tests/test_smoke_tool.py) | Unit | #252 | `tools/smoke_check.py, tests/smoke/` | 23 |
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
 | [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 58 |
-| | | | **Total** | **849** |
+| | | | **Total** | **876** |
 
 ## Every test
 
@@ -147,7 +148,7 @@ Guards the two failure modes behind "every request lands in General".
 
 ### `test_client_factory.py`
 
-*Unit · issue #193 · 11 tests*
+*Unit · issue #193 · 12 tests*
 
 Unit tests for target-aware LangChain client construction.
 
@@ -162,19 +163,21 @@ Unit tests for target-aware LangChain client construction.
 | `test_factory_rejects_an_unsupported_provider` | Factory rejects an unsupported provider. |
 | `test_constructor_failure_can_fall_through_to_another_provider` | Constructor failure can fall through to another provider. |
 | `test_legacy_groq_defaults_include_low_reasoning_effort` | Legacy groq defaults include low reasoning effort. |
-| `test_shared_groq_model_is_built_with_low_reasoning_effort` | groq_llm serves subject and answer generation; it must request low effort. |
+| `test_shared_groq_model_is_built_with_low_reasoning_effort` | get_groq_llm serves subject generation; it must request low effort. |
+| `test_accessors_reuse_one_client_per_container` | Accessors reuse one client per container. |
 
-> 10 test functions expand to 11 cases through parametrisation.
+> 11 test functions expand to 12 cases through parametrisation.
 
 ### `test_client_imports.py`
 
-*Integration · issue #154 · 2 tests*
+*Integration · issue #154 · 3 tests*
 
 Guard against the utils/client.py import regression that broke dev.
 
 | Test | Behaviour it protects |
 | --- | --- |
 | `test_client_exports_all_required_names` | Client exports all required names. |
+| `test_client_no_longer_exports_import_time_names` | Client no longer exports import time names. |
 | `test_core_modules_import` | Core modules import. |
 
 ### `test_emergency_dataset.py`
@@ -468,6 +471,40 @@ Test the local session-memory integration in the Lambda handler.
 | `test_oversized_history_answers_without_memory` | Past 500 messages the chat loses memory, not its answers. |
 | `test_restarted_history_answers_without_the_old_memory` | A transcript restarted under the same session_id is still answered. |
 
+### `test_lazy_provider_keys.py`
+
+*Unit · issue #237 · 24 tests*
+
+Provider keys load from SSM on first use, not at import (#237). Successful reads are cached; failed reads back off, then retry.
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_cold_start_and_emergency_contacts_never_create_an_ssm_client` | Cold start and emergency contacts never create an ssm client. |
+| `test_emergency_contacts_does_not_load_provider_keys` | Emergency contacts does not load provider keys. |
+| `test_a_successful_read_is_cached` | A successful read is cached. |
+| `test_parameter_not_found_is_a_successful_read_and_is_cached` | Parameter not found is a successful read and is cached. |
+| `test_a_failed_read_is_not_cached_and_the_next_call_retries` | A failed read is not cached and the next call retries. |
+| `test_calls_inside_the_backoff_window_do_not_call_ssm` | Calls inside the backoff window do not call ssm. |
+| `test_a_call_29_seconds_after_a_failure_does_not_reach_ssm` | A call 29s after a failure stays inside the 30s backoff window. |
+| `test_a_retry_that_fails_again_starts_a_new_window` | A retry that fails again starts a new window. |
+| `test_ssm_client_is_created_with_short_timeouts` | Ssm client is created with short timeouts. |
+| `test_accessors_recover_once_keys_become_available` | Accessors recover once keys become available. |
+| `test_default_parameter_names_are_used_when_env_vars_are_unset` | Default parameter names are used when env vars are unset. |
+| `test_env_var_parameter_names_are_passed_to_ssm` | Env var parameter names are passed to ssm. |
+| `test_a_missing_gemini_key_is_logged_and_groq_still_works` | A missing gemini key is logged and groq still works. |
+| `test_access_denied_on_gemini_alone_still_loads_groq` | Access denied on gemini alone still loads groq. |
+| `test_access_denied_on_both_keys_is_a_failure_and_backs_off` | Access denied on both keys is a failure and backs off. |
+| `test_a_non_permission_error_during_per_key_reads_is_a_failure` | A non permission error during per key reads is a failure. |
+| `test_access_denied_on_the_only_configured_key_is_one_call_and_backs_off` | Access denied on the only configured key is one call and backs off. |
+| `test_key_found_lines_are_printed_once_per_container` | Key found lines are printed once per container. |
+| `test_accessors_return_none_without_keys` | Accessors return none without keys. |
+| `test_accessor_swallows_a_constructor_failure` | Accessor swallows a constructor failure. |
+| `test_gemini_client_accessor_swallows_a_constructor_failure` | Gemini client accessor swallows a constructor failure. |
+| `test_groq_llm_accessor_swallows_a_constructor_failure` | Groq llm accessor swallows a constructor failure. |
+| `test_gemini_llm_accessor_swallows_a_constructor_failure` | Gemini llm accessor swallows a constructor failure. |
+
+> 23 test functions expand to 24 cases through parametrisation.
+
 ### `test_memory_controls.py`
 
 *Integration · issue #197 · 5 tests*
@@ -550,7 +587,7 @@ Unit contract for the shared model fallback chain (issue #193).
 
 ### `test_org_search_contract.py`
 
-*Contract · issue #170 · 24 tests*
+*Contract · issue #170 · 25 tests*
 
 Tests for More Organizations / the Organizations tab - issue #170.
 
@@ -574,6 +611,7 @@ Tests for More Organizations / the Organizations tab - issue #170.
 | `test_groq_is_used_alone_when_it_succeeds` | Groq is used alone when it succeeds. |
 | `test_a_provider_returning_no_organizations_falls_through_to_the_next` | A provider returning no organizations falls through to the next. |
 | `test_an_unconfigured_provider_is_skipped_not_fatal` | An unconfigured provider is skipped not fatal. |
+| `test_with_no_groq_key_the_real_loaders_serve_gemini` | With only a Gemini key, the real loaders skip Groq and serve Gemini. |
 | `test_every_provider_failing_raises_rather_than_returning_an_empty_success` | Every provider failing raises rather than returning an empty success. |
 | `test_total_provider_failure_is_a_502_with_a_code_and_a_list` | Total provider failure is a 502 with a code and a list. |
 | `test_description_is_required` | Description is required. |
