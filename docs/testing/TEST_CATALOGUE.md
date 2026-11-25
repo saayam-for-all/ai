@@ -39,6 +39,7 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_import_blast_radius.py`](../../tests/test_import_blast_radius.py) | Integration | #169, #171 | `module-scope imports` | 4 |
 | [`tests/test_model_fallback.py`](../../tests/test_model_fallback.py) | Unit | #193 | `utils/model_fallback.py` | 24 |
 | [`tests/test_org_search_contract.py`](../../tests/test_org_search_contract.py) | Contract | #170 | `utils/search_orgs.py` | 24 |
+| [`tests/test_prompt_emergency_numbers.py`](../../tests/test_prompt_emergency_numbers.py) | Unit | #258 | `utils/prompts.py answer prompts` | 17 |
 | [`tests/test_request_db_schema.py`](../../tests/test_request_db_schema.py) | Unit | #169 | `utils/request_db.py` | 54 |
 | [`tests/test_response_contract.py`](../../tests/test_response_contract.py) | Contract | #146, #169, #170 | `response envelopes` | 10 |
 | [`tests/test_router.py`](../../tests/test_router.py) | Integration | #171 | `lambda_function.lambda_handler` | 34 |
@@ -47,7 +48,7 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_skill_suggestion.py`](../../tests/test_skill_suggestion.py) | Unit | #216 | `services/skill_suggestion_service.py` | 76 |
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
 | [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 57 |
-| | | | **Total** | **726** |
+| | | | **Total** | **743** |
 
 ## Every test
 
@@ -453,6 +454,26 @@ Tests for More Organizations / the Organizations tab - issue #170.
 | `test_missing_location_defaults_and_missing_subject_is_tolerated` | Missing location defaults and missing subject is tolerated. |
 | `test_category_is_passed_through_to_the_search` | Category is passed through to the search. |
 | `test_unified_router_reaches_search_orgs` | Unified router reaches search orgs. |
+
+### `test_prompt_emergency_numbers.py`
+
+*Unit · issue #258 · 17 tests*
+
+No answer prompt may name an emergency number - issue #258, Task A.
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_detector_catches_the_numbers_the_prompts_used_to_carry` | Prove the check bites: the old wording must be flagged. |
+| `test_detector_ignores_list_markers_limits_and_percentages` | Detector ignores list markers limits and percentages. |
+| `test_dataset_numbers_are_loaded` | Dataset numbers are loaded. |
+| `test_no_prompt_names_an_emergency_number` | No prompt names an emergency number. |
+| `test_no_prompt_contains_any_phone_like_number` | No prompt contains any phone like number. |
+| `test_every_category_is_rendered_on_both_paths` | Every category is rendered on both paths. |
+| `test_no_category_template_names_an_emergency_number` | No category template names an emergency number. |
+| `test_urgent_prompts_point_to_emergency_contacts` | Urgent prompts point to emergency contacts. |
+| `test_urgent_categories_exist` | Urgent categories exist. |
+
+> 9 test functions expand to 17 cases through parametrisation.
 
 ### `test_request_db_schema.py`
 
