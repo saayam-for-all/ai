@@ -39,6 +39,7 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_import_blast_radius.py`](../../tests/test_import_blast_radius.py) | Integration | #169, #171 | `module-scope imports` | 4 |
 | [`tests/test_model_fallback.py`](../../tests/test_model_fallback.py) | Unit | #193 | `utils/model_fallback.py` | 24 |
 | [`tests/test_org_search_contract.py`](../../tests/test_org_search_contract.py) | Contract | #170 | `utils/search_orgs.py` | 24 |
+| [`tests/test_prompt_config.py`](../../tests/test_prompt_config.py) | - | #160 | `config/all_prompts.py, utils/prompts.py, utils/prompts_no_hallucination_reviewed.py` | 11 |
 | [`tests/test_request_db_schema.py`](../../tests/test_request_db_schema.py) | Unit | #169 | `utils/request_db.py` | 54 |
 | [`tests/test_response_contract.py`](../../tests/test_response_contract.py) | Contract | #146, #169, #170 | `response envelopes` | 10 |
 | [`tests/test_router.py`](../../tests/test_router.py) | Integration | #171 | `lambda_function.lambda_handler` | 34 |
@@ -46,8 +47,9 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_skill_eval_scoring.py`](../../tests/test_skill_eval_scoring.py) | Unit | #216 | `tools/skill_eval_scoring.py` | 36 |
 | [`tests/test_skill_suggestion.py`](../../tests/test_skill_suggestion.py) | Unit | #216 | `services/skill_suggestion_service.py` | 76 |
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
+| [`tests/test_taxonomy_config.py`](../../tests/test_taxonomy_config.py) | - | #160 | `config/category_with_desc.json, utils/predict_category_list.py, services/classification_service.py` | 6 |
 | [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 57 |
-| | | | **Total** | **726** |
+| | | | **Total** | **743** |
 
 ## Every test
 
@@ -454,6 +456,24 @@ Tests for More Organizations / the Organizations tab - issue #170.
 | `test_category_is_passed_through_to_the_search` | Category is passed through to the search. |
 | `test_unified_router_reaches_search_orgs` | Unified router reaches search orgs. |
 
+### `test_prompt_config.py`
+
+*- · issue #160 · 11 tests*
+
+Prompt config.
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_category_prompt_count` | Ensure all 37 existing prompts are preserved. |
+| `test_general_fallback_exists` | Ensure the default fallback prompt is available. |
+| `test_category_prompt_keys_match` | Ensure both dictionaries support the same categories. |
+| `test_category_prompt_formatting` | Ensure blank lines surround the base instruction. |
+| `test_category_prompt_indentation` | Ensure prompt strings contain no unintended indentation. |
+| `test_standard_prompt_import_consistency` | Ensure the standard prompt module uses the config. |
+| `test_no_hallucination_prompt_import_consistency` | Ensure the no-hallucination module uses the config. |
+
+> 7 test functions expand to 11 cases through parametrisation.
+
 ### `test_request_db_schema.py`
 
 *Unit · issue #169 · 54 tests*
@@ -714,6 +734,21 @@ Unit tests for the Generate Subject service.
 | `test_prompt_keeps_no_status_word_rule` | Prompt keeps no status word rule. |
 | `test_prompt_forbids_subject_label_in_output` | Prompt forbids subject label in output. |
 | `test_prompt_includes_the_description` | Prompt includes the description. |
+
+### `test_taxonomy_config.py`
+
+*- · issue #160 · 6 tests*
+
+Taxonomy config.
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_taxonomy_category_count` | Ensure the config contains all 80 existing categories. |
+| `test_taxonomy_parent_ids` | Ensure every parent is null or references a valid category. |
+| `test_help_categories_matches_config` | Ensure category ID-to-name mapping matches the config. |
+| `test_taxonomy_descriptions_match_config` | Ensure category name-to-description mapping matches the config. |
+| `test_top_level_categories_unchanged` | Ensure the seven existing top-level categories are preserved. |
+| `test_new_category_from_config` | Ensure a new config category is recognized by the classifier. |
 
 ### `test_token_usage.py`
 
