@@ -54,6 +54,7 @@ FILE_META = {
     "test_emergency_location_fields.py": ("#146, webapp#1959", "location_source, display_location"),
     "test_token_usage.py": ("#159", "utils/token_usage.py"),
     "test_model_fallback.py": ("#193", "utils/model_fallback.py"),
+    "test_model_health_probe.py": ("#195", "utils/model_health_probe.py"),
     "test_client_factory.py": ("#193", "utils/client.py create_chat_model"),
 }
 
