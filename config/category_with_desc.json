@@ -1,0 +1,402 @@
+{
+  "0.0.0.0.0": {
+    "name": "GENERAL_CATEGORY",
+    "parent": null,
+    "description": "Use only for requests that are truly unclear or do not fit any defined support area. Do not use when the request is clearly about health, emotional support, education, housing, food, clothing, or elderly assistance."
+  },
+  "1": {
+    "name": "FOOD_AND_ESSENTIALS",
+    "parent": null,
+    "description": "Parent category for all food and basic essentials-related assistance."
+  },
+  "1.1": {
+    "name": "FOOD_ASSISTANCE",
+    "parent": "1",
+    "description": "Help users find food banks, pantries, and government meal programs."
+  },
+  "1.2": {
+    "name": "GROCERY_SHOPPING_AND_DELIVERY",
+    "parent": "1",
+    "description": "Request help with grocery shopping and doorstep delivery by volunteers."
+  },
+  "1.3": {
+    "name": "COOKING_HELP",
+    "parent": "1",
+    "description": "Users can request help from volunteers to assist with basic cooking and kitchen tasks."
+  },
+  "1.3.1": {
+    "name": "MEAL_PREP_BASIC",
+    "parent": "1.3",
+    "description": "Assistance with basic meal preparation and simple cooking."
+  },
+  "1.3.2": {
+    "name": "FESTIVE_OR_BULK_COOKING",
+    "parent": "1.3",
+    "description": "Help with cooking for festivals, events, or bulk meal preparation."
+  },
+  "1.3.3": {
+    "name": "NUTRITIONAL_MEAL_PLANNING",
+    "parent": "1.3",
+    "description": "Guidance on nutritious meal planning and balanced diets."
+  },
+  "1.3.4": {
+    "name": "CULTURAL_CUISINE_GUIDANCE",
+    "parent": "1.3",
+    "description": "Help with preparing or understanding specific cultural or traditional cuisines."
+  },
+  "1.3.5": {
+    "name": "OTHER_COOKING_HELP",
+    "parent": "1.3",
+    "description": "Other cooking-related assistance not covered by the above."
+  },
+  "2": {
+    "name": "CLOTHING_ASSISTANCE",
+    "parent": null,
+    "description": "Parent category for all clothing-related assistance and services."
+  },
+  "2.1": {
+    "name": "DONATE_CLOTHES",
+    "parent": "2",
+    "description": "Use when the user offers to donate or give away clothes."
+  },
+  "2.2": {
+    "name": "BORROW_CLOTHES",
+    "parent": "2",
+    "description": "Use when the user needs clothes for themselves or family."
+  },
+  "2.3": {
+    "name": "EMERGENCY_CLOTHING_ASSISTANCE",
+    "parent": "2",
+    "description": "Use when urgent clothing is needed due to crisis or displacement."
+  },
+  "2.4": {
+    "name": "TAILORING",
+    "parent": "2",
+    "description": "Use for clothing repairs like seams, zippers, or alterations."
+  },
+  "3": {
+    "name": "HOUSING_ASSISTANCE",
+    "parent": null,
+    "description": "Parent category for all housing-related assistance and services."
+  },
+  "3.1": {
+    "name": "LEASE_SUPPORT",
+    "parent": "3",
+    "description": "Assistance understanding or navigating lease agreements and landlord matters."
+  },
+  "3.2": {
+    "name": "TENANT_RENT_SUPPORT",
+    "parent": "3",
+    "description": "Support with rent-related issues, tenant rights, and rental affordability."
+  },
+  "3.3": {
+    "name": "REPAIR_MAINTENANCE_SUPPORT",
+    "parent": "3",
+    "description": "Support for home repairs and maintenance tasks."
+  },
+  "3.3.1": {
+    "name": "PLUMBING",
+    "parent": "3.3",
+    "description": "Plumbing repairs, leaks, and fixture installation or repair."
+  },
+  "3.3.2": {
+    "name": "HANDYMAN",
+    "parent": "3.3",
+    "description": "General handyman tasks and small fixes around the home."
+  },
+  "3.3.3": {
+    "name": "ELECTRICIAN",
+    "parent": "3.3",
+    "description": "Electrical repairs, wiring, and fixture installation."
+  },
+  "3.3.4": {
+    "name": "CARPENTRY",
+    "parent": "3.3",
+    "description": "Carpentry work including furniture repair and basic woodwork."
+  },
+  "3.3.5": {
+    "name": "GARDEN",
+    "parent": "3.3",
+    "description": "Garden maintenance, landscaping, and outdoor upkeep."
+  },
+  "3.3.6": {
+    "name": "HVAC_AIR_CONDITIONING",
+    "parent": "3.3",
+    "description": "Heating, ventilation, and air conditioning repair or maintenance."
+  },
+  "3.3.7": {
+    "name": "ROOFING",
+    "parent": "3.3",
+    "description": "Roof repair, inspection, and maintenance."
+  },
+  "3.3.8": {
+    "name": "LOCKSMITH",
+    "parent": "3.3",
+    "description": "Lock repair, key duplication, and security hardware."
+  },
+  "3.3.9": {
+    "name": "PAINTING",
+    "parent": "3.3",
+    "description": "Interior or exterior painting and touch-ups."
+  },
+  "3.3.10": {
+    "name": "MASONRY_OR_CONCRETE",
+    "parent": "3.3",
+    "description": "Masonry, concrete work, and structural repairs."
+  },
+  "3.3.11": {
+    "name": "METALWORK_OR_WELDING",
+    "parent": "3.3",
+    "description": "Metalwork, welding, and metal repair."
+  },
+  "3.3.12": {
+    "name": "POOL_AND_SPA_MAINTENANCE",
+    "parent": "3.3",
+    "description": "Pool and spa cleaning, repair, and maintenance."
+  },
+  "3.3.13": {
+    "name": "OTHER_REPAIR_MAINTENANCE_SUPPORT",
+    "parent": "3.3",
+    "description": "Other repair or maintenance not listed above."
+  },
+  "3.4": {
+    "name": "UTILITIES_SETUP_SUPPORT",
+    "parent": "3",
+    "description": "Assistance setting up internet, electricity, water, and other services during move-in."
+  },
+  "3.5": {
+    "name": "LOOKING_FOR_RENTAL",
+    "parent": "3",
+    "description": "Help finding rental listings and suitable housing."
+  },
+  "3.6": {
+    "name": "FIND_ROOMATE",
+    "parent": "3",
+    "description": "Help users find compatible roommates by posting listings or providing guidance."
+  },
+  "3.7": {
+    "name": "MOVE_IN_HELP",
+    "parent": "3",
+    "description": "In-person support for packing, sorting, or organizing during a move."
+  },
+  "3.8": {
+    "name": "BOOKING_PACKERS_MOVERS_SUPPORT",
+    "parent": "3",
+    "description": "Assistance booking or coordinating packers and movers."
+  },
+  "3.9": {
+    "name": "BUY_THINGS",
+    "parent": "3",
+    "description": "Help buying secondhand or new furniture and home essentials."
+  },
+  "3.10": {
+    "name": "SELL_THINGS",
+    "parent": "3",
+    "description": "Help selling furniture, household items, or other belongings."
+  },
+  "4": {
+    "name": "EDUCATION_CAREER_SUPPORT",
+    "parent": null,
+    "description": "Parent category for school, college, academics, tutoring, scholarships, study resources, resumes, interviews, and job or career development. Do not use for general health, wellness, emotional support, or medical guidance."
+  },
+  "4.1": {
+    "name": "COLLEGE_APPLICATION_HELP",
+    "parent": "4",
+    "description": "Guidance for navigating college application tasks."
+  },
+  "4.2": {
+    "name": "SOP_ESSAY_REVIEW",
+    "parent": "4",
+    "description": "Review and feedback on SOPs, essays, and academic statements."
+  },
+  "4.3": {
+    "name": "TUTORING",
+    "parent": "4",
+    "description": "Academic tutoring for specific subjects or standardized tests."
+  },
+  "4.3.1": {
+    "name": "MATH",
+    "parent": "4.3",
+    "description": "Tutoring in mathematics."
+  },
+  "4.3.2": {
+    "name": "ENGLISH",
+    "parent": "4.3",
+    "description": "Tutoring in English language and literature."
+  },
+  "4.3.3": {
+    "name": "SCIENCE",
+    "parent": "4.3",
+    "description": "Tutoring in science subjects (e.g., physics, chemistry, biology)."
+  },
+  "4.3.4": {
+    "name": "COMPUTER_SCIENCE",
+    "parent": "4.3",
+    "description": "Tutoring in computer science and programming."
+  },
+  "4.3.5": {
+    "name": "TEST_PREP",
+    "parent": "4.3",
+    "description": "Standardized test preparation (e.g., SAT, GRE, GMAT)."
+  },
+  "4.3.6": {
+    "name": "OTHER_SUBJECTS",
+    "parent": "4.3",
+    "description": "Tutoring in other subjects not listed above."
+  },
+  "4.4": {
+    "name": "SCHOLARSHIP_KNOWLEDGE",
+    "parent": "4",
+    "description": "Information and guidance on scholarships and financial aid."
+  },
+  "4.5": {
+    "name": "STUDY_GROUP_FORMATION",
+    "parent": "4",
+    "description": "Help forming or joining study groups."
+  },
+  "4.6": {
+    "name": "CAREER_GUIDANCE",
+    "parent": "4",
+    "description": "Use for career advice, resume review, interview preparation, networking, and job search support. Do not use for health advice, wellness questions, or emotional support."
+  },
+  "4.7": {
+    "name": "EDUCATION_RESOURCE_SHARING",
+    "parent": "4",
+    "description": "Use for sharing or finding academic learning resources such as books, notes, courses, and study materials. Do not use for health tips, sleep guidance, or medical information."
+  },
+  "5": {
+    "name": "HEALTHCARE_AND_WELLNESS",
+    "parent": null,
+    "description": "Parent category for health-related assistance, including physical symptom evaluation, medical consultation, preventive care questions, health and wellness guidance, and emotional or mental wellbeing support."
+  },
+  "5.1": {
+    "name": "MEDICAL_CONSULTATION",
+    "parent": "5",
+    "description": "Use for physical symptoms, pain, injury, body-part complaints, mobility issues, or requests to consult a doctor or medical specialist. Includes both general and specialty medical evaluation; not for emotional support or general wellness education."
+  },
+  "5.1.1": {
+    "name": "GENERAL_CONSULTATION",
+    "parent": "5.1",
+    "description": "Use for non-specific physical symptoms or general health concerns that need an initial medical evaluation by a doctor, including flu-like or mixed symptoms such as fever, fatigue, body aches, and sore throat when no specific specialty is clearly primary."
+  },
+  "5.1.2": {
+    "name": "ENT(EAR_NOSE_AND_THROAT)",
+    "parent": "5.1",
+    "description": "Use for clearly localized ear, nose, sinus, or throat complaints, or requests to see an ENT specialist. Do not use when the request is mainly about broad flu-like or whole-body illness without a clearly primary ENT issue."
+  },
+  "5.1.3": {
+    "name": "DENTAL_OR_ORAL_HEALTH",
+    "parent": "5.1",
+    "description": "Dental and oral health consultation and guidance."
+  },
+  "5.1.4": {
+    "name": "EYE_OR_VISION_CARE",
+    "parent": "5.1",
+    "description": "Use for blurred vision, eye pain, eye strain, watering, discomfort, trouble seeing, or requests to consult an eye doctor or vision specialist."
+  },
+  "5.1.5": {
+    "name": "CARDIAC_OR_BLOOD_PRESSURE",
+    "parent": "5.1",
+    "description": "Cardiac health and blood pressure related guidance."
+  },
+  "5.1.6": {
+    "name": "ORTHOPEDIC_OR_PHYSIOTHERAPY",
+    "parent": "5.1",
+    "description": "Use for joint, muscle, bone, back, neck, shoulder, arm, leg, or mobility problems, including stiffness, injury, rehabilitation, and physiotherapy or orthopedic evaluation."
+  },
+  "5.1.7": {
+    "name": "SKIN_OR_DERMATOLOGY",
+    "parent": "5.1",
+    "description": "Skin and dermatology related consultation."
+  },
+  "5.1.8": {
+    "name": "WOMENS_OR_REPRODUCTIVE_HEALTH",
+    "parent": "5.1",
+    "description": "Women's health and reproductive health guidance."
+  },
+  "5.1.9": {
+    "name": "VACCINATIONS_AND_PREVENTIVE_SCREENINGS",
+    "parent": "5.1",
+    "description": "Use for vaccinations, immunizations, vaccine schedules or requirements, preventive screenings, and routine preventive medical checks. This includes questions about when vaccines are due, including school-related vaccine requirements. Not for general wellness tips or non-diagnostic health education."
+  },
+  "5.1.10": {
+    "name": "PEDIATRICS_OR_CHILD_HEALTH",
+    "parent": "5.1",
+    "description": "Pediatric and child health related consultation."
+  },
+  "5.1.11": {
+    "name": "OTHER_MEDICAL_CONCERN",
+    "parent": "5.1",
+    "description": "Other medical concerns not listed above."
+  },
+  "5.2": {
+    "name": "MEDICINE_DELIVERY",
+    "parent": "5",
+    "description": "Assist with OTC medication pickup or pharmacy navigation."
+  },
+  "5.3": {
+    "name": "MENTAL_WELLBEING_SUPPORT",
+    "parent": "5",
+    "description": "Use for explicit emotional or psychological support needs such as anxiety, depression, stress, panic, counseling, therapy, coping, loneliness, grief, or wanting someone to talk to. Do not use for physical pain, injury, mobility issues, or medical symptom evaluation unless the request is primarily about mental health or emotional support."
+  },
+  "5.4": {
+    "name": "MEDICATION_REMINDERS",
+    "parent": "5",
+    "description": "Use only for medication-taking reminders, schedules, alarms, or prompts for OTC medication or supplements. This category is about remembering to take medicine, not about sleep hygiene, bedtime routines, rest, wellness coaching, or broader health education."
+  },
+  "5.5": {
+    "name": "HEALTH_EDUCATION_GUIDANCE",
+    "parent": "5",
+    "description": "Use for general health information or wellness education such as hygiene, sleep hygiene, bedtime routines, rest, nutrition, healthy habits, preventive care education, and routine-care questions like when to get checkups or eye exams. Do not use for vaccinations or immunization schedules, and do not use when the person is asking for diagnosis, symptom evaluation, or a doctor/specialist consultation."
+  },
+  "6": {
+    "name": "ELDERLY_COMMUNITY_ASSISTANCE",
+    "parent": null,
+    "description": "Parent category for elderly and community-related support."
+  },
+  "6.1": {
+    "name": "SENIOR_RELOCATION_SUPPORT",
+    "parent": "6",
+    "description": "Help seniors find housing and assist with the moving process."
+  },
+  "6.2": {
+    "name": "DIGITAL_SUPPORT_FOR_SENIORS",
+    "parent": "6",
+    "description": "Support with using phones, tablets, and apps."
+  },
+  "6.3": {
+    "name": "MEDICATION_MANAGEMENT",
+    "parent": "6",
+    "description": "Medication reminders or help organizing medications (non-clinical)."
+  },
+  "6.4": {
+    "name": "MEDICAL_DEVICES_SETUP",
+    "parent": "6",
+    "description": "Help setting up or using medical devices at home (non-clinical)."
+  },
+  "6.5": {
+    "name": "ERRANDS_EVENTS_TRANSPORTATION",
+    "parent": "6",
+    "description": "Assistance with errands or transport to events."
+  },
+  "6.6": {
+    "name": "TRANSPORTATION_APPOINTMENTS_EVENTS",
+    "parent": "6",
+    "description": "Transport to appointments, events, or other destinations."
+  },
+  "6.7": {
+    "name": "SCHEDULING_APPOINTMENTS_OR_TASKS",
+    "parent": "6",
+    "description": "Help scheduling appointments or organizing tasks."
+  },
+  "6.8": {
+    "name": "SOCIAL_CONNECTION",
+    "parent": "6",
+    "description": "Companionship and social activities (calls, walks, games)."
+  },
+  "6.9": {
+    "name": "MEAL_SUPPORT",
+    "parent": "6",
+    "description": "Help cooking meals or prepping food based on dietary needs."
+  }
+}
