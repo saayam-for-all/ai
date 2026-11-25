@@ -5,18 +5,13 @@ Each prompt emphasizes using location, gender, age, subject, and description con
 from config.all_prompts import (
     NOT_SPECIFIED,
     BASE_INSTRUCTION,
-    CATEGORY_PROMPTS_PROMPTS,
+    CATEGORY_PROMPTS,
     CONVERSATIONAL_BASE_INSTRUCTION,
     CONVERSATIONAL_CONTEXT,
 )
 
 # Constants
-NOT_SPECIFIED = NOT_SPECIFIED
-
-BASE_INSTRUCTION = BASE_INSTRUCTION
-
-category_prompts = CATEGORY_PROMPTS_PROMPTS
-
+category_prompts = CATEGORY_PROMPTS
 
 def get_prompt(category: str, subject: str, description: str, location: str = "", gender: str = "", age: str = "") -> str:
     """
@@ -83,7 +78,6 @@ def get_prompt(category: str, subject: str, description: str, location: str = ""
     )
     
     return formatted_prompt
-
 
 def get_conversational_prompt(category: str, subject: str, location: str = "", gender: str = "", age: str = "") -> str:
     """

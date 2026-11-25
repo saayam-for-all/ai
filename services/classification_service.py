@@ -1,10 +1,10 @@
 import json
-from pathlib import Path
 # from utils.categories_with_description import TAXONOMY
 from utils.client import client, _use_groq, _gemini_client
 from utils.model_fallback import ModelResponseError, ModelTarget, run_model_chain
 from utils.predict_category_list import (
     help_categories,
+    TAXONOMY,
     category_name_to_number,
     get_top_level_categories,
     get_direct_children,
@@ -19,22 +19,6 @@ from config.all_prompts import (
     SINGLE_CLASSIFICATION_OUTPUT,
     RANKED_CLASSIFICATION_OUTPUT,
 )
-
-
-
-CONFIG_PATH = (
-    Path(__file__).resolve().parent.parent
-    / "config"
-    / "category_with_desc.json"
-)
-
-with CONFIG_PATH.open("r", encoding="utf-8") as f:
-    category_config = json.load(f)
-
-TAXONOMY = {
-    details["name"]: details["description"]
-    for details in category_config.values()
-}
 
 
 

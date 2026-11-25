@@ -1,22 +1,37 @@
 import json
 from pathlib import Path
 
-
 CONFIG_PATH = (
     Path(__file__).resolve().parent.parent
     / "config"
     / "category_with_desc.json"
 )
 
-with CONFIG_PATH.open("r", encoding="utf-8") as f:
-    taxonomy = json.load(f)
+def load_taxonomy(path=CONFIG_PATH):
+    """Load category configuration from a JSON file."""
+    with Path(path).open("r", encoding="utf-8") as f:
+        return json.load(f)
 
 
-# File contains all the help categories mapped to their string constants.
-help_categories = {
-    category_id: details["name"]
-    for category_id, details in taxonomy.items()
-}
+def build_taxonomy_mappings(taxonomy):
+    """Build category name and description mappings from the taxonomy."""
+
+    help_categories = {
+        category_id: details["name"]
+        for category_id, details in taxonomy.items()
+    }
+
+    descriptions = {
+        details["name"]: details["description"]
+        for details in taxonomy.values()
+    }
+
+    return help_categories, descriptions
+
+
+taxonomy = load_taxonomy()
+
+help_categories, TAXONOMY = build_taxonomy_mappings(taxonomy)
 
 
 # Reverse mapping: category name -> category number

@@ -5,21 +5,14 @@ Each prompt emphasizes using location, gender, age, subject, and description con
 from config.all_prompts import (
     NOT_SPECIFIED,
     BASE_INSTRUCTION,
-    CATEGORY_PROMPTS_PROMPTS_NO_HALLUCINATIONS,
+    CATEGORY_PROMPTS_NO_HALLUCINATIONS,
     CONVERSATIONAL_BASE_INSTRUCTION,
     CONVERSATIONAL_CONTEXT,
     CONTEXT_LIMITATION,
 )
 
 # Constants
-NOT_SPECIFIED = NOT_SPECIFIED
-
-BASE_INSTRUCTION = BASE_INSTRUCTION
-
-CONTEXT_LIMITATION = CONTEXT_LIMITATION
-
-category_prompts = CATEGORY_PROMPTS_PROMPTS_NO_HALLUCINATIONS
-
+category_prompts = CATEGORY_PROMPTS_NO_HALLUCINATIONS
 
 def get_prompt(category: str, subject: str, description: str, location: str = "", gender: str = "", age: str = "") -> str:
     """
