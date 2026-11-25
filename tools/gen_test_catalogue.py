@@ -54,6 +54,7 @@ FILE_META = {
     "test_emergency_location_fields.py": ("#146, webapp#1959", "location_source, display_location"),
     "test_token_usage.py": ("#159", "utils/token_usage.py"),
     "test_model_fallback.py": ("#193", "utils/model_fallback.py"),
+    "test_induced_failure_drills.py": ("#195", "provider outages across the four GenAI handlers"),
     "test_client_factory.py": ("#193", "utils/client.py create_chat_model"),
     "test_gardening_category.py": ("#217", "services/classification_service.py"),
     "test_lambda_session_memory.py": ("#197", "generate_answer_handler session memory"),
