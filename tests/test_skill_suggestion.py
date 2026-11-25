@@ -113,9 +113,8 @@ class _FakeGemini:
 
 def _install(monkeypatch, groq=None, gemini=None):
     """Stub the providers the skill suggestion service talks to."""
-    monkeypatch.setattr(ss, "client", groq)
-    monkeypatch.setattr(ss, "_use_groq", groq is not None)
-    monkeypatch.setattr(ss, "_gemini_client", gemini)
+    monkeypatch.setattr(ss, "get_groq_client", lambda: groq)
+    monkeypatch.setattr(ss, "get_gemini_client", lambda: gemini)
 
 
 def _primary_returns(monkeypatch, payload):
@@ -634,9 +633,8 @@ def test_request_without_mode_returns_exactly_what_it_did_before(monkeypatch, mo
             {"category": "4.3.2", "confidence": 0.2},
         ]}),
     ])
-    monkeypatch.setattr(cs, "client", groq)
-    monkeypatch.setattr(cs, "_use_groq", True)
-    monkeypatch.setattr(cs, "_gemini_client", None)
+    monkeypatch.setattr(cs, "get_groq_client", lambda: groq)
+    monkeypatch.setattr(cs, "get_gemini_client", lambda: None)
     monkeypatch.setattr(LF, "suggest_skills", mock.Mock(side_effect=AssertionError("volunteer path taken")))
 
     response = LF.predict_category_handler(

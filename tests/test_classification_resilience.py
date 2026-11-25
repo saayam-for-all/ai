@@ -25,6 +25,11 @@ from utils import token_usage
 from utils.model_fallback import ModelChainExhausted, ModelTarget
 
 
+def _returning(value):
+    """An accessor stand-in that always hands back the same object."""
+    return lambda: value
+
+
 # Category prediction degrades rather than failing when the model or its
 # artefacts are unavailable.
 pytestmark = pytest.mark.unit
@@ -122,9 +127,8 @@ def _assert_groq_error_falls_back(monkeypatch, exc):
         }
     )
     gemini = _RecordingGemini(payload={"category": "1", "confidence": 0.9})
-    monkeypatch.setattr(cs, "client", groq)
-    monkeypatch.setattr(cs, "_use_groq", True)
-    monkeypatch.setattr(cs, "_gemini_client", gemini)
+    monkeypatch.setattr(cs, "get_groq_client", _returning(groq))
+    monkeypatch.setattr(cs, "get_gemini_client", _returning(gemini))
 
     result = cs.GroqClassificationService()._predict_one_level(
         "I need help with math",
@@ -193,9 +197,8 @@ def test_primary_failure_tries_secondary_groq_before_gemini(
         }
     )
     gemini = _RecordingGemini(payload=successful_payload)
-    monkeypatch.setattr(cs, "client", groq)
-    monkeypatch.setattr(cs, "_use_groq", True)
-    monkeypatch.setattr(cs, "_gemini_client", gemini)
+    monkeypatch.setattr(cs, "get_groq_client", _returning(groq))
+    monkeypatch.setattr(cs, "get_gemini_client", _returning(gemini))
 
     service = cs.GroqClassificationService()
     result = getattr(service, method_name)(
@@ -222,9 +225,8 @@ def test_healthy_primary_is_not_retried(monkeypatch):
     payload = {"categories": [{"category": "1", "confidence": 0.95}]}
     groq = _ModelAwareGroq({primary: _groq_response(payload)})
     gemini = _RecordingGemini(payload=payload)
-    monkeypatch.setattr(cs, "client", groq)
-    monkeypatch.setattr(cs, "_use_groq", True)
-    monkeypatch.setattr(cs, "_gemini_client", gemini)
+    monkeypatch.setattr(cs, "get_groq_client", _returning(groq))
+    monkeypatch.setattr(cs, "get_gemini_client", _returning(gemini))
 
     result = cs.GroqClassificationService()._predict_ranked_level(
         "I need help with math",
@@ -247,9 +249,8 @@ def test_all_groq_failures_reach_the_configured_gemini_model(monkeypatch):
     )
     payload = {"categories": [{"category": "1", "confidence": 0.88}]}
     gemini = _RecordingGemini(payload=payload)
-    monkeypatch.setattr(cs, "client", groq)
-    monkeypatch.setattr(cs, "_use_groq", True)
-    monkeypatch.setattr(cs, "_gemini_client", gemini)
+    monkeypatch.setattr(cs, "get_groq_client", _returning(groq))
+    monkeypatch.setattr(cs, "get_gemini_client", _returning(gemini))
 
     result = cs.GroqClassificationService()._predict_ranked_level(
         "I need help with math",

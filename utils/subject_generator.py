@@ -4,10 +4,8 @@ from utils import token_usage
 from utils.client import (
     GEMINI_MODEL,
     GROQ_MODEL,
-    _use_gemini,
-    _use_groq,
-    gemini_llm,
-    groq_llm,
+    get_gemini_llm,
+    get_groq_llm,
 )
 
 # Strips a leading "Subject:" / "Title:" label that some models prepend despite
@@ -116,7 +114,7 @@ Description: {description}"""
         truncated = description[:max_length]
 
         # Try Groq (LangChain) first
-        if _use_groq and groq_llm:
+        if (groq_llm := get_groq_llm()) is not None:
             try:
                 content = _invoke_counted(
                     groq_llm, prompt, "groq", GROQ_MODEL, usage, "short"
@@ -131,7 +129,7 @@ Description: {description}"""
                 print(f"Error generating subject with Groq (LangChain), trying Gemini: {str(e)}")
 
         # Fallback to Gemini (LangChain)
-        if _use_gemini and gemini_llm:
+        if (gemini_llm := get_gemini_llm()) is not None:
             try:
                 content = _invoke_counted(
                     gemini_llm, prompt, "gemini", GEMINI_MODEL, usage, "short"
@@ -152,7 +150,7 @@ Description: {description}"""
     # ---------- CASE 2: Long description ----------
 
     # Try Groq (LangChain) first
-    if _use_groq and groq_llm:
+    if (groq_llm := get_groq_llm()) is not None:
         try:
             content = _invoke_counted(
                 groq_llm, prompt, "groq", GROQ_MODEL, usage, "long"
@@ -167,7 +165,7 @@ Description: {description}"""
             print(f"Error generating subject with Groq (LangChain), trying Gemini: {str(e)}")
 
     # Fallback to Gemini (LangChain)
-    if _use_gemini and gemini_llm:
+    if (gemini_llm := get_gemini_llm()) is not None:
         try:
             content = _invoke_counted(
                 gemini_llm, prompt, "gemini", GEMINI_MODEL, usage, "long"

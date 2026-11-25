@@ -10,6 +10,28 @@ team works and reviews in.
 
 ## Unreleased
 
+### SSM parameter names and partial provider key reads — [#237](https://github.com/saayam-for-all/ai/issues/237)
+
+**Changed**
+
+- `GROQ_PARAM_NAME` and `GEMINI_PARAM_NAME` (#252) are read when the keys are first loaded, not at import. Unset uses `/dev/saayam/GenAI/groq/key` and `/dev/saayam/GenAI/gemini/key`; an empty name still skips that provider. The warning for a parameter missing from SSM now reads `Parameters not found in SSM, continuing without them`. Caching, the 30s retry backoff and the short SSM timeouts are unchanged.
+
+**Fixed**
+
+- If the function can't read one provider's key because of a permission error (`AccessDeniedException`), it logs a warning naming that parameter and keeps working with the other provider. Previously one denied parameter failed the whole read, so neither provider loaded.
+
+### Provider keys loaded on first use — [#237](https://github.com/saayam-for-all/ai/issues/237) (Part A)
+
+**Changed**
+
+- Provider keys and provider SDKs (`groq`, `google.genai`, `langchain_groq`, `langchain_google_genai`) are loaded on first model use, not at import, so cold starts (including Emergency Contacts) skip SSM and provider SDK imports.
+- Import-time singletons replaced by accessors: `get_groq_client()`, `get_gemini_client()`, `get_groq_llm()`, `get_gemini_llm()`, `has_groq()`.
+- The `INIT LOG: ... Key Found` lines now appear on first model use, not at cold start.
+
+**Fixed**
+
+- A failed SSM read is no longer cached for the container's lifetime; it is retried after 30s.
+- The SSM client uses 2s connect/read timeouts and at most 2 attempts, staying under API Gateway's 29s limit.
 
 ### Test environment: its own key and a smoke test after every deploy · [#252](https://github.com/saayam-for-all/ai/issues/252)
 

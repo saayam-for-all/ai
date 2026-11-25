@@ -1,35 +1,177 @@
-import os
-import logging
+"""Provider clients, built on first use (#237).
+
+Keys and provider SDKs are loaded on first use, not at import; call the accessors where used."""
 from functools import lru_cache
-from groq import Groq
-from google import genai
-from langchain_groq import ChatGroq
-from langchain_google_genai import ChatGoogleGenerativeAI
+import importlib
+import logging
+import os
+import sys
+import time
+
 import boto3
+from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
 
 
 from utils.model_fallback import ModelTarget
 
 logger = logging.getLogger(__name__)
+_THIS_MODULE = sys.modules[__name__]
 
-# Parameter Store names of the provider keys. The deployed functions use the
-# defaults. The test function sets GROQ_PARAM_NAME to its own test-only key and
-# GEMINI_PARAM_NAME to an empty string, so it runs Groq-only and never asks for
-# a key its role cannot read (#252). An empty name skips that provider.
-GROQ_PARAM = os.environ.get("GROQ_PARAM_NAME", "/dev/saayam/GenAI/groq/key")
-GEMINI_PARAM = os.environ.get("GEMINI_PARAM_NAME", "/dev/saayam/GenAI/gemini/key")
+_LAZY_SDK_ATTRS = {
+    "Groq": ("groq", "Groq"),
+    "genai": ("google.genai", None),
+    "ChatGroq": ("langchain_groq", "ChatGroq"),
+    "ChatGoogleGenerativeAI": ("langchain_google_genai", "ChatGoogleGenerativeAI"),
+}
 
-# Legacy defaults used by the prebuilt LangChain exports below.
-# Keep these while subject generation still relies on those exports.
+
+def __getattr__(name: str):
+    """Load provider SDKs on first attribute access rather than at cold start."""
+    if name in _LAZY_SDK_ATTRS:
+        module_name, attr_name = _LAZY_SDK_ATTRS[name]
+        module = importlib.import_module(module_name)
+        value = getattr(module, attr_name) if attr_name else module
+        globals()[name] = value
+        return value
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+# Default Parameter Store names of the provider keys; GROQ_PARAM_NAME and
+# GEMINI_PARAM_NAME override them, read when the keys load. The test function
+# sets GROQ_PARAM_NAME to its own test-only key and GEMINI_PARAM_NAME to an
+# empty string, so it runs Groq-only and never asks for a key its role cannot
+# read (#252). An empty name skips that provider.
+GROQ_PARAM = "/dev/saayam/GenAI/groq/key"
+GEMINI_PARAM = "/dev/saayam/GenAI/gemini/key"
+
+# Legacy defaults for get_groq_llm() / get_gemini_llm().
 GROQ_MODEL = "openai/gpt-oss-20b"
 GROQ_TEMPERATURE = 0.3
 GROQ_REASONING_EFFORT = "low"
 GEMINI_MODEL = "gemini-2.5-flash"
 GEMINI_TEMPERATURE = 0.3
 
-GROQ_API_KEY = None
-GEMINI_API_KEY = None
+# After a failed read, skip SSM for this long so one request can't stack slow retries.
+FAILURE_BACKOFF_SECONDS = 30
+
+_SSM_CONFIG = Config(
+    connect_timeout=2,
+    read_timeout=2,
+    # total_max_attempts counts the first try (legacy max_attempts doesn't).
+    retries={"mode": "standard", "total_max_attempts": 2},
+)
+
+_last_failure_at: float | None = None
+
+
+def _print_key_status(groq_key, gemini_key):
+    print(f"INIT LOG: Groq Key Found: {bool(groq_key)}")
+    print(f"INIT LOG: Gemini Key Found: {bool(gemini_key)}")
+
+
+def _param_names() -> tuple[str, str]:
+    """SSM parameter names, read from the environment when keys load. Unset uses the default."""
+    return (
+        os.environ.get("GROQ_PARAM_NAME", GROQ_PARAM),
+        os.environ.get("GEMINI_PARAM_NAME", GEMINI_PARAM),
+    )
+
+
+def _is_access_denied(error: ClientError) -> bool:
+    return error.response.get("Error", {}).get("Code") == "AccessDeniedException"
+
+
+def _get_parameters(ssm, names: list[str]) -> dict[str, str]:
+    response = ssm.get_parameters(Names=names, WithDecryption=True)
+    return {p["Name"]: p["Value"] for p in response.get("Parameters", [])}
+
+
+def _get_each_parameter(ssm, names: list[str]) -> tuple[dict[str, str], list[str]]:
+    """Read names one at a time; returns (params, denied). Raises if all are denied."""
+    params, denied = {}, []
+    for name in names:
+        try:
+            params.update(_get_parameters(ssm, [name]))
+        except ClientError as e:
+            if not _is_access_denied(e):
+                raise
+            denied.append(name)
+            last_denial = e
+    if len(denied) == len(names):
+        raise last_denial
+    return params, denied
+
+
+# lru_cache doesn't cache a call that raised, so failed reads aren't cached.
+@lru_cache(maxsize=1)
+def _fetch_keys() -> tuple[str | None, str | None]:
+    """Read the configured keys from SSM; raises on failure.
+
+    An empty name is skipped. A missing or denied key is not a failure."""
+    groq_param, gemini_param = _param_names()
+    names = [n for n in (groq_param, gemini_param) if n]
+    params, denied = {}, []
+    if names:
+        ssm = boto3.client("ssm", config=_SSM_CONFIG)
+        try:
+            params = _get_parameters(ssm, names)
+        except ClientError as e:
+            if len(names) < 2 or not _is_access_denied(e):
+                raise
+            # One denied name fails the whole batch; read each so the other key still loads.
+            params, denied = _get_each_parameter(ssm, names)
+
+    if denied:
+        logger.warning("INIT: Access denied to SSM parameters, continuing without them: %s", denied)
+
+    missing = [n for n in names if n not in params and n not in denied]
+    if missing:
+        logger.warning("INIT: Parameters not found in SSM, continuing without them: %s", missing)
+
+    keys = (params.get(groq_param), params.get(gemini_param))
+    _print_key_status(*keys)
+    return keys
+
+
+def _with_local_keys(groq_key, gemini_key) -> tuple[str | None, str | None]:
+    """Off Lambda, SAAYAM_LOCAL_MODEL_KEYS=1 fills missing keys from the environment."""
+    if (
+        os.getenv("SAAYAM_LOCAL_MODEL_KEYS") == "1"
+        and not os.getenv("AWS_LAMBDA_FUNCTION_NAME")
+        and not os.getenv("AWS_EXECUTION_ENV")
+    ):
+        groq_key = groq_key or os.getenv("GROQ_API_KEY")
+        gemini_key = gemini_key or os.getenv("GEMINI_API_KEY")
+    return groq_key, gemini_key
+
+
+def _load_keys() -> tuple[str | None, str | None]:
+    """Return (groq_key, gemini_key), or (None, None) if SSM is failing."""
+    return _with_local_keys(*_load_ssm_keys())
+
+
+def _load_ssm_keys() -> tuple[str | None, str | None]:
+    global _last_failure_at
+    if (
+        _last_failure_at is not None
+        and time.monotonic() - _last_failure_at < FAILURE_BACKOFF_SECONDS
+    ):
+        return None, None
+
+    try:
+        keys = _fetch_keys()
+    except (BotoCoreError, ClientError) as e:
+        logger.error("INIT: Failed to fetch from Parameter Store: %s", str(e))
+    except Exception as e:
+        logger.exception("INIT: Unexpected error fetching from Parameter Store: %s", str(e))
+    else:
+        _last_failure_at = None
+        return keys
+
+    _last_failure_at = time.monotonic()
+    _print_key_status(None, None)
+    return None, None
 
 
 @lru_cache(maxsize=32)
@@ -48,10 +190,10 @@ def _create_chat_model_cached(
         }
         if reasoning_effort:
             kwargs["reasoning_effort"] = reasoning_effort
-        return ChatGroq(**kwargs)
+        return _THIS_MODULE.ChatGroq(**kwargs)
 
     if provider == "gemini":
-        return ChatGoogleGenerativeAI(
+        return _THIS_MODULE.ChatGoogleGenerativeAI(
             google_api_key=api_key,
             model=model_name,
             temperature=temperature,
@@ -62,10 +204,11 @@ def _create_chat_model_cached(
 
 def create_chat_model(target: ModelTarget, *, temperature: float):
     """Return a cached LangChain model for the configured target."""
+    groq_key, gemini_key = _load_keys()
     if target.provider == "groq":
-        api_key = GROQ_API_KEY
+        api_key = groq_key
     elif target.provider == "gemini":
-        api_key = GEMINI_API_KEY
+        api_key = gemini_key
     else:
         raise ValueError(f"Unsupported model provider: {target.provider}")
 
@@ -82,58 +225,50 @@ def create_chat_model(target: ModelTarget, *, temperature: float):
     )
 
 
-# Fetching keys from parameter store
-try:
-    # One request for every configured name: a name the role cannot read would
-    # fail the whole request, which is why the test function leaves Gemini out.
-    names = [n for n in (GROQ_PARAM, GEMINI_PARAM) if n]
-    params = {}
-    if names:
-        ssm = boto3.client("ssm")
-        response = ssm.get_parameters(Names=names, WithDecryption=True)
-        params = {p["Name"]: p["Value"] for p in response.get("Parameters", [])}
+@lru_cache(maxsize=4)
+def _build_groq_client(api_key: str):
+    client = _THIS_MODULE.Groq(api_key=api_key)
+    print("INIT LOG: Groq raw client initialized.")
+    return client
 
-    missing = [n for n in names if n not in params]
-    if missing:
-        logger.warning("INIT: Parameters not found in SSM: %s", missing)
 
-    GROQ_API_KEY = params.get(GROQ_PARAM)
-    GEMINI_API_KEY = params.get(GEMINI_PARAM)
+@lru_cache(maxsize=4)
+def _build_gemini_client(api_key: str):
+    client = _THIS_MODULE.genai.Client(api_key=api_key)
+    print("INIT LOG: Gemini raw client initialized.")
+    return client
 
-except (BotoCoreError, ClientError) as e:
-    logger.error("INIT: Failed to fetch from Parameter Store: %s", str(e))
 
-except Exception as e:
-    logger.exception("INIT: Unexpected error fetching from Parameter Store: %s", str(e))
-
-if (
-    os.getenv("SAAYAM_LOCAL_MODEL_KEYS") == "1"
-    and not os.getenv("AWS_LAMBDA_FUNCTION_NAME")
-    and not os.getenv("AWS_EXECUTION_ENV")
-):
-    GROQ_API_KEY = GROQ_API_KEY or os.getenv("GROQ_API_KEY")
-    GEMINI_API_KEY = GEMINI_API_KEY or os.getenv("GEMINI_API_KEY")
-# --- BOOTSTRAP LOGGING ---
-print(f"INIT LOG: Groq Key Found: {bool(GROQ_API_KEY)}")
-print(f"INIT LOG: Gemini Key Found: {bool(GEMINI_API_KEY)}")
-
-# Raw SDK clients (used by services/classification_service.py):
-#   client.chat.completions.create(...)  and  _gemini_client.models.generate_content(...)
-client = None
-_gemini_client = None
-
-# Legacy prebuilt LangChain models retained for subject generation.
-# Answer generation creates models through the shared configured model chain.
-groq_llm = None
-gemini_llm = None
-
-_use_groq = False
-_use_gemini = False
-
-if GROQ_API_KEY:
+def get_groq_client():
+    """Raw Groq SDK client, or None if unavailable."""
+    groq_key, _ = _load_keys()
+    if not groq_key:
+        return None
     try:
-        client = Groq(api_key=GROQ_API_KEY)
-        groq_llm = create_chat_model(
+        return _build_groq_client(groq_key)
+    except Exception as e:
+        print(f"INIT ERROR: Groq client initialization failed: {str(e)}")
+        return None
+
+
+def get_gemini_client():
+    """Raw google.genai client, or None if unavailable."""
+    _, gemini_key = _load_keys()
+    if not gemini_key:
+        return None
+    try:
+        return _build_gemini_client(gemini_key)
+    except Exception as e:
+        print(f"INIT ERROR: Gemini client initialization failed: {str(e)}")
+        return None
+
+
+def get_groq_llm():
+    """Legacy LangChain Groq model, or None if unavailable."""
+    if not has_groq():
+        return None
+    try:
+        return create_chat_model(
             ModelTarget(
                 provider="groq",
                 model=GROQ_MODEL,
@@ -141,33 +276,25 @@ if GROQ_API_KEY:
             ),
             temperature=GROQ_TEMPERATURE,
         )
-        _use_groq = True
-        print("INIT LOG: Groq clients (raw + LangChain) successfully initialized.")
     except Exception as e:
-        print(f"INIT ERROR: Groq initialization failed: {str(e)}")
-        client = None
-        groq_llm = None
-        _use_groq = False
-else:
-    print("INIT LOG: Groq API Key is missing. Groq will be disabled.")
+        print(f"INIT ERROR: Groq LangChain model initialization failed: {str(e)}")
+        return None
 
-if GEMINI_API_KEY:
+
+def get_gemini_llm():
+    """Legacy LangChain Gemini model, or None if unavailable."""
+    if not _load_keys()[1]:
+        return None
     try:
-        _gemini_client = genai.Client(api_key=GEMINI_API_KEY)
-        gemini_llm = create_chat_model(
+        return create_chat_model(
             ModelTarget(provider="gemini", model=GEMINI_MODEL),
             temperature=GEMINI_TEMPERATURE,
         )
-        _use_gemini = True
-        print("INIT LOG: Gemini clients (raw + LangChain) successfully initialized.")
     except Exception as e:
-        print(f"INIT ERROR: Gemini initialization failed: {str(e)}")
-        _gemini_client = None
-        gemini_llm = None
-        _use_gemini = False
-else:
-    print("INIT LOG: Gemini API Key is missing.")
+        print(f"INIT ERROR: Gemini LangChain model initialization failed: {str(e)}")
+        return None
 
 
-def has_any_llm() -> bool:
-    return bool(groq_llm or gemini_llm)
+def has_groq() -> bool:
+    """True when a Groq key is configured."""
+    return bool(_load_keys()[0])

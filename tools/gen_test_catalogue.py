@@ -67,6 +67,7 @@ FILE_META = {
     "test_memory_integration.py": ("#197", "session_memory + SQLite store"),
     "test_provider_key_settings.py": ("#252", "utils/client.py key names"),
     "test_smoke_tool.py": ("#252", "tools/smoke_check.py, tests/smoke/"),
+    "test_lazy_provider_keys.py": ("#237", "utils/client.py key loading"),
 }
 
 HEADER = """# Test catalogue

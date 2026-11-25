@@ -46,7 +46,7 @@ from __future__ import annotations
 import json
 import os
 
-from utils.client import client, _use_groq, _gemini_client
+from utils.client import get_gemini_client, get_groq_client
 from utils.model_fallback import (
     ModelResponseError,
     ModelTarget,
@@ -280,7 +280,8 @@ class SkillSuggestionService:
         chain, and the content they could quote is the volunteer's text.
         """
         if target.provider == "groq":
-            if not (_use_groq and client):
+            client = get_groq_client()
+            if client is None:
                 raise ModelResponseError("Groq client not initialized")
 
             try:
@@ -301,11 +302,12 @@ class SkillSuggestionService:
             )
             content = response.choices[0].message.content
         elif target.provider == "gemini":
-            if not _gemini_client:
+            gemini_client = get_gemini_client()
+            if gemini_client is None:
                 raise ModelResponseError("Gemini client not initialized")
 
             try:
-                response = _gemini_client.models.generate_content(
+                response = gemini_client.models.generate_content(
                     model=target.model,
                     contents=self._user_message(description),
                     config={
