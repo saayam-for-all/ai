@@ -30,6 +30,7 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_classification_resilience.py`](../../tests/test_classification_resilience.py) | Unit | - | `services/classification_service.py` | 10 |
 | [`tests/test_client_factory.py`](../../tests/test_client_factory.py) | Unit | #193 | `utils/client.py create_chat_model` | 9 |
 | [`tests/test_client_imports.py`](../../tests/test_client_imports.py) | Integration | #154 | `utils/client.py` | 2 |
+| [`tests/test_deploy_verification.py`](../../tests/test_deploy_verification.py) | Integration | #246 | `.github/scripts/verify_lambda_hashes.sh, deploy workflow verify job` | 12 |
 | [`tests/test_emergency_dataset.py`](../../tests/test_emergency_dataset.py) | Dataset | #146 | `services/emergency_numbers.json` | 17 |
 | [`tests/test_emergency_locale.py`](../../tests/test_emergency_locale.py) | Unit | #146 | `services/emergency.py` | 67 |
 | [`tests/test_emergency_location_fields.py`](../../tests/test_emergency_location_fields.py) | Contract | #146, webapp#1959 | `location_source, display_location` | 59 |
@@ -47,7 +48,7 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_skill_suggestion.py`](../../tests/test_skill_suggestion.py) | Unit | #216 | `services/skill_suggestion_service.py` | 76 |
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
 | [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 57 |
-| | | | **Total** | **726** |
+| | | | **Total** | **738** |
 
 ## Every test
 
@@ -149,6 +150,28 @@ Guard against the utils/client.py import regression that broke dev.
 | --- | --- |
 | `test_client_exports_all_required_names` | Client exports all required names. |
 | `test_core_modules_import` | Core modules import. |
+
+### `test_deploy_verification.py`
+
+*Integration · issue #246 · 12 tests*
+
+Post-deploy build check - issue #246.
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_passes_when_every_target_runs_the_built_zip` | Five targets on the artefact's hash is the only state that passes. |
+| `test_fails_and_names_the_one_target_on_a_different_build` | One diverged target fails the run, and the error says which one. |
+| `test_fails_when_all_targets_agree_with_each_other_but_not_the_build` | Five identical stale targets is still a failure: agreement is not enough. |
+| `test_fails_when_a_target_update_did_not_finish_successfully` | A failed or in-flight update leaves the code in doubt, even on the right hash. |
+| `test_fails_when_a_target_cannot_be_read` | An AWS error on read-back is a failure, never a silent skip. |
+| `test_fails_on_a_missing_arn_secret_without_calling_aws_for_it` | An empty secret is reported as missing rather than sent to AWS as a blank name. |
+| `test_reads_back_the_hash_and_update_status_of_latest` | The query asks Lambda for exactly the two fields the comparison uses. |
+| `test_writes_a_per_target_table_to_the_step_summary` | The run summary shows every target's result, so a red run says where to look. |
+| `test_fails_when_the_built_zip_is_absent` | Without the artefact there is nothing to compare against, so it cannot pass. |
+| `test_every_deployed_function_is_also_verified` | Each ARN secret in the deploy matrix is passed to the verify step. |
+| `test_verify_runs_after_the_whole_matrix_even_when_a_leg_fails` | The check waits for every deploy leg and still runs if one of them failed. |
+
+> 11 test functions expand to 12 cases through parametrisation.
 
 ### `test_emergency_dataset.py`
 

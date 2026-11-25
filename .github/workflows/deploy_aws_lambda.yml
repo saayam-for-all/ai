@@ -164,3 +164,52 @@ jobs:
         run: |
           chmod +x .github/scripts/deploy_lambda.sh
           .github/scripts/deploy_lambda.sh
+
+  verify:
+    # Read back every target after the whole matrix and fail unless all of
+    # them run the zip this run built (issue #246). A per-target check could
+    # not catch this: the failure is targets disagreeing with each other.
+    name: Verify all targets run this build
+    needs: [build, deploy]
+    # Runs even when a deploy leg failed. With fail-fast off, the legs that
+    # succeeded and the one that did not now disagree, and reporting which is
+    # which is the point. Skipped when the build itself did not run.
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+          sparse-checkout-cone-mode: false
+
+      - name: Download zip artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: deployment-package
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_AI_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_AI_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Compare each target's CodeSha256 with the artifact
+        # One env entry per deploy matrix row. tests/test_deploy_verification.py
+        # fails if a row is added to the matrix and not here.
+        env:
+          PRED_CAT_AWS_LAMBDA_ARN: ${{ secrets.PRED_CAT_AWS_LAMBDA_ARN }}
+          GEN_SUB_AWS_LAMBDA_ARN: ${{ secrets.GEN_SUB_AWS_LAMBDA_ARN }}
+          GEN_ANS_AWS_LAMBDA_ARN: ${{ secrets.GEN_ANS_AWS_LAMBDA_ARN }}
+          EMR_CON_AWS_LAMBDA_ARN: ${{ secrets.EMR_CON_AWS_LAMBDA_ARN }}
+          MORE_ORG_LAMBDA_ARN: ${{ secrets.MORE_ORG_LAMBDA_ARN }}
+        run: |
+          chmod +x .github/scripts/verify_lambda_hashes.sh
+          .github/scripts/verify_lambda_hashes.sh deployment.zip \
+            "Predict Category=$PRED_CAT_AWS_LAMBDA_ARN" \
+            "Generate Subject=$GEN_SUB_AWS_LAMBDA_ARN" \
+            "Generate Answer=$GEN_ANS_AWS_LAMBDA_ARN" \
+            "Emergency Contacts=$EMR_CON_AWS_LAMBDA_ARN" \
+            "More Organizations=$MORE_ORG_LAMBDA_ARN"
