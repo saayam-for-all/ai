@@ -290,6 +290,13 @@ headers carry the caller's token.
 runtime and fails the deploy on a mismatch, because a silent runtime drift is
 how the `psycopg2` breakage reached production in the first place.
 
+After all five deploys, `.github/scripts/verify_lambda_hashes.sh` reads back
+each function's `CodeSha256` and fails the run unless every one equals the hash
+of the zip that run built. Before it, the five could drift onto different builds,
+or keep a hand-edited version, with every run green (issue #246). A red
+"Verify all targets run this build" job means at least one function is not
+running the code in that commit; the run summary names which.
+
 #### Regression tests covering this service
 
 | File | Proves |
