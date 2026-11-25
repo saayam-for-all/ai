@@ -10,6 +10,28 @@ team works and reviews in.
 
 ## Unreleased
 
+### Model health probe and alarm — [#195](https://github.com/saayam-for-all/ai/issues/195) (Parts C and D)
+
+**Added**
+
+- **A daily probe of every model in the chain**, including fallbacks no request
+  is using (`utils/model_health_probe.py`, entry point
+  `lambda_function.model_health_probe_handler`). For each model it records
+  reachable or not, the `error_class` from #241's classifier, and latency, and
+  writes one `MODEL_PROBE` log line. A model that hangs is given up on after
+  20 seconds so the rest are still checked. It is not one of the router's
+  services, so `{"service": "model_health_probe"}` still returns `400`.
+- **CloudWatch metrics** in `Saayam/GenAI`: `ModelProbeFailures` (written every
+  run, even at 0), plus `ModelReachable` and `ModelLatencyMs` per model.
+- **A runbook**, `docs/runbooks/model-provider-health.md`: what each
+  `error_class` means and who acts, and the AWS CLI commands for the daily
+  schedule, the email topic and the alarm. The alarm also fires when the probe
+  did not run.
+
+A tester can observe: `python -m utils.model_health_probe` prints one row per
+model and exits 1 if any model fails. Nothing changes for any user-facing
+service.
+
 ### Volunteer skill suggestions — [#216](https://github.com/saayam-for-all/ai/issues/216)
 
 **Added**

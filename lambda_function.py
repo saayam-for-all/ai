@@ -648,6 +648,19 @@ def generate_subject_handler(event, context):
 # Unified Entry Point (Fallback routing)
 # -------------------------------------------------------------
 
+def model_health_probe_handler(event, context):
+    """AWS Lambda entry point for the daily model health probe (#195).
+
+    Run once a day by an EventBridge schedule, never by a user. It is not one
+    of lambda_handler's services on purpose: anyone who can reach the API
+    could otherwise spend provider quota on demand. See
+    docs/runbooks/model-provider-health.md.
+    """
+    from utils.model_health_probe import handle
+
+    return handle(event, context)
+
+
 def _without_routing_key(event, service):
     """The event minus the router's own `service` selector.
 

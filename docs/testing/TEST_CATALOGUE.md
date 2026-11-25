@@ -38,6 +38,7 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_generate_answer.py`](../../tests/test_generate_answer.py) | Contract | #169 | `generate_answer_handler` | 50 |
 | [`tests/test_import_blast_radius.py`](../../tests/test_import_blast_radius.py) | Integration | #169, #171 | `module-scope imports` | 4 |
 | [`tests/test_model_fallback.py`](../../tests/test_model_fallback.py) | Unit | #193 | `utils/model_fallback.py` | 50 |
+| [`tests/test_model_health_probe.py`](../../tests/test_model_health_probe.py) | Unit | #195 | `utils/model_health_probe.py` | 28 |
 | [`tests/test_org_search_contract.py`](../../tests/test_org_search_contract.py) | Contract | #170 | `utils/search_orgs.py` | 24 |
 | [`tests/test_request_db_schema.py`](../../tests/test_request_db_schema.py) | Unit | #169 | `utils/request_db.py` | 54 |
 | [`tests/test_response_contract.py`](../../tests/test_response_contract.py) | Contract | #146, #169, #170 | `response envelopes` | 10 |
@@ -47,7 +48,7 @@ be marked `needs_network`, which is excluded from the default run and from CI.
 | [`tests/test_skill_suggestion.py`](../../tests/test_skill_suggestion.py) | Unit | #216 | `services/skill_suggestion_service.py` | 76 |
 | [`tests/test_subject_generator.py`](../../tests/test_subject_generator.py) | Unit | - | `utils/subject_generator.py` | 13 |
 | [`tests/test_token_usage.py`](../../tests/test_token_usage.py) | - | #159 | `utils/token_usage.py` | 57 |
-| | | | **Total** | **752** |
+| | | | **Total** | **780** |
 
 ## Every test
 
@@ -430,6 +431,35 @@ Unit contract for the shared model fallback chain (issue #193).
 | `test_all_failover_warnings_have_error_class` | All failover warnings have error class. |
 
 > 23 test functions expand to 50 cases through parametrisation.
+
+### `test_model_health_probe.py`
+
+*Unit · issue #195 · 28 tests*
+
+The daily model health and entitlement probe (issue #195, Part C).
+
+| Test | Behaviour it protects |
+| --- | --- |
+| `test_every_model_in_the_chain_is_probed_including_unused_fallbacks` | Every model in the chain is probed including unused fallbacks. |
+| `test_the_probe_reads_the_same_chain_requests_use` | The probe reads the same chain requests use. |
+| `test_a_healthy_primary_does_not_stop_the_probe` | A healthy primary does not stop the probe. |
+| `test_a_dead_fallback_behind_a_healthy_primary_is_reported` | The gemini-2.0-flash case: the last resort was shut down on 1 June 2026 and nothing noticed, because nothing called it. |
+| `test_each_failure_is_recorded_with_its_error_class` | Each failure is recorded with its error class. |
+| `test_a_lapsed_subscription_is_not_reported_as_a_retired_model` | A lapsed subscription is not reported as a retired model. |
+| `test_an_empty_answer_is_not_healthy` | An empty answer is not healthy. |
+| `test_a_model_that_hangs_is_given_up_on_and_the_rest_are_still_checked` | A model that hangs is given up on and the rest are still checked. |
+| `test_latency_is_recorded_for_success_and_failure` | Latency is recorded for success and failure. |
+| `test_a_probe_never_raises_whatever_the_provider_does` | A probe never raises whatever the provider does. |
+| `test_a_failing_model_logs_a_warning_naming_model_and_class` | A failing model logs a warning naming model and class. |
+| `test_a_failure_log_never_carries_the_provider_message` | A failure log never carries the provider message. |
+| `test_a_healthy_run_logs_no_warning` | A healthy run logs no warning. |
+| `test_the_alarm_metric_counts_failing_models_and_is_written_when_zero` | The alarm metric counts failing models and is written when zero. |
+| `test_each_model_gets_its_own_reachable_and_latency_series` | Each model gets its own reachable and latency series. |
+| `test_the_lambda_handler_runs_hermetically_and_reports_missing_keys` | The lambda handler runs hermetically and reports missing keys. |
+| `test_the_summary_never_carries_provider_detail` | The summary never carries provider detail. |
+| `test_the_probe_is_not_reachable_through_the_public_router` | Anyone who can reach the API could otherwise spend provider quota. |
+
+> 18 test functions expand to 28 cases through parametrisation.
 
 ### `test_org_search_contract.py`
 

@@ -21,6 +21,9 @@ This codebase supports two hosting paradigms:
 | **Generate Answer** | `lambda_function.generate_answer_handler` | 1024 MB | 60 seconds |
 | **Emergency Contacts** | `lambda_function.emergency_contacts_handler` | 256 MB | 15 seconds |
 | **More Organizations** | `lambda_function.search_orgs_handler` | 512 MB | 45 seconds |
+| **Model Health Probe** | `lambda_function.model_health_probe_handler` (daily schedule only, not routed) | 256 MB | 120 seconds |
+
+The Model Health Probe checks every model in `config/model_routing.json` once a day and alarms on the first failure. Setup, the alarm and what to do when it fires: [`docs/runbooks/model-provider-health.md`](docs/runbooks/model-provider-health.md).
 
 ---
 
